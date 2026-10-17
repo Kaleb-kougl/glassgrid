@@ -5,7 +5,8 @@ import { z } from 'zod';
  * types onto these (e.g. TINYINT..HUGEINT -> integer, REAL/DOUBLE -> float,
  * DATE -> date, TIMESTAMP -> timestamp, VARCHAR -> text).
  */
-export const ColumnTypeSchema = z.enum(['integer', 'float', 'decimal', 'boolean', 'date', 'timestamp', 'text']);
+export const COLUMN_TYPES = ['integer', 'float', 'decimal', 'boolean', 'date', 'timestamp', 'text'] as const;
+export const ColumnTypeSchema = z.enum(COLUMN_TYPES);
 export type ColumnType = z.infer<typeof ColumnTypeSchema>;
 
 /**
