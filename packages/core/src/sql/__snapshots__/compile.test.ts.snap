@@ -1,0 +1,314 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`compileChartQuery snapshots > area: colour series with M4 1`] = `
+"WITH __gg_base AS (
+  SELECT date_trunc('month', "created_on") AS gx, "category" AS gc
+  FROM "v_sales"
+  WHERE "created_on" IS NOT NULL
+),
+__gg_series AS (
+  SELECT gc, CAST(count(*) AS DOUBLE) AS v, TRUE AS k FROM __gg_base GROUP BY gc
+  ORDER BY v DESC NULLS LAST, gc ASC NULLS LAST LIMIT 8
+),
+__gg_src AS (
+  SELECT b.* EXCLUDE (gc), CASE WHEN s.k THEN b.gc END AS gc, s.k IS NULL AS other
+  FROM __gg_base AS b LEFT JOIN __gg_series AS s ON b.gc IS NOT DISTINCT FROM s.gc
+),
+__gg_agg AS (
+  SELECT gx AS x, gc AS color, other AS color_other, CAST(count(*) AS DOUBLE) AS y
+  FROM __gg_src GROUP BY gx, gc, other
+),
+__gg_xn AS (SELECT *, epoch_us(x) AS xn FROM __gg_agg),
+__gg_px AS (
+  SELECT a.*, CASE WHEN b.hi = b.lo THEN 0 ELSE least(floor((a.xn - b.lo) / (b.hi - b.lo) * CAST($1 AS DOUBLE)), CAST($1 AS DOUBLE) - 1) END AS px
+  FROM __gg_xn AS a CROSS JOIN (SELECT min(xn) AS lo, max(xn) AS hi FROM __gg_xn) AS b
+),
+__gg_m4 AS (
+  SELECT *,
+    row_number() OVER (PARTITION BY color, color_other, px ORDER BY x ASC) AS r_first,
+    row_number() OVER (PARTITION BY color, color_other, px ORDER BY x DESC) AS r_last,
+    row_number() OVER (PARTITION BY color, color_other, px ORDER BY y ASC NULLS LAST, x ASC) AS r_min,
+    row_number() OVER (PARTITION BY color, color_other, px ORDER BY y DESC NULLS LAST, x ASC) AS r_max
+  FROM __gg_px
+)
+SELECT x, y, color, color_other
+FROM __gg_m4
+WHERE r_first = 1 OR r_last = 1 OR r_min = 1 OR r_max = 1
+ORDER BY color_other ASC, color ASC NULLS LAST, x"
+`;
+
+exports[`compileChartQuery snapshots > area: colour series with M4 2`] = `
+[
+  1000,
+]
+`;
+
+exports[`compileChartQuery snapshots > bar: count by category 1`] = `
+"WITH __gg_base AS (
+  SELECT "category" AS gx
+  FROM "v_sales"
+)
+SELECT gx AS x, CAST(count(*) AS DOUBLE) AS y
+FROM __gg_base
+GROUP BY gx
+ORDER BY y DESC NULLS LAST, gx ASC NULLS LAST
+LIMIT CAST($1 AS BIGINT)"
+`;
+
+exports[`compileChartQuery snapshots > bar: count by category 2`] = `
+[
+  20,
+]
+`;
+
+exports[`compileChartQuery snapshots > bar: max date per month 1`] = `
+"WITH __gg_base AS (
+  SELECT date_trunc('month', "ts") AS gx, "created_on" AS gy
+  FROM "v_sales"
+)
+SELECT gx AS x, max(gy) AS y
+FROM __gg_base
+GROUP BY gx
+ORDER BY y DESC NULLS LAST, gx ASC NULLS LAST
+LIMIT CAST($1 AS BIGINT)"
+`;
+
+exports[`compileChartQuery snapshots > bar: max date per month 2`] = `
+[
+  20,
+]
+`;
+
+exports[`compileChartQuery snapshots > bar: sum with colour, top 5, filtered 1`] = `
+"WITH __gg_base AS (
+  SELECT "we""ird name" AS gx, "amount" AS gy, "select" AS gc
+  FROM "v_sales"
+  WHERE ("qty" >= CAST($1 AS DOUBLE) AND "qty" <= CAST($2 AS DOUBLE))
+),
+__gg_series AS (
+  SELECT gc, CAST(sum(gy) AS DOUBLE) AS v, TRUE AS k FROM __gg_base GROUP BY gc
+  ORDER BY v DESC NULLS LAST, gc ASC NULLS LAST LIMIT 8
+),
+__gg_src AS (
+  SELECT b.* EXCLUDE (gc), CASE WHEN s.k THEN b.gc END AS gc, s.k IS NULL AS other
+  FROM __gg_base AS b LEFT JOIN __gg_series AS s ON b.gc IS NOT DISTINCT FROM s.gc
+),
+__gg_top AS (
+  SELECT gx, CAST(sum(gy) AS DOUBLE) AS v FROM __gg_base GROUP BY gx
+  ORDER BY v DESC NULLS LAST, gx ASC NULLS LAST LIMIT CAST($3 AS BIGINT)
+)
+SELECT s.gx AS x, s.gc AS color, s.other AS color_other, CAST(sum(s.gy) AS DOUBLE) AS y
+FROM __gg_src AS s JOIN __gg_top AS t ON s.gx IS NOT DISTINCT FROM t.gx
+GROUP BY s.gx, s.gc, s.other, t.v
+ORDER BY t.v DESC NULLS LAST, s.gx ASC NULLS LAST, s.other ASC, s.gc ASC NULLS LAST"
+`;
+
+exports[`compileChartQuery snapshots > bar: sum with colour, top 5, filtered 2`] = `
+[
+  1,
+  10,
+  5,
+]
+`;
+
+exports[`compileChartQuery snapshots > heatmap: numeric x time 1`] = `
+"WITH __gg_base AS (
+  SELECT floor(CAST("amount" AS DOUBLE) / CAST($1 AS DOUBLE)) AS gx, date_trunc('hour', "ts") AS gy
+  FROM "v_sales"
+  WHERE "amount" IS NOT NULL
+    AND "ts" IS NOT NULL
+)
+SELECT gx * CAST($1 AS DOUBLE) AS x, (gx + 1) * CAST($1 AS DOUBLE) AS x_end, gy AS y, gy + INTERVAL 1 HOUR AS y_end, CAST(count(*) AS DOUBLE) AS count
+FROM __gg_base
+GROUP BY gx, gy
+ORDER BY gx, gy"
+`;
+
+exports[`compileChartQuery snapshots > heatmap: numeric x time 2`] = `
+[
+  20,
+]
+`;
+
+exports[`compileChartQuery snapshots > histogram: auto numeric bins 1`] = `
+"WITH __gg_base AS (
+  SELECT floor(CAST("amount" AS DOUBLE) / CAST($1 AS DOUBLE)) AS gx
+  FROM "v_sales"
+  WHERE "amount" IS NOT NULL
+)
+SELECT gx * CAST($1 AS DOUBLE) AS x, (gx + 1) * CAST($1 AS DOUBLE) AS x_end, CAST(count(*) AS DOUBLE) AS y
+FROM __gg_base
+GROUP BY gx
+ORDER BY gx"
+`;
+
+exports[`compileChartQuery snapshots > histogram: auto numeric bins 2`] = `
+[
+  50,
+]
+`;
+
+exports[`compileChartQuery snapshots > histogram: auto time unit 1`] = `
+"WITH __gg_base AS (
+  SELECT date_trunc('month', "created_on") AS gx
+  FROM "v_sales"
+  WHERE "created_on" IS NOT NULL
+)
+SELECT gx AS x, gx + INTERVAL 1 MONTH AS x_end, CAST(count(*) AS DOUBLE) AS y
+FROM __gg_base
+GROUP BY gx
+ORDER BY gx"
+`;
+
+exports[`compileChartQuery snapshots > histogram: auto time unit 2`] = `[]`;
+
+exports[`compileChartQuery snapshots > histogram: explicit width, avg, colour 1`] = `
+"WITH __gg_base AS (
+  SELECT floor(CAST("qty" AS DOUBLE) / CAST($1 AS DOUBLE)) AS gx, "price" AS gy, "active" AS gc
+  FROM "v_sales"
+  WHERE "qty" IS NOT NULL
+),
+__gg_series AS (
+  SELECT gc, CAST(avg(gy) AS DOUBLE) AS v, TRUE AS k FROM __gg_base GROUP BY gc
+  ORDER BY v DESC NULLS LAST, gc ASC NULLS LAST LIMIT 8
+),
+__gg_src AS (
+  SELECT b.* EXCLUDE (gc), CASE WHEN s.k THEN b.gc END AS gc, s.k IS NULL AS other
+  FROM __gg_base AS b LEFT JOIN __gg_series AS s ON b.gc IS NOT DISTINCT FROM s.gc
+)
+SELECT gx * CAST($1 AS DOUBLE) AS x, (gx + 1) * CAST($1 AS DOUBLE) AS x_end, gc AS color, other AS color_other, CAST(avg(gy) AS DOUBLE) AS y
+FROM __gg_src
+GROUP BY gx, gc, other
+ORDER BY gx, other ASC, gc ASC NULLS LAST"
+`;
+
+exports[`compileChartQuery snapshots > histogram: explicit width, avg, colour 2`] = `
+[
+  5,
+]
+`;
+
+exports[`compileChartQuery snapshots > line: auto time unit with M4 1`] = `
+"WITH __gg_base AS (
+  SELECT date_trunc('hour', "ts") AS gx, "amount" AS gy
+  FROM "v_sales"
+  WHERE "ts" IS NOT NULL
+),
+__gg_agg AS (
+  SELECT gx AS x, CAST(sum(gy) AS DOUBLE) AS y
+  FROM __gg_base GROUP BY gx
+),
+__gg_xn AS (SELECT *, epoch_us(x) AS xn FROM __gg_agg),
+__gg_px AS (
+  SELECT a.*, CASE WHEN b.hi = b.lo THEN 0 ELSE least(floor((a.xn - b.lo) / (b.hi - b.lo) * CAST($1 AS DOUBLE)), CAST($1 AS DOUBLE) - 1) END AS px
+  FROM __gg_xn AS a CROSS JOIN (SELECT min(xn) AS lo, max(xn) AS hi FROM __gg_xn) AS b
+),
+__gg_m4 AS (
+  SELECT *,
+    row_number() OVER (PARTITION BY px ORDER BY x ASC) AS r_first,
+    row_number() OVER (PARTITION BY px ORDER BY x DESC) AS r_last,
+    row_number() OVER (PARTITION BY px ORDER BY y ASC NULLS LAST, x ASC) AS r_min,
+    row_number() OVER (PARTITION BY px ORDER BY y DESC NULLS LAST, x ASC) AS r_max
+  FROM __gg_px
+)
+SELECT x, y
+FROM __gg_m4
+WHERE r_first = 1 OR r_last = 1 OR r_min = 1 OR r_max = 1
+ORDER BY x"
+`;
+
+exports[`compileChartQuery snapshots > line: auto time unit with M4 2`] = `
+[
+  800,
+]
+`;
+
+exports[`compileChartQuery snapshots > line: numeric x, explicit bin 1`] = `
+"WITH __gg_base AS (
+  SELECT floor(CAST("price" AS DOUBLE) / CAST($1 AS DOUBLE)) AS gx, "qty" AS gy
+  FROM "v_sales"
+  WHERE "price" IS NOT NULL
+),
+__gg_agg AS (
+  SELECT gx * CAST($1 AS DOUBLE) AS x, CAST(max(gy) AS DOUBLE) AS y
+  FROM __gg_base GROUP BY gx
+),
+__gg_xn AS (SELECT *, CAST(x AS DOUBLE) AS xn FROM __gg_agg),
+__gg_px AS (
+  SELECT a.*, CASE WHEN b.hi = b.lo THEN 0 ELSE least(floor((a.xn - b.lo) / (b.hi - b.lo) * CAST($2 AS DOUBLE)), CAST($2 AS DOUBLE) - 1) END AS px
+  FROM __gg_xn AS a CROSS JOIN (SELECT min(xn) AS lo, max(xn) AS hi FROM __gg_xn) AS b
+),
+__gg_m4 AS (
+  SELECT *,
+    row_number() OVER (PARTITION BY px ORDER BY x ASC) AS r_first,
+    row_number() OVER (PARTITION BY px ORDER BY x DESC) AS r_last,
+    row_number() OVER (PARTITION BY px ORDER BY y ASC NULLS LAST, x ASC) AS r_min,
+    row_number() OVER (PARTITION BY px ORDER BY y DESC NULLS LAST, x ASC) AS r_max
+  FROM __gg_px
+)
+SELECT x, y
+FROM __gg_m4
+WHERE r_first = 1 OR r_last = 1 OR r_min = 1 OR r_max = 1
+ORDER BY x"
+`;
+
+exports[`compileChartQuery snapshots > line: numeric x, explicit bin 2`] = `
+[
+  0.5,
+  300,
+]
+`;
+
+exports[`compileChartQuery snapshots > scatter: coloured, capped 1`] = `
+"WITH __gg_base AS (
+  SELECT "qty" AS gx, "ts" AS gy, "日付 😀" AS gc
+  FROM "v_sales"
+  WHERE "qty" IS NOT NULL
+    AND "ts" IS NOT NULL
+),
+__gg_series AS (
+  SELECT gc, count(*) AS v, TRUE AS k FROM __gg_base GROUP BY gc
+  ORDER BY v DESC NULLS LAST, gc ASC NULLS LAST LIMIT 8
+),
+__gg_src AS (
+  SELECT b.* EXCLUDE (gc), CASE WHEN s.k THEN b.gc END AS gc, s.k IS NULL AS other
+  FROM __gg_base AS b LEFT JOIN __gg_series AS s ON b.gc IS NOT DISTINCT FROM s.gc
+)
+SELECT gx AS x, gy AS y, gc AS color, other AS color_other
+FROM __gg_src
+LIMIT CAST($1 AS BIGINT)"
+`;
+
+exports[`compileChartQuery snapshots > scatter: coloured, capped 2`] = `
+[
+  1000,
+]
+`;
+
+exports[`compileChartQuery snapshots > scatter: raw points 1`] = `
+"WITH __gg_base AS (
+  SELECT "amount" AS gx, "price" AS gy
+  FROM "v_sales"
+  WHERE "amount" IS NOT NULL
+    AND "price" IS NOT NULL
+)
+SELECT gx AS x, gy AS y
+FROM __gg_base
+LIMIT CAST($1 AS BIGINT)"
+`;
+
+exports[`compileChartQuery snapshots > scatter: raw points 2`] = `
+[
+  50000,
+]
+`;
+
+exports[`compileRowsQuery / compileCountQuery > selects every column, sorts with a full tiebreak and pages with parameters 1`] = `
+"SELECT "category", "amount", "qty", "price", "created_on", "ts", "active", "we""ird name", "select", "日付 😀"
+FROM "v_sales"
+WHERE "category" IS NOT NULL
+ORDER BY "amount" DESC NULLS LAST, "we""ird name" ASC NULLS LAST, "category" ASC NULLS LAST, "qty" ASC NULLS LAST, "price" ASC NULLS LAST, "created_on" ASC NULLS LAST, "ts" ASC NULLS LAST, "active" ASC NULLS LAST, "select" ASC NULLS LAST, "日付 😀" ASC NULLS LAST
+LIMIT CAST($1 AS BIGINT) OFFSET CAST($2 AS BIGINT)"
+`;
+
+exports[`compileWhere > compiles every filter kind with bound, cast parameters 1`] = `"("amount" >= CAST($1 AS DOUBLE) AND "amount" < CAST($2 AS DOUBLE)) AND "ts" > CAST($3 AS TIMESTAMP) AND "created_on" <= epoch_ms(CAST($4 AS BIGINT)) AND ("category" IN (CAST($5 AS VARCHAR), CAST($6 AS VARCHAR)) OR "category" IS NULL) AND "active" IN (CAST($7 AS BOOLEAN)) AND FALSE AND "we""ird name" IS NULL AND "price" IS NULL AND "select" IS NOT NULL"`;

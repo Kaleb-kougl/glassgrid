@@ -1,0 +1,11 @@
+{
+  // Property tests run compiled SQL in real DuckDB, so unlike src/ they may
+  // use Node and the native driver. They sit outside src/ to keep the core
+  // boundary lint rule strict there.
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023"],
+    "types": ["node"]
+  },
+  "include": ["**/*.ts"]
+}
