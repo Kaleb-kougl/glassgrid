@@ -1,0 +1,120 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      rows:
+        description: Rows in the generated E2E fixture
+        required: false
+        default: '1000000'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # One cache dir for both @electron/get (electron_config_cache) and electron-builder (ELECTRON_CACHE).
+  electron_config_cache: ${{ github.workspace }}/.cache/electron
+  ELECTRON_CACHE: ${{ github.workspace }}/.cache/electron
+  GLASSGRID_E2E_ROWS: ${{ github.event.inputs.rows || '1000000' }}
+
+jobs:
+  checks:
+    name: Lint, typecheck, unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+
+  e2e:
+    name: Build + E2E (${{ matrix.os }})
+    needs: checks
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest # arm64
+            packaged: release/0.0.0/mac-arm64/Glassgrid.app/Contents/MacOS/Glassgrid
+            run: ''
+          - os: windows-latest
+            packaged: release/0.0.0/win-unpacked/Glassgrid.exe
+            run: ''
+          - os: ubuntu-latest
+            packaged: release/0.0.0/linux-unpacked/glassgrid
+            run: xvfb-run --auto-servernum
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - name: Cache Electron binaries
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.ELECTRON_CACHE }}
+          key: electron-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: electron-${{ runner.os }}-${{ runner.arch }}-
+      - run: pnpm install --frozen-lockfile
+      - name: Download Electron binary
+        # Electron 44 fetches its binary lazily; do it up front so failures are obvious.
+        run: pnpm --filter @glassgrid/desktop exec install-electron
+
+      - name: Allow Chromium's sandbox on Ubuntu 24.04
+        if: runner.os == 'Linux'
+        # Ubuntu 24.04 restricts unprivileged user namespaces via AppArmor,
+        # which Electron's renderer sandbox needs.
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      - run: pnpm build
+
+      - name: E2E (unpackaged build)
+        run: ${{ matrix.run }} pnpm --filter @glassgrid/desktop e2e
+
+      - name: Package (unsigned, unpacked directory)
+        run: pnpm --filter @glassgrid/desktop exec electron-builder --dir --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: E2E (packaged app, verifies asarUnpack of the DuckDB binding)
+        run: ${{ matrix.run }} pnpm --filter @glassgrid/desktop e2e
+        env:
+          GLASSGRID_E2E_EXECUTABLE: ${{ github.workspace }}/apps/desktop/${{ matrix.packaged }}
+
+      - name: Upload benchmark baseline
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-${{ matrix.os }}
+          path: apps/desktop/e2e-results/
+          if-no-files-found: warn
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ matrix.os }}
+          path: |
+            apps/desktop/playwright-report/
+            apps/desktop/test-results/
+          if-no-files-found: ignore

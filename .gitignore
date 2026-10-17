@@ -1,0 +1,20 @@
+node_modules/
+out/
+dist/
+release/
+coverage/
+*.tsbuildinfo
+.vite/
+
+# E2E artifacts
+test-results/
+playwright-report/
+e2e-results/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.log

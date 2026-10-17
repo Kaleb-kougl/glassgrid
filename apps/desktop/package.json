@@ -1,0 +1,41 @@
+{
+  "name": "@glassgrid/desktop",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Glassgrid desktop app: open multi-GB CSV files locally.",
+  "license": "MIT",
+  "author": "Kaleb Kougl",
+  "homepage": "https://github.com/kalebkougl/glassgrid",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.preload.json && tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.e2e.json",
+    "e2e": "playwright test",
+    "e2e:10m": "cross-env GLASSGRID_E2E_ROWS=10000000 playwright test",
+    "package": "electron-vite build && electron-builder --publish never",
+    "package:dir": "electron-vite build && electron-builder --dir --publish never"
+  },
+  "dependencies": {
+    "@duckdb/node-api": "1.5.6-r.1"
+  },
+  "devDependencies": {
+    "@glassgrid/core": "workspace:*",
+    "@glassgrid/ui": "workspace:*",
+    "@playwright/test": "1.64.1",
+    "@types/node": "24.19.2",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "apache-arrow": "21.2.0",
+    "cross-env": "10.1.0",
+    "electron": "44.9.0",
+    "electron-builder": "26.15.3",
+    "electron-vite": "6.0.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "typescript": "6.0.3",
+    "vite": "8.3.4"
+  }
+}

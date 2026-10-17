@@ -1,0 +1,10 @@
+{
+  // Renderer: browser-only. No Node typings, so Node APIs fail to typecheck.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "types": ["vite/client"]
+  },
+  "include": ["src/renderer/src"]
+}

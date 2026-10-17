@@ -1,0 +1,9 @@
+{
+  // Sandboxed preload: a DOM context with a small Electron/Node surface.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM"],
+    "types": ["node"]
+  },
+  "include": ["src/preload"]
+}

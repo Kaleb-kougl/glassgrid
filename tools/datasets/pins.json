@@ -1,0 +1,23 @@
+{
+  "comment": "Reference outputs. A fresh run with the same recipe and DuckDB version must reproduce these bytes; `npm run verify` checks them. Add an entry by copying name/rows/sha256/generator.recipe/generator.duckdbVersion from a manifest.",
+  "datasets": {
+    "synthetic-1m-seed42": {
+      "rows": 1000000,
+      "sha256": "3404ff2af528de1115b398ce3c28eda5aca7feeb844e2598c895341fb1c213ed",
+      "recipe": "synthetic/1",
+      "duckdbVersion": "v1.5.6"
+    },
+    "synthetic-10m-seed42": {
+      "rows": 10000000,
+      "sha256": "dbe88975b1a7c840afc9f6c9f39dadbe45aed18e3977e0badc0ae63d0fc4b81e",
+      "recipe": "synthetic/1",
+      "duckdbVersion": "v1.5.6"
+    },
+    "synthetic-50m-seed42": {
+      "rows": 50000000,
+      "sha256": "f96012bb804af27abf6de0d6339fbae35c9218abba5eb74dae5dac4b491f7f06",
+      "recipe": "synthetic/1",
+      "duckdbVersion": "v1.5.6"
+    }
+  }
+}

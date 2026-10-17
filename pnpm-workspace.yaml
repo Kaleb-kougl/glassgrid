@@ -1,0 +1,13 @@
+packages:
+  - apps/*
+  - packages/*
+  - tools/*
+
+# pnpm 10 blocks dependency lifecycle scripts by default and none are needed:
+# Electron 44 fetches its binary lazily on first use (or via `install-electron`),
+# and DuckDB ships prebuilt N-API binaries as optional dependencies.
+ignoredBuiltDependencies:
+  - electron-winstaller
+
+onlyBuiltDependencies:
+  - esbuild

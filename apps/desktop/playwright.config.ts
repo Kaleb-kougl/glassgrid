@@ -1,0 +1,17 @@
+import { defineConfig } from '@playwright/test';
+import { e2eRowCount } from './e2e/config';
+
+const rows = e2eRowCount();
+
+export default defineConfig({
+  testDir: './e2e',
+  // CSV generation plus a cold and a warm count; 10M rows needs headroom.
+  timeout: rows > 2_000_000 ? 20 * 60_000 : 5 * 60_000,
+  expect: { timeout: 30_000 },
+  workers: 1,
+  fullyParallel: false,
+  forbidOnly: Boolean(process.env['CI']),
+  retries: 0,
+  outputDir: './test-results',
+  reporter: process.env['CI'] ? [['list'], ['html', { open: 'never', outputFolder: 'playwright-report' }]] : 'list',
+});

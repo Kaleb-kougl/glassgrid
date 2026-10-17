@@ -1,0 +1,25 @@
+{
+  "name": "@glassgrid/datasets",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Reproducible, pinned benchmark CSVs for Glassgrid (NYC TLC taxi + seeded synthetic).",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "taxi": "tsx src/taxi.ts",
+    "synthetic": "tsx src/synthetic.ts",
+    "verify": "tsx src/verify.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@duckdb/node-api": "1.5.6-r.1"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "tsx": "4.23.15",
+    "typescript": "6.0.3"
+  }
+}

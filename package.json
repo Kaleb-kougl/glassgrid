@@ -1,0 +1,32 @@
+{
+  "name": "glassgrid",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Open multi-GB CSV files locally, browse them in a virtualized grid and chart them. Powered by DuckDB.",
+  "license": "MIT",
+  "author": "Kaleb Kougl",
+  "type": "module",
+  "packageManager": "pnpm@10.34.7",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @glassgrid/desktop dev",
+    "dev:web": "pnpm --filter @glassgrid/web dev",
+    "build": "pnpm -r --filter \"./apps/*\" build",
+    "lint": "eslint .",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r --if-present test",
+    "e2e": "pnpm --filter @glassgrid/desktop build && pnpm --filter @glassgrid/desktop e2e",
+    "e2e:10m": "pnpm --filter @glassgrid/desktop build && pnpm --filter @glassgrid/desktop e2e:10m",
+    "package": "pnpm --filter @glassgrid/desktop package"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "eslint": "10.13.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.13.0",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.71.2"
+  }
+}

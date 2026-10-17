@@ -1,0 +1,55 @@
+# electron-builder configuration. Code signing and notarization are deferred
+# (see docs/m0-notes.md); builds are unsigned.
+appId: dev.glassgrid.desktop
+productName: Glassgrid
+executableName: glassgrid
+copyright: Copyright © 2026 Kaleb Kougl
+
+directories:
+  buildResources: build
+  output: release/${version}
+
+files:
+  - out/**
+  - package.json
+  - '!**/*.map'
+
+asar: true
+# DuckDB ships a prebuilt N-API addon plus its shared library (libduckdb.so /
+# .dylib / .dll). Native code cannot be loaded from inside an asar archive, so
+# the whole platform binding package is unpacked next to it.
+asarUnpack:
+  - '**/node_modules/@duckdb/**'
+
+# @duckdb/node-api uses N-API, whose ABI is stable across Node and Electron
+# versions: the published prebuilt binary is used as-is, no electron-rebuild.
+npmRebuild: false
+nodeGypRebuild: false
+
+mac:
+  target:
+    - target: dmg
+  category: public.app-category.developer-tools
+  # Ad-hoc signature only: Apple Silicon refuses to run binaries without one.
+  # Developer ID signing + notarization come with the release milestone.
+  identity: '-'
+  # Hardened runtime's library validation rejects ad-hoc-signed dylibs such
+  # as libduckdb; turn it back on together with Developer ID signing.
+  hardenedRuntime: false
+
+win:
+  target:
+    - target: nsis
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+
+linux:
+  target:
+    - target: AppImage
+  category: Development
+  maintainer: Kaleb Kougl
+
+publish: null

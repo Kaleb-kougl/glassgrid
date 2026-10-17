@@ -1,0 +1,63 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--gg-bg);
+  color: var(--gg-text);
+  font: 14px/1.5 var(--gg-font);
+}
+
+.app {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 40px 24px;
+  display: grid;
+  gap: 20px;
+}
+
+.app__header h1 {
+  margin: 0;
+  font-size: 26px;
+  letter-spacing: -0.01em;
+}
+
+.app__tagline,
+.app__muted {
+  margin: 4px 0 0;
+  color: var(--gg-muted);
+}
+
+.app__toolbar {
+  display: flex;
+  gap: 8px;
+}
+
+.app__file p {
+  margin: 0;
+}
+
+.app__file-name {
+  font-family: var(--gg-mono);
+}
+
+.app__stats {
+  margin: 0;
+  padding: 16px 20px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+  background: var(--gg-surface);
+  border: 1px solid var(--gg-border);
+  border-radius: var(--gg-radius);
+}
+
+.app__error {
+  margin: 0;
+  color: var(--gg-danger);
+}

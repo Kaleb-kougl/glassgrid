@@ -1,0 +1,18 @@
+html,
+body {
+  margin: 0;
+  background: var(--gg-bg);
+  color: var(--gg-text);
+  font: 15px/1.6 var(--gg-font);
+}
+
+.web {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 48px 24px;
+}
+
+.web code {
+  font-size: 13px;
+  word-break: break-word;
+}

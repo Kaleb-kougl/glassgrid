@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // No DOM and no Node typings: core must stay runtime-neutral so it can run
+    // in the Electron utility process, the renderer and the browser build.
+    "lib": ["ES2023"],
+    "types": []
+  },
+  "include": ["src", "vitest.config.ts"]
+}

@@ -1,0 +1,9 @@
+{
+  // Playwright tests: Node test runner code plus callbacks evaluated in the page.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM"],
+    "types": ["node"]
+  },
+  "include": ["e2e", "playwright.config.ts"]
+}
