@@ -67,12 +67,23 @@ describe('EngineSession', () => {
     expect(await replyTo('p1')).toMatchObject({ code: 'bad_request' });
   });
 
-  it('reports unknown tables and the aggregate stub with codes', async () => {
+  it('reports unknown tables and compile errors with codes', async () => {
     const { send, replyTo } = connect();
     send({ kind: 'count', requestId: 'u1', viewId: 'v', seq: 1, table: 'tb_00000000-0000-0000-0000-000000000000' });
     expect(await replyTo('u1')).toMatchObject({ kind: 'error', code: 'unknown_table' });
-    send({ kind: 'aggregate', requestId: 'a1', viewId: 'chart', seq: 1, table, spec: { mark: 'bar' } });
-    expect(await replyTo('a1')).toMatchObject({ kind: 'error', code: 'not_implemented' });
+    send({ kind: 'aggregate', requestId: 'a0', viewId: 'chart:0', seq: 1, table, spec: { mark: 'bar' } });
+    expect(await replyTo('a0')).toMatchObject({ kind: 'error', code: 'bad_request' });
+    send({ kind: 'aggregate', requestId: 'a1', viewId: 'chart:1', seq: 1, table, spec: { mark: 'bar', x: { column: 'nope' } } });
+    expect(await replyTo('a1')).toMatchObject({ kind: 'error', code: 'bad_request', path: 'x.column' });
+    send({
+      kind: 'count',
+      requestId: 'f1',
+      viewId: 'v',
+      seq: 2,
+      table,
+      filters: [{ kind: 'range', column: 'category', min: 1 }],
+    });
+    expect(await replyTo('f1')).toMatchObject({ kind: 'error', code: 'bad_request', path: 'filters[0].column' });
   });
 
   it('drops the response of a request superseded by a newer seq for the same view', async () => {

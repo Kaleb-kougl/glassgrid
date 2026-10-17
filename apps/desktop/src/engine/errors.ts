@@ -12,13 +12,6 @@ export class EngineFailure extends Error {
   }
 }
 
-export class NotImplementedError extends EngineFailure {
-  constructor(what: string) {
-    super('not_implemented', `${what} is not implemented yet`);
-    this.name = 'NotImplementedError';
-  }
-}
-
 export function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }

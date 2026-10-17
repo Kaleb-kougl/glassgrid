@@ -34,8 +34,23 @@ describe('EngineRequestSchema', () => {
         query: { offset: 0, limit: 1000, sort: [{ column: 'a b', direction: 'desc' }] },
       },
       { kind: 'count', requestId: 'r3', viewId: 'grid', seq: 4, table },
+      {
+        kind: 'count',
+        requestId: 'r3b',
+        viewId: 'status',
+        seq: 5,
+        table,
+        filters: [{ kind: 'range', column: 'amount', min: 1, minInclusive: true, maxInclusive: false }],
+      },
       { kind: 'profile', requestId: 'r4', viewId: 'profile', seq: 0, table },
-      { kind: 'aggregate', requestId: 'r5', viewId: 'chart:1', seq: 1, table, spec: { mark: 'bar' } },
+      {
+        kind: 'aggregate',
+        requestId: 'r5',
+        viewId: 'chart:1',
+        seq: 1,
+        table,
+        spec: { mark: 'bar', x: { column: 'category' }, filters: [], pixelWidth: 640 },
+      },
       { kind: 'cancel', requestId: 'r6', target: 'r2' },
       { kind: 'ensureParquetCache', requestId: 'r7', table },
       { kind: 'clearCache', requestId: 'r8', scope: 'parquet' },
@@ -81,6 +96,26 @@ describe('EngineRequestSchema', () => {
       where: { sql: '1=1; DROP TABLE x', params: [] },
     });
     expect('where' in parsed).toBe(false);
+  });
+
+  it('validates filters on rows and count requests', () => {
+    const base = { kind: 'rows', requestId: 'r1', viewId: 'grid', seq: 1, table, query: { offset: 0, limit: 10 } };
+    const parsed = EngineRequestSchema.parse({ ...base, filters: [{ kind: 'in', column: 'c', values: ['a', null] }] });
+    expect(parsed.kind === 'rows' && parsed.filters).toEqual([{ kind: 'in', column: 'c', values: ['a', null] }]);
+    expect(EngineRequestSchema.safeParse({ ...base, filters: [{ kind: 'range', column: 'c' }] }).success).toBe(false);
+    expect(EngineRequestSchema.safeParse({ ...base, filters: [{ kind: 'sql', text: '1=1' }] }).success).toBe(false);
+  });
+
+  it('requires a real chart spec on aggregate requests', () => {
+    const base = { kind: 'aggregate', requestId: 'r1', viewId: 'chart:1', seq: 1, table };
+    const parsed = EngineRequestSchema.parse({ ...base, spec: { mark: 'histogram', x: { column: 'amount' } } });
+    expect(parsed.kind === 'aggregate' && parsed.spec).toEqual({ mark: 'histogram', x: { column: 'amount' }, filters: [] });
+    expect(EngineRequestSchema.safeParse({ ...base, spec: { mark: 'bar' } }).success).toBe(false);
+    expect(EngineRequestSchema.safeParse({ ...base, spec: { mark: 'pie', x: { column: 'a' } } }).success).toBe(false);
+    expect(
+      EngineRequestSchema.safeParse({ ...base, spec: { mark: 'line', x: { column: 'a' }, pixelWidth: 0 } }).success,
+    ).toBe(false);
+    expect(EngineRequestSchema.safeParse({ ...base, spec: { mark: 'bar', x: { column: 'a' }, sql: 'x' } }).success).toBe(false);
   });
 
   it('rejects unknown request kinds and empty request ids', () => {
@@ -136,6 +171,18 @@ describe('EngineResponseSchema', () => {
     expect(
       EngineResponseSchema.safeParse({ kind: 'event', event: { type: 'parquetProgress', table, fraction: 2 } }).success,
     ).toBe(false);
+  });
+
+  it('accepts aggregate results with the effective mark and fallback flag', () => {
+    const ipc = new Uint8Array([1]);
+    const reply = { kind: 'aggregate', requestId: 'r', ipc, mark: 'heatmap', fellBackToHeatmap: true, engineMs: 1, cached: false };
+    expect(EngineResponseSchema.parse(reply)).toEqual(reply);
+    expect(EngineResponseSchema.safeParse({ ...reply, mark: 'pie' }).success).toBe(false);
+  });
+
+  it('carries the compiler path on bad_request errors', () => {
+    const error = { kind: 'error', requestId: 'r', code: 'bad_request', message: 'y.aggregate ...', path: 'y.aggregate' };
+    expect(EngineResponseSchema.parse(error)).toEqual(error);
   });
 
   it('accepts an error without a request id (e.g. unparseable request)', () => {

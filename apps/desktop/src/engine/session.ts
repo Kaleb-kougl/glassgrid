@@ -1,26 +1,92 @@
 import {
   EngineRequestSchema,
+  compileChartQuery,
+  compileScatterCountQuery,
+  compileWhere,
+  isCompileError,
   isViewScopedRequest,
+  quoteIdent,
+  scatterAsHeatmap,
+  scatterPointLimit,
+  type AggregateSpec,
+  type ChartSpec,
+  type CompiledQuery,
   type EngineEvent,
   type EngineReply,
   type EngineRequest,
   type EngineResponse,
+  type Filter,
+  type TableId,
 } from '@glassgrid/core';
-import { EngineFailure, NotImplementedError, abortCode, errorMessage, toEngineFailure } from './errors';
-import type { QueryService, RequestContext } from './query-service';
-import type { SqlFragment } from './sql-text';
+import { EngineFailure, abortCode, errorMessage, toEngineFailure } from './errors';
+import { QueryService, type Cached, type RequestContext } from './query-service';
+import type { SqlFragment, SqlParam } from './sql-text';
 
 interface InFlight {
   controller: AbortController;
   viewId: string | undefined;
 }
 
+/** The compiler's output as an engine SQL fragment (its params are always JSON scalars). */
+export function toFragment(compiled: CompiledQuery): SqlFragment {
+  const params = compiled.params.map((value): SqlParam => {
+    if (value === null || ['string', 'number', 'boolean', 'bigint'].includes(typeof value)) return value as SqlParam;
+    throw new EngineFailure('query_failed', `Unsupported bound value of type ${typeof value}`);
+  });
+  return { sql: compiled.sql, params };
+}
+
 /**
- * Integration seam for the chart compiler: turn an aggregate request's spec
- * into a full SELECT with bound values. Replace with the core compiler.
+ * Compile request filters to a WHERE fragment over the table's columns, or
+ * undefined when there are none (so unfiltered pages keep their fast path).
+ * `compileWhere` numbers its placeholders `$1..$n`; the engine writes its own
+ * offsets and limits as literals, so the fragment is the only placeholder
+ * source in the final statement.
  */
-export function compileAggregate(_spec: unknown): SqlFragment {
-  throw new NotImplementedError('aggregate (the chart spec compiler is not wired in yet)');
+async function compileFilters(
+  service: QueryService,
+  table: TableId,
+  filters: readonly Filter[] | undefined,
+  ctx: RequestContext,
+): Promise<SqlFragment | undefined> {
+  if (!filters || filters.length === 0) return undefined;
+  return toFragment(compileWhere(filters, await service.columns(table, ctx)));
+}
+
+export interface AggregateOutcome extends Cached<Uint8Array> {
+  /** The mark the rows are shaped for (`heatmap` after a scatter fallback). */
+  mark: ChartSpec['mark'];
+  fellBackToHeatmap: boolean;
+}
+
+/**
+ * Compile and run a chart aggregate against the table's cached profile.
+ * Scatter specs are counted first: above `scatterPointLimit(spec)` points the
+ * engine answers with `scatterAsHeatmap(spec)` instead (see docs/m1-compiler.md).
+ */
+export async function runAggregate(
+  service: QueryService,
+  table: TableId,
+  request: AggregateSpec,
+  ctx: RequestContext,
+): Promise<AggregateOutcome> {
+  const { pixelWidth, ...spec } = request;
+  // Profiles are cached per table, so only the first chart pays for the scan.
+  const columns = (await service.profile(table, ctx)).value.columns;
+  const relation = quoteIdent(QueryService.viewName(table));
+
+  let chart: ChartSpec = spec;
+  let fellBackToHeatmap = false;
+  if (spec.mark === 'scatter') {
+    const points = await service.countQuery(table, toFragment(compileScatterCountQuery(relation, spec, columns)), ctx);
+    if (points.value > scatterPointLimit(spec)) {
+      chart = scatterAsHeatmap(spec);
+      fellBackToHeatmap = true;
+    }
+  }
+  const compiled = compileChartQuery(relation, chart, columns, pixelWidth === undefined ? {} : { pixelWidth });
+  const result = await service.aggregate(table, toFragment(compiled), { pixelWidth }, ctx);
+  return { ...result, mark: chart.mark, fellBackToHeatmap };
 }
 
 /**
@@ -155,16 +221,27 @@ export class EngineSession {
           return { kind: 'profile', requestId, ...value, cached, engineMs: elapsed() };
         }
         case 'rows': {
-          const { value, cached } = await service.rows(request.table, request.query, ctx);
+          const where = await compileFilters(service, request.table, request.filters, ctx);
+          const query = where ? { ...request.query, where } : request.query;
+          const { value, cached } = await service.rows(request.table, query, ctx);
           return { kind: 'arrow', requestId, ipc: value, cached, engineMs: elapsed() };
         }
         case 'count': {
-          const { value, cached } = await service.count(request.table, undefined, ctx);
+          const where = await compileFilters(service, request.table, request.filters, ctx);
+          const { value, cached } = await service.count(request.table, where, ctx);
           return { kind: 'count', requestId, rowCount: value, cached, engineMs: elapsed() };
         }
         case 'aggregate': {
-          const { value, cached } = await service.aggregate(request.table, compileAggregate(request.spec), ctx);
-          return { kind: 'arrow', requestId, ipc: value, cached, engineMs: elapsed() };
+          const outcome = await runAggregate(service, request.table, request.spec, ctx);
+          return {
+            kind: 'aggregate',
+            requestId,
+            ipc: outcome.value,
+            mark: outcome.mark,
+            fellBackToHeatmap: outcome.fellBackToHeatmap,
+            cached: outcome.cached,
+            engineMs: elapsed(),
+          };
         }
         case 'ensureParquetCache': {
           const outcome = await service.ensureParquetCache(request.table);
@@ -182,6 +259,16 @@ export class EngineSession {
           };
       }
     } catch (error) {
+      if (isCompileError(error) && !ctx.signal?.aborted) {
+        // Spec problems are the caller's to fix; the message names the path and valid options.
+        return {
+          kind: 'error',
+          requestId,
+          code: 'bad_request',
+          message: error.message,
+          ...(error.path === undefined ? {} : { path: error.path }),
+        };
+      }
       const failure = toEngineFailure(error, ctx.signal);
       const code = ctx.signal?.aborted ? abortCode(ctx.signal) : failure.code;
       return { kind: 'error', requestId, code, message: failure.message };

@@ -4,6 +4,7 @@ import { DataType } from 'apache-arrow';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { SortKey, TableId } from '@glassgrid/core';
 import { EngineFailure } from './errors';
+import { QueryService } from './query-service';
 import { columnValues, createHarness, decode, fixtureRow, writeFixtureCsv, type Harness } from './test-support';
 
 const ROWS = 25_000;
@@ -281,9 +282,21 @@ describe('count', () => {
 });
 
 describe('aggregate', () => {
-  it('is a typed stub until the compiler lands', async () => {
-    await expect(h.service.aggregate(fixture.table, { sql: 'SELECT 1', params: [] })).rejects.toMatchObject({
-      code: 'not_implemented',
-    });
+  it('runs a compiled SELECT over the table view and caches by SQL, params and pixel width', async () => {
+    const view = `"${QueryService.viewName(fixture.table)}"`;
+    const compiled = { sql: `SELECT count(*) AS n FROM ${view} WHERE amount >= CAST($1 AS DOUBLE)`, params: [0] };
+    const first = await h.service.aggregate(fixture.table, compiled, { pixelWidth: 100 });
+    expect(first.cached).toBe(false);
+    expect(columnValues(decode(first.value), 'n')).toEqual([ROWS]);
+    expect((await h.service.aggregate(fixture.table, compiled, { pixelWidth: 100 })).cached).toBe(true);
+    expect((await h.service.aggregate(fixture.table, compiled, { pixelWidth: 200 })).cached).toBe(false);
+    expect((await h.service.aggregate(fixture.table, { ...compiled, params: [1e9] }, { pixelWidth: 100 })).cached).toBe(false);
+  });
+
+  it('runs a compiled count query', async () => {
+    const view = `"${QueryService.viewName(fixture.table)}"`;
+    const compiled = { sql: `SELECT count(*) AS row_count FROM ${view}`, params: [] };
+    expect(await h.service.countQuery(fixture.table, compiled)).toEqual({ value: ROWS, cached: false });
+    expect(await h.service.countQuery(fixture.table, compiled)).toEqual({ value: ROWS, cached: true });
   });
 });

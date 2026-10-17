@@ -1,7 +1,10 @@
 import { z } from 'zod';
 import { FileHandleSchema, RequestIdSchema, type FileHandle } from '../ids.js';
+import { ChartSpecSchema, MarkSchema } from '../spec/chart.js';
 import { ColumnProfileSchema, ColumnTypeSchema } from '../spec/column.js';
+import { FilterSchema } from '../spec/filter.js';
 import { SortKeySchema } from '../spec/rows.js';
+import { MAX_PIXEL_WIDTH } from '../sql/chart.js';
 
 /*
  * Renderer <-> engine protocol.
@@ -12,8 +15,9 @@ import { SortKeySchema } from '../spec/rows.js';
  * treat the other as untrusted input.
  *
  * No message carries SQL text or a filesystem path. Grid and chart requests
- * are typed objects; the engine builds SQL from them (quoted identifiers,
- * bound values). See docs/m1-engine-notes.md for the full contract.
+ * are typed objects (filters and chart specs from spec/); the engine compiles
+ * them with the core SQL compiler (quoted identifiers, bound values). See
+ * docs/m1-engine-notes.md and docs/m1-notes.md for the full contract.
  */
 
 // ---------------------------------------------------------------------------
@@ -102,6 +106,20 @@ export const RowsQuerySchema = z.object({
 });
 export type RowsQuery = z.infer<typeof RowsQuerySchema>;
 
+/** Filters on a rows or count request (AND-combined; see spec/filter.ts). */
+export const MAX_REQUEST_FILTERS = 256;
+export const RequestFiltersSchema = z.array(FilterSchema).max(MAX_REQUEST_FILTERS);
+
+/**
+ * What an aggregate request carries: a chart spec plus the plot width in
+ * device pixels, which bounds line/area results via M4 (see sql/chart.ts).
+ */
+export const AggregateSpecSchema = ChartSpecSchema.extend({
+  pixelWidth: z.number().int().min(1).max(MAX_PIXEL_WIDTH).optional(),
+});
+export type AggregateSpec = z.infer<typeof AggregateSpecSchema>;
+export type AggregateSpecInput = z.input<typeof AggregateSpecSchema>;
+
 /** `auto` converts in the background when the CSV exceeds the engine's size threshold. */
 export const ParquetModeSchema = z.enum(['auto', 'always', 'never']);
 export type ParquetMode = z.infer<typeof ParquetModeSchema>;
@@ -132,20 +150,27 @@ export const RowsRequestSchema = z.object({
   kind: z.literal('rows'),
   ...QueryBase,
   query: RowsQuerySchema,
+  /** Only rows matching every filter; compiled with `compileWhere`. */
+  filters: RequestFiltersSchema.optional(),
 });
 
-export const CountRequestSchema = z.object({ kind: z.literal('count'), ...QueryBase });
+export const CountRequestSchema = z.object({
+  kind: z.literal('count'),
+  ...QueryBase,
+  /** Count only rows matching every filter; compiled with `compileWhere`. */
+  filters: RequestFiltersSchema.optional(),
+});
 
 /**
- * Chart aggregate. The payload is the chart spec; at integration it becomes
- * the compiler's `ChartQuery` schema and the engine compiles it to
- * `{ sql, params }` before running it (see docs/m1-engine-notes.md). Until
- * then the engine answers `not_implemented`.
+ * Chart aggregate. The engine compiles the spec with `compileChartQuery`
+ * against the table's profile and answers `aggregate` (Arrow IPC). A scatter
+ * spec with more points than `scatterPointLimit(spec)` is answered as its
+ * `scatterAsHeatmap(spec)` fallback, flagged with `fellBackToHeatmap`.
  */
 export const AggregateRequestSchema = z.object({
   kind: z.literal('aggregate'),
   ...QueryBase,
-  spec: z.unknown(),
+  spec: AggregateSpecSchema,
 });
 
 export const CancelRequestSchema = z.object({
@@ -243,6 +268,19 @@ export const ArrowResultSchema = z.object({
   ...Cached,
 });
 
+/** A chart aggregate: Arrow IPC plus the mark the rows are shaped for. */
+export const AggregateResultSchema = z.object({
+  kind: z.literal('aggregate'),
+  requestId: RequestIdSchema,
+  ipc: ipcBytes,
+  /** The mark of the returned rows; `heatmap` when a scatter fell back. */
+  mark: MarkSchema,
+  /** True when a scatter spec had too many points and a heatmap was returned instead. */
+  fellBackToHeatmap: z.boolean(),
+  ...Timing,
+  ...Cached,
+});
+
 export const OpenedResultSchema = z.object({
   kind: z.literal('opened'),
   requestId: RequestIdSchema,
@@ -311,6 +349,8 @@ export const EngineErrorSchema = z.object({
   requestId: RequestIdSchema.nullable(),
   code: EngineErrorCodeSchema,
   message: z.string(),
+  /** For `bad_request` from the compiler: dotted path of the offending input, e.g. `y.aggregate`. */
+  path: z.string().optional(),
 });
 
 /** Unsolicited notifications, broadcast to every connected renderer. */
@@ -348,6 +388,7 @@ export const EngineEventMessageSchema = z.object({
 
 export const EngineResponseSchema = z.discriminatedUnion('kind', [
   ArrowResultSchema,
+  AggregateResultSchema,
   OpenedResultSchema,
   ProfileResultSchema,
   CountResultSchema,
@@ -359,6 +400,7 @@ export const EngineResponseSchema = z.discriminatedUnion('kind', [
 ]);
 export type EngineResponse = z.infer<typeof EngineResponseSchema>;
 export type ArrowResult = z.infer<typeof ArrowResultSchema>;
+export type AggregateResult = z.infer<typeof AggregateResultSchema>;
 export type OpenedResult = z.infer<typeof OpenedResultSchema>;
 export type ProfileResult = z.infer<typeof ProfileResultSchema>;
 export type CountResult = z.infer<typeof CountResultSchema>;

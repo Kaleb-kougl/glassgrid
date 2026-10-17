@@ -1,7 +1,12 @@
 import { tableFromIPC, type Table } from 'apache-arrow';
 import {
+  AggregateSpecSchema,
   ENGINE_PORT_WINDOW_MESSAGE,
   EngineResponseSchema,
+  RequestFiltersSchema,
+  type AggregateSpecInput,
+  type FilterInput,
+  type Mark,
   type CacheScope,
   type TableColumnProfile,
   type EngineEvent,
@@ -21,10 +26,26 @@ export class EngineRequestError extends Error {
   constructor(
     readonly code: string,
     message: string,
+    /** For `bad_request` from the compiler: the offending input path, e.g. `y.aggregate`. */
+    readonly path?: string,
   ) {
     super(message);
     this.name = 'EngineRequestError';
   }
+}
+
+type SafeParsed<T> =
+  | { success: true; data: T }
+  | { success: false; error: { issues: ReadonlyArray<{ path: readonly PropertyKey[]; message: string }> } };
+
+/** Validate a request payload in the renderer, so mistakes fail before a round trip. */
+function parseOrReject<T>(parsed: SafeParsed<T>, what: string): T {
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    const path = issue?.path.map(String).join('.') ?? '';
+    throw new EngineRequestError('bad_request', `Invalid ${what}${path ? ` at ${path}` : ''}: ${issue?.message ?? 'invalid'}`, path || undefined);
+  }
+  return parsed.data;
 }
 
 /** True for errors that only mean "a newer request replaced this one" or "you cancelled it". */
@@ -44,6 +65,11 @@ export interface QueryOptions {
   signal?: AbortSignal;
 }
 
+export interface FilteredQueryOptions extends QueryOptions {
+  /** Only rows matching every filter (AND). */
+  filters?: readonly FilterInput[];
+}
+
 interface Timed {
   /** Time spent inside the engine, as reported by the engine. */
   engineMs: number;
@@ -53,6 +79,14 @@ interface Timed {
 
 export interface RowsResult extends Timed {
   table: Table;
+}
+
+export interface AggregateResult extends Timed {
+  table: Table;
+  /** The mark the rows are shaped for; `heatmap` when a scatter fell back. */
+  mark: Mark;
+  /** A scatter spec had too many points, so a heatmap came back instead. */
+  fellBackToHeatmap: boolean;
 }
 
 export interface CountResult extends Timed {
@@ -135,20 +169,33 @@ export class EngineClient {
     return { rowCount: reply.rowCount, columns: reply.columns, engineMs: reply.engineMs, cached: reply.cached };
   }
 
-  async rows(table: TableId, query: RowsQuery, options: QueryOptions = {}): Promise<RowsResult> {
-    const reply = await this.call(this.viewScoped({ kind: 'rows', table, query }, options), 'arrow', options);
+  async rows(table: TableId, query: RowsQuery, options: FilteredQueryOptions = {}): Promise<RowsResult> {
+    const body = { kind: 'rows' as const, table, query, ...this.filters(options) };
+    const reply = await this.call(this.viewScoped(body, options), 'arrow', options);
     return { table: tableFromIPC(reply.ipc), engineMs: reply.engineMs, cached: reply.cached };
   }
 
-  async count(table: TableId, options: QueryOptions = {}): Promise<CountResult> {
-    const reply = await this.call(this.viewScoped({ kind: 'count', table }, options), 'count', options);
+  async count(table: TableId, options: FilteredQueryOptions = {}): Promise<CountResult> {
+    const body = { kind: 'count' as const, table, ...this.filters(options) };
+    const reply = await this.call(this.viewScoped(body, options), 'count', options);
     return { rowCount: reply.rowCount, engineMs: reply.engineMs, cached: reply.cached };
   }
 
-  /** Chart aggregate; the engine answers `not_implemented` until the spec compiler lands. */
-  async aggregate(table: TableId, spec: unknown, options: QueryOptions = {}): Promise<RowsResult> {
-    const reply = await this.call(this.viewScoped({ kind: 'aggregate', table, spec }, options), 'arrow', options);
-    return { table: tableFromIPC(reply.ipc), engineMs: reply.engineMs, cached: reply.cached };
+  /**
+   * Chart aggregate for a `ChartSpec` (plus the plot's `pixelWidth`). Use
+   * `viewId: 'chart:<id>'` per chart card, so a newer request (e.g. while
+   * brushing) supersedes the stale one.
+   */
+  async aggregate(table: TableId, spec: AggregateSpecInput, options: QueryOptions = {}): Promise<AggregateResult> {
+    const parsed = parseOrReject(AggregateSpecSchema.safeParse(spec), 'chart spec');
+    const reply = await this.call(this.viewScoped({ kind: 'aggregate', table, spec: parsed }, options), 'aggregate', options);
+    return {
+      table: tableFromIPC(reply.ipc),
+      mark: reply.mark,
+      fellBackToHeatmap: reply.fellBackToHeatmap,
+      engineMs: reply.engineMs,
+      cached: reply.cached,
+    };
   }
 
   async ensureParquetCache(table: TableId): Promise<ParquetCacheResult> {
@@ -197,6 +244,11 @@ export class EngineClient {
   }
 
   // -------------------------------------------------------------------------
+
+  private filters(options: FilteredQueryOptions) {
+    if (!options.filters || options.filters.length === 0) return {};
+    return { filters: parseOrReject(RequestFiltersSchema.safeParse(options.filters), 'filters') };
+  }
 
   private viewScoped<B extends { kind: 'profile' | 'rows' | 'count' | 'aggregate' }>(body: B, options: QueryOptions) {
     // Requests without a view get a private one, so they never supersede anything.
@@ -295,7 +347,7 @@ export class EngineClient {
     }
 
     if (response.kind === 'error') {
-      pending.reject(new EngineRequestError(response.code, response.message));
+      pending.reject(new EngineRequestError(response.code, response.message, response.path));
       return;
     }
     pending.resolve(response);

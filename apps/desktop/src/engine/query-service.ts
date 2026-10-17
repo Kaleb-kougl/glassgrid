@@ -29,7 +29,6 @@ import { readerToArrowIPC } from './arrow';
 import { simpleColumnType, toCount, toScalar } from './column-types';
 import {
   EngineFailure,
-  NotImplementedError,
   errorMessage,
   isInterruptError,
   throwIfAborted,
@@ -161,6 +160,15 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
   // -------------------------------------------------------------------------
   // Files and tables
 
+  /**
+   * Name of the view that exposes a table's columns (unquoted). The chart
+   * compiler reads from it: `compileChartQuery(quoteIdent(viewName), ...)`.
+   * Deterministic, so it is valid as soon as the table is open.
+   */
+  static viewName(id: TableId): string {
+    return `gg_${id}`;
+  }
+
   /** Called by main (through the control channel) when the user picks a file. */
   registerFile(handle: FileHandle, path: string): void {
     this.files.set(handle, path);
@@ -228,7 +236,7 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
       source,
       columns: [],
       rowCount: undefined,
-      view: quoteIdent(`gg_${id}`),
+      view: quoteIdent(QueryService.viewName(id)),
       ordView: quoteIdent(`gg_${id}_ord`),
     };
 
@@ -286,6 +294,11 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
     const csvPath = this.files.get(file);
     if (!csvPath) throw new EngineFailure('unknown_table', 'This table is not open');
     return this.openTable(id, file, csvPath, ctx);
+  }
+
+  /** A table's columns (name, logical type, DuckDB type), opening it on demand. */
+  async columns(id: TableId, ctx: RequestContext = {}): Promise<ColumnInfo[]> {
+    return (await this.table(id, ctx)).columns;
   }
 
   private handleFor(state: TableState): TableHandle {
@@ -406,12 +419,35 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
   }
 
   /**
-   * Chart aggregate. Contract for integration: the engine compiles the
-   * request's ChartQuery into `{ sql, params }` (a full SELECT over the
-   * table's view, values bound) and runs it here; the result is Arrow IPC.
+   * Chart aggregate: run a full SELECT compiled by `compileChartQuery` over
+   * this table's view (see `viewName`) and return Arrow IPC. Results are
+   * cached by SQL, bound values and `pixelWidth`.
    */
-  aggregate(_id: TableId, _compiled: SqlFragment, _ctx: RequestContext = {}): Promise<Cached<Uint8Array>> {
-    return Promise.reject(new NotImplementedError('aggregate'));
+  async aggregate(
+    id: TableId,
+    compiled: SqlFragment,
+    options: { pixelWidth?: number | undefined } = {},
+    ctx: RequestContext = {},
+  ): Promise<Cached<Uint8Array>> {
+    await this.table(id, ctx); // opens (or reopens) the view the SQL reads from
+    return this.cachedArrow(id, compiled.sql, compiled, ctx, `pixelWidth=${options.pixelWidth ?? 'default'}`);
+  }
+
+  /**
+   * Run a compiled query that returns one BIGINT in its first column (e.g.
+   * `compileScatterCountQuery`) and return it as a number. Cached like counts.
+   */
+  async countQuery(id: TableId, compiled: SqlFragment, ctx: RequestContext = {}): Promise<Cached<number>> {
+    await this.table(id, ctx);
+    const key = ResultCache.key(id, compiled.sql, fragmentKey(compiled));
+    const hit = this.results.get(key);
+    if (hit?.kind === 'count') return { value: hit.rowCount, cached: true };
+    const rowCount = await this.withConnection(ctx.signal, async (connection) => {
+      const reader = await connection.runAndReadAll(compiled.sql, bind(compiled.params));
+      return toCount(reader.getRows()[0]?.[0] ?? null);
+    });
+    this.results.set(key, { kind: 'count', rowCount }, 64);
+    return { value: rowCount, cached: false };
   }
 
   private indexSpec(state: TableState, name: string, orderBy: string, where: SqlFragment | undefined) {
@@ -442,8 +478,10 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
     sql: string,
     where: SqlFragment | undefined,
     ctx: RequestContext,
+    /** Extra cache-key material for inputs that shape the result but not the SQL text. */
+    keyExtra = '',
   ): Promise<Cached<Uint8Array>> {
-    const key = ResultCache.key(id, sql, fragmentKey(where));
+    const key = ResultCache.key(id, sql, keyExtra ? `${fragmentKey(where)}\u0000${keyExtra}` : fragmentKey(where));
     const hit = this.results.get(key);
     if (hit?.kind === 'ipc') return { value: hit.ipc, cached: true };
     const ipc = await this.withConnection(ctx.signal, async (connection) =>
