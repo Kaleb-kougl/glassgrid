@@ -11,7 +11,7 @@ describe('openFile', () => {
     expect(state.dataSource).toEqual({
       handleId: 'fh_0123456789abcdef',
       fileName: 'sales.csv',
-      fingerprint: { sizeBytes: 31_000_000, mtimeMs: 1_760_000_000_000, sampleHash: 'abc123' },
+      fingerprint: { sizeBytes: 31_000_000, mtimeMs: 1_760_000_000_000, headTailSha256: 'a'.repeat(64), key: 'b'.repeat(32) },
     });
     expect(state.columns[2]).toEqual({ name: 'amount', inferredType: 'float', typeOverride: null });
     expect(state.charts).toEqual([]);

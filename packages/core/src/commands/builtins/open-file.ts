@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { FileHandleSchema } from '../../ids.js';
 import { ColumnTypeSchema } from '../../spec/column.js';
-import { ColumnNameSchema, FingerprintSchema } from '../../state/workspace.js';
+import { FingerprintSchema } from '../../protocol/engine.js';
+import { ColumnNameSchema } from '../../state/workspace.js';
 import { defineCommand } from '../define.js';
 import { MCP_EXEMPTIONS } from '../mcp-exemptions.js';
 

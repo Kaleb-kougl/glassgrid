@@ -10,9 +10,8 @@ import {
   type Mark,
 } from '../spec/chart.js';
 import { type Field, type TimeUnit, type YField } from '../spec/field.js';
-import { ROW_COUNT_COLUMN } from '../sql.js';
 import { autoTimeUnit, niceBinWidth, numericBinCount, type TimeUnitStrategy } from './bins.js';
-import { Params, quoteIdent, type CompiledQuery } from './builder.js';
+import { Params, quoteIdent, ROW_COUNT_COLUMN, type CompiledQuery } from './builder.js';
 import { ColumnIndex } from './columns.js';
 import { CompileError, type CompileErrorCode } from './errors.js';
 import { filterPredicates, parseOrThrow, whereClause } from './where.js';

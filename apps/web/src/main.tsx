@@ -1,6 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { APP_NAME, Sql } from '@glassgrid/core';
+import { APP_NAME, compileCountQuery, quoteIdent } from '@glassgrid/core';
 import { Stat } from '@glassgrid/ui';
 import '@glassgrid/ui/styles.css';
 import './styles.css';
@@ -14,7 +14,7 @@ function App() {
         proves the shared packages compile for the browser.
       </p>
       <dl>
-        <Stat label="Shared row-count query" value={<code>{Sql.countRows}</code>} />
+        <Stat label="Shared row-count query" value={<code>{compileCountQuery(quoteIdent('trips'), [], []).sql}</code>} />
       </dl>
     </main>
   );

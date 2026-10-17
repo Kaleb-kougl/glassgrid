@@ -1,5 +1,5 @@
 export { CompileError, isCompileError, type CompileErrorCode } from './errors.js';
-export { quoteIdent, type CompiledQuery } from './builder.js';
+export { quoteIdent, ROW_COUNT_COLUMN, type CompiledQuery } from './builder.js';
 export { compileWhere } from './where.js';
 export { compileRowsQuery, compileCountQuery } from './rows.js';
 export {

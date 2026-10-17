@@ -25,7 +25,7 @@ export function openFileInput(overrides: Partial<OpenFileInput> = {}): OpenFileI
   return {
     handleId: 'fh_0123456789abcdef',
     fileName: 'sales.csv',
-    fingerprint: { sizeBytes: 31_000_000, mtimeMs: 1_760_000_000_000, sampleHash: 'abc123' },
+    fingerprint: { sizeBytes: 31_000_000, mtimeMs: 1_760_000_000_000, headTailSha256: 'a'.repeat(64), key: 'b'.repeat(32) },
     columns: [
       { name: 'id', type: 'integer' },
       { name: 'category', type: 'text' },

@@ -3,7 +3,14 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { arch, cpus, platform, tmpdir, totalmem } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
-import { COUNT_ROWS_MEASURE, type CountRowsMeasureDetail } from '../src/renderer/src/perf';
+import {
+  COUNT_ROWS_MEASURE,
+  OPEN_TO_FIRST_PAGE_MEASURE,
+  PROFILE_MEASURE,
+  type CountRowsMeasureDetail,
+  type OpenToFirstPageMeasureDetail,
+  type ProfileMeasureDetail,
+} from '../src/renderer/src/perf';
 import { e2eRowCount } from './config';
 import { writeFixtureCsv } from './csv-fixture';
 
@@ -17,8 +24,10 @@ interface CountRun {
   label: 'cold' | 'warm';
   /** Renderer performance.measure: click handler -> Arrow decoded. */
   roundTripMs: number;
-  /** Engine-reported time: DuckDB query + Arrow encode. */
+  /** Engine-reported time: DuckDB query + encode (0 when served from the result cache). */
   engineMs: number;
+  /** Served from the engine's result cache (the warm run after a cold one). */
+  cached: boolean;
   /** Playwright-observed time from click to measure (includes polling). */
   wallMs: number;
 }
@@ -36,15 +45,12 @@ async function duckdbPackageVersion(): Promise<string> {
   return pkg.version;
 }
 
-async function countOnce(page: Page, label: CountRun['label']): Promise<CountRun> {
-  const previous = await page.evaluate(
-    (name) => performance.getEntriesByName(name, 'measure').length,
-    COUNT_ROWS_MEASURE,
-  );
+async function measureCount(page: Page, name: string): Promise<number> {
+  return page.evaluate((measure) => performance.getEntriesByName(measure, 'measure').length, name);
+}
 
-  const clickedAt = performance.now();
-  await page.getByTestId('count-rows').click();
-
+/** Wait for the next performance.measure entry called `name` (or an error shown by the app). */
+async function nextMeasure(page: Page, name: string, previous: number): Promise<{ duration: number; detail: unknown }> {
   const handle = await page.waitForFunction(
     ({ name, previous }) => {
       const error = document.querySelector('[data-testid="error"]');
@@ -56,15 +62,21 @@ async function countOnce(page: Page, label: CountRun['label']): Promise<CountRun
       }
       return null;
     },
-    { name: COUNT_ROWS_MEASURE, previous },
+    { name, previous },
     { timeout: test.info().timeout, polling: 25 },
   );
-  const wallMs = performance.now() - clickedAt;
-  const outcome = (await handle.jsonValue()) as
-    | { error: string }
-    | { duration: number; detail: CountRowsMeasureDetail };
-
+  const outcome = (await handle.jsonValue()) as { error: string } | { duration: number; detail: unknown };
   if ('error' in outcome) throw new Error(`App reported an error: ${outcome.error}`);
+  return outcome;
+}
+
+async function countOnce(page: Page, label: CountRun['label']): Promise<CountRun> {
+  const previous = await measureCount(page, COUNT_ROWS_MEASURE);
+  const clickedAt = performance.now();
+  await page.getByTestId('count-rows').click();
+  const measured = await nextMeasure(page, COUNT_ROWS_MEASURE, previous);
+  const outcome = { duration: measured.duration, detail: measured.detail as CountRowsMeasureDetail };
+  const wallMs = performance.now() - clickedAt;
   expect(outcome.detail.rowCount).toBe(String(ROWS));
 
   // The rendered value must match too (strip locale-specific separators).
@@ -72,10 +84,49 @@ async function countOnce(page: Page, label: CountRun['label']): Promise<CountRun
     .poll(async () => (await page.getByTestId('row-count').textContent())?.replace(/\D/g, ''))
     .toBe(String(ROWS));
 
-  return { label, roundTripMs: outcome.duration, engineMs: outcome.detail.engineMs, wallMs };
+  return {
+    label,
+    roundTripMs: outcome.duration,
+    engineMs: outcome.detail.engineMs,
+    cached: outcome.detail.cached,
+    wallMs,
+  };
 }
 
-test.describe('count rows', () => {
+async function machineInfo(app: ElectronApplication | undefined) {
+  if (!app) throw new Error('Electron app failed to launch');
+  const versions = await app.evaluate(() => ({
+    electron: process.versions.electron,
+    chrome: process.versions.chrome,
+    node: process.versions.node,
+  }));
+  return {
+    machine: {
+      platform: platform(),
+      arch: arch(),
+      cpuModel: cpus()[0]?.model ?? 'unknown',
+      cpuCount: cpus().length,
+      totalMemBytes: totalmem(),
+      ci: Boolean(process.env['CI']),
+    },
+    versions: { ...versions, duckdbNodeApi: await duckdbPackageVersion() },
+    packaged: Boolean(PACKAGED_EXECUTABLE),
+  };
+}
+
+async function writeBaseline(name: string, baseline: object): Promise<string> {
+  await mkdir(RESULTS_DIR, { recursive: true });
+  const variant = PACKAGED_EXECUTABLE ? '-packaged' : '';
+  const outFile = join(RESULTS_DIR, `${name}-${ROWS}-${platform()}-${arch()}${variant}.json`);
+  await writeFile(outFile, `${JSON.stringify(baseline, null, 2)}\n`);
+  await test.info().attach('benchmark', { path: outFile, contentType: 'application/json' });
+  return outFile;
+}
+
+test.describe('data path', () => {
+  // The tests share one app instance: the first opens the file, the second counts it.
+  test.describe.configure({ mode: 'serial' });
+
   let workDir: string;
   let csvPath: string;
   let fileBytes: number;
@@ -99,7 +150,13 @@ test.describe('count rows', () => {
     fileBytes = await writeFixtureCsv(csvPath, ROWS);
     csvGenerationMs = performance.now() - started;
 
-    const env = { ...process.env, GLASSGRID_E2E: '1', GLASSGRID_E2E_OPEN: csvPath };
+    const env = {
+      ...process.env,
+      GLASSGRID_E2E: '1',
+      GLASSGRID_E2E_OPEN: csvPath,
+      // Fresh userData per run: no Parquet cache from earlier runs, nothing written to the real profile.
+      GLASSGRID_E2E_USER_DATA: join(workDir, 'user-data'),
+    };
     const launched = PACKAGED_EXECUTABLE
       ? await electron.launch({ executablePath: PACKAGED_EXECUTABLE, args: chromiumFlags(), env })
       : await electron.launch({ args: [APP_DIR, ...chromiumFlags()], env });
@@ -131,21 +188,64 @@ test.describe('count rows', () => {
     if (workDir) await rm(workDir, { recursive: true, force: true });
   });
 
-  test(`counts ${ROWS.toLocaleString('en-US')} rows and records a baseline`, async () => {
+  test(`opens ${ROWS.toLocaleString('en-US')} rows, fetches the first page and profiles`, async () => {
+    const previousOpen = await measureCount(page, OPEN_TO_FIRST_PAGE_MEASURE);
+    const previousProfile = await measureCount(page, PROFILE_MEASURE);
+    const clickedAt = performance.now();
     await page.getByTestId('open-csv').click();
+    const opened = await nextMeasure(page, OPEN_TO_FIRST_PAGE_MEASURE, previousOpen);
+    const firstPage = { duration: opened.duration, detail: opened.detail as OpenToFirstPageMeasureDetail };
+    const firstPageWallMs = performance.now() - clickedAt;
+    await expect(page.getByTestId('file-name')).toHaveText(basename(csvPath));
+    expect(firstPage.detail).toMatchObject({ rows: 1000, columns: 4, usingParquetCache: false });
+    await expect(page.getByTestId('first-page')).toContainText('4 columns');
+
+    const profiled = await nextMeasure(page, PROFILE_MEASURE, previousProfile);
+    const profile = { duration: profiled.duration, detail: profiled.detail as ProfileMeasureDetail };
+    expect(profile.detail).toMatchObject({ rowCount: ROWS, columns: 4 });
+    const profileTable = page.getByTestId('profile');
+    await expect(profileTable.locator('tbody tr')).toHaveCount(4);
+    await expect(profileTable.locator('tbody tr').first()).toContainText('integer');
+
+    expect(rendererErrors, 'renderer console errors (CSP violations, exceptions)').toEqual([]);
+
+    const baseline = {
+      benchmark: 'open-to-first-page',
+      recordedAt: new Date().toISOString(),
+      rows: ROWS,
+      fileBytes,
+      csvGenerationMs,
+      ...(await machineInfo(app)),
+      openToFirstPage: {
+        /** Renderer measure: Open CSV click -> first 1,000-row page decoded. */
+        roundTripMs: firstPage.duration,
+        openEngineMs: firstPage.detail.openEngineMs,
+        firstPageEngineMs: firstPage.detail.firstPageEngineMs,
+        wallMs: firstPageWallMs,
+      },
+      profile: {
+        /** Renderer measure: profile request -> result, started after the first page. */
+        roundTripMs: profile.duration,
+        engineMs: profile.detail.engineMs,
+      },
+    };
+    const outFile = await writeBaseline('open-to-first-page', baseline);
+    console.log(
+      `open-to-first-page ${ROWS} rows: ${firstPage.duration.toFixed(1)} ms ` +
+        `(open ${firstPage.detail.openEngineMs.toFixed(1)} ms, page ${firstPage.detail.firstPageEngineMs.toFixed(1)} ms); ` +
+        `profile ${profile.duration.toFixed(1)} ms (engine ${profile.detail.engineMs.toFixed(1)} ms) -> ${outFile}`,
+    );
+  });
+
+  test(`counts ${ROWS.toLocaleString('en-US')} rows and records a baseline`, async () => {
     await expect(page.getByTestId('file-name')).toHaveText(basename(csvPath));
 
     const cold = await countOnce(page, 'cold');
     const warm = await countOnce(page, 'warm');
+    expect(cold.cached).toBe(false);
+    expect(warm.cached).toBe(true);
 
     expect(rendererErrors, 'renderer console errors (CSP violations, exceptions)').toEqual([]);
-
-    if (!app) throw new Error('Electron app failed to launch');
-    const versions = await app.evaluate(() => ({
-      electron: process.versions.electron,
-      chrome: process.versions.chrome,
-      node: process.versions.node,
-    }));
 
     const baseline = {
       benchmark: 'count-rows',
@@ -153,27 +253,13 @@ test.describe('count rows', () => {
       rows: ROWS,
       fileBytes,
       csvGenerationMs,
-      machine: {
-        platform: platform(),
-        arch: arch(),
-        cpuModel: cpus()[0]?.model ?? 'unknown',
-        cpuCount: cpus().length,
-        totalMemBytes: totalmem(),
-        ci: Boolean(process.env['CI']),
-      },
-      versions: { ...versions, duckdbNodeApi: await duckdbPackageVersion() },
-      packaged: Boolean(PACKAGED_EXECUTABLE),
+      ...(await machineInfo(app)),
       runs: [cold, warm],
     };
-
-    await mkdir(RESULTS_DIR, { recursive: true });
-    const variant = PACKAGED_EXECUTABLE ? '-packaged' : '';
-    const outFile = join(RESULTS_DIR, `count-rows-${ROWS}-${platform()}-${arch()}${variant}.json`);
-    await writeFile(outFile, `${JSON.stringify(baseline, null, 2)}\n`);
-    await test.info().attach('benchmark', { path: outFile, contentType: 'application/json' });
+    const outFile = await writeBaseline('count-rows', baseline);
     console.log(
       `count-rows ${ROWS} rows: cold ${cold.roundTripMs.toFixed(1)} ms (engine ${cold.engineMs.toFixed(1)} ms), ` +
-        `warm ${warm.roundTripMs.toFixed(1)} ms (engine ${warm.engineMs.toFixed(1)} ms) -> ${outFile}`,
+        `warm ${warm.roundTripMs.toFixed(1)} ms (result cache) -> ${outFile}`,
     );
   });
 });

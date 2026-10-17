@@ -2,8 +2,7 @@ import { z } from 'zod';
 import { type CompileColumn } from '../spec/column.js';
 import { FilterSchema, type FilterInput } from '../spec/filter.js';
 import { RowQuerySchema, type RowQueryInput } from '../spec/rows.js';
-import { ROW_COUNT_COLUMN } from '../sql.js';
-import { Params, quoteIdent, type CompiledQuery } from './builder.js';
+import { Params, quoteIdent, ROW_COUNT_COLUMN, type CompiledQuery } from './builder.js';
 import { ColumnIndex } from './columns.js';
 import { filterPredicates, parseOrThrow, whereClause } from './where.js';
 

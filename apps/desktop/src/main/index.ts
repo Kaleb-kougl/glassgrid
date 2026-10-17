@@ -2,7 +2,7 @@ import { basename, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { app, BrowserWindow, dialog, ipcMain, type OpenDialogOptions } from 'electron';
 import { APP_NAME, IpcChannel, type OpenCsvResult } from '@glassgrid/core';
-import { e2eOpenPath } from './e2e';
+import { applyE2EOverrides, e2eOpenPath } from './e2e';
 import { EngineHost } from './engine-host';
 import { createSenderGuard, installSecurityPolicies } from './security';
 
@@ -10,7 +10,12 @@ const devServerUrl = process.env['ELECTRON_RENDERER_URL'];
 const rendererIndex = join(__dirname, '../renderer/index.html');
 const rendererOrigin = devServerUrl ?? pathToFileURL(rendererIndex).href;
 
-const engine = new EngineHost();
+applyE2EOverrides();
+
+const engine = new EngineHost(() => ({
+  cacheDir: join(app.getPath('userData'), 'cache', 'parquet'),
+  tempDir: join(app.getPath('userData'), 'cache', 'duckdb-tmp'),
+}));
 const assertTrustedSender = createSenderGuard((url) => url.startsWith(rendererOrigin));
 
 function createMainWindow(): BrowserWindow {

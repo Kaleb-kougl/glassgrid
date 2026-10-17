@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { FileHandleSchema } from '../ids.js';
+import { FingerprintSchema } from '../protocol/engine.js';
 import { ColumnTypeSchema, type ColumnType } from '../spec/column.js';
 import { SortKeySchema } from '../spec/rows.js';
 
@@ -40,18 +41,11 @@ export type ChartId = z.infer<typeof ChartIdSchema>;
 export const ViewIdSchema = SafeIdSchema;
 export type ViewId = z.infer<typeof ViewIdSchema>;
 
-/** Identifies a CSV on disk: size, mtime and a hash of its first and last 1 MB. */
-export const FingerprintSchema = z.strictObject({
-  sizeBytes: z.number().int().nonnegative(),
-  mtimeMs: z.number().nonnegative(),
-  sampleHash: z.string().min(1).max(128),
-});
-export type Fingerprint = z.infer<typeof FingerprintSchema>;
-
 export const DataSourceSchema = z.strictObject({
   handleId: FileHandleSchema,
   /** Display name only; the path never reaches the renderer. */
   fileName: z.string().min(1).max(1024),
+  /** As returned by the engine's `open` (size, mtime, head/tail SHA-256, cache key). */
   fingerprint: FingerprintSchema,
 });
 export type DataSource = z.infer<typeof DataSourceSchema>;

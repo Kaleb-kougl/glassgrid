@@ -1,5 +1,8 @@
 import { CompileError } from './errors.js';
 
+/** Name of the single BIGINT column returned by count queries. */
+export const ROW_COUNT_COLUMN = 'row_count';
+
 /** SQL text plus its positional parameters (`$1` is `params[0]`). */
 export interface CompiledQuery {
   readonly sql: string;

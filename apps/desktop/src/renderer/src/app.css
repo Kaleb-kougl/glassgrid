@@ -61,3 +61,25 @@ body {
   margin: 0;
   color: var(--gg-danger);
 }
+
+.app__profile {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.app__profile th,
+.app__profile td {
+  padding: 6px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--gg-border);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+
+.app__profile th {
+  color: var(--gg-muted);
+  font-weight: 500;
+}
