@@ -153,7 +153,7 @@ describe('tier policy', () => {
         tier: 'read',
         mcp: true,
         apply(draft) {
-          draft.charts.push({ id: 'c1', spec: {} });
+          draft.charts.push({ id: 'c1', spec: { mark: 'bar', x: { column: 'id' }, filters: [] } });
         },
       }),
     );

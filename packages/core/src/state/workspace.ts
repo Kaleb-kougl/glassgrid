@@ -1,7 +1,9 @@
 import { z } from 'zod';
 import { FileHandleSchema } from '../ids.js';
 import { FingerprintSchema } from '../protocol/engine.js';
+import { ChartSpecSchema } from '../spec/chart.js';
 import { ColumnTypeSchema, type ColumnType } from '../spec/column.js';
+import { FilterSchema } from '../spec/filter.js';
 import { SortKeySchema } from '../spec/rows.js';
 
 /*
@@ -9,24 +11,6 @@ import { SortKeySchema } from '../spec/rows.js';
  * `.glassgrid` files. It must stay plain JSON (no Dates, Maps, class instances
  * or undefined values) so it can be serialised, diffed and undone as patches.
  */
-
-/**
- * Placeholder for a chart spec.
- *
- * INTEGRATION: replace with the real `ChartSpecSchema` from
- * packages/core/src/spec/** once it lands.
- */
-export const ChartSpecLikeSchema = z.record(z.string(), z.unknown());
-export type ChartSpecLike = z.infer<typeof ChartSpecLikeSchema>;
-
-/**
- * Placeholder for one view's filter selection.
- *
- * INTEGRATION: replace with the real `Filter`/`Selection` schema from
- * packages/core/src/spec/**.
- */
-export const FilterLikeSchema = z.record(z.string(), z.unknown());
-export type FilterLike = z.infer<typeof FilterLikeSchema>;
 
 /**
  * Ids used as object keys in state. Restricting the alphabet keeps keys such
@@ -63,7 +47,7 @@ export type ColumnState = z.infer<typeof ColumnStateSchema>;
 
 export const ChartStateSchema = z.strictObject({
   id: ChartIdSchema,
-  spec: ChartSpecLikeSchema,
+  spec: ChartSpecSchema,
 });
 export type ChartState = z.infer<typeof ChartStateSchema>;
 
@@ -92,7 +76,7 @@ export const WorkspaceStateSchema = z.strictObject({
   columns: z.array(ColumnStateSchema),
   charts: z.array(ChartStateSchema),
   /** One selection per view (chart id or grid); see Cross-filtering. */
-  filters: z.record(ViewIdSchema, FilterLikeSchema),
+  filters: z.record(ViewIdSchema, FilterSchema),
   grid: GridStateSchema,
   layout: LayoutStateSchema,
 });

@@ -158,9 +158,14 @@ describe('WorkspaceStore', () => {
       newId: sequentialIds(),
     });
     const entry = store.commit({ name: 'test', caller: 'ai', input: {} }, (draft, ctx) => {
-      draft.charts.push({ id: ctx.newId('chart'), spec: { createdAt: ctx.now, by: ctx.caller } });
+      const id = ctx.newId('chart');
+      draft.charts.push({ id, spec: { mark: 'bar', x: { column: ctx.caller }, filters: [] } });
+      draft.filters[id] = { kind: 'range', column: 'at', min: ctx.now, minInclusive: true, maxInclusive: true };
     });
-    expect(store.getState().charts).toEqual([{ id: 'chart_1', spec: { createdAt: 5_000, by: 'ai' } }]);
+    expect(store.getState().charts).toEqual([{ id: 'chart_1', spec: { mark: 'bar', x: { column: 'ai' }, filters: [] } }]);
+    expect(store.getState().filters).toEqual({
+      chart_1: { kind: 'range', column: 'at', min: 5_000, minInclusive: true, maxInclusive: true },
+    });
     expect(entry).toMatchObject({ id: 'entry_2', at: 5_000, caller: 'ai' });
   });
 });
