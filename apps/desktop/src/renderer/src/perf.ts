@@ -42,3 +42,14 @@ export interface ProfileMeasureDetail {
   rowCount: number;
   columns: number;
 }
+
+/** performance.measure name for one chart aggregate round trip (debug panel in M1). */
+export const AGGREGATE_MEASURE = 'glassgrid:aggregate';
+
+export interface AggregateMeasureDetail {
+  engineMs: number;
+  cached: boolean;
+  /** Mark of the returned rows (heatmap after a scatter fallback). */
+  mark: string;
+  rows: number;
+}

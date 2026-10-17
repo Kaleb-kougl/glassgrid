@@ -83,3 +83,45 @@ body {
   color: var(--gg-muted);
   font-weight: 500;
 }
+
+.app__section-title {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.app__columns,
+.app__history {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+}
+
+.app__column {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.app__column .app__file-name {
+  min-width: 160px;
+}
+
+.app__history {
+  padding-left: 20px;
+  list-style: decimal;
+}
+
+.app__history-undone {
+  color: var(--gg-muted);
+  text-decoration: line-through;
+}
+
+.app__spec {
+  margin: 8px 0;
+  font: 12px/1.4 var(--gg-mono);
+  color: var(--gg-muted);
+  white-space: pre-wrap;
+}

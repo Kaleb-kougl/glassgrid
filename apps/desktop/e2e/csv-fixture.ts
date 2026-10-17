@@ -3,7 +3,7 @@ import { stat } from 'node:fs/promises';
 import { once } from 'node:events';
 import { finished } from 'node:stream/promises';
 
-const CATEGORIES = ['alpha', 'bravo', 'charlie', 'delta', 'echo'] as const;
+export const CATEGORIES = ['alpha', 'bravo', 'charlie', 'delta', 'echo'] as const;
 const ROWS_PER_CHUNK = 50_000;
 
 function pad2(value: number): string {

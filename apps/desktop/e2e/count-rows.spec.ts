@@ -4,15 +4,17 @@ import { arch, cpus, platform, tmpdir, totalmem } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import {
+  AGGREGATE_MEASURE,
   COUNT_ROWS_MEASURE,
   OPEN_TO_FIRST_PAGE_MEASURE,
   PROFILE_MEASURE,
+  type AggregateMeasureDetail,
   type CountRowsMeasureDetail,
   type OpenToFirstPageMeasureDetail,
   type ProfileMeasureDetail,
 } from '../src/renderer/src/perf';
 import { e2eRowCount } from './config';
-import { writeFixtureCsv } from './csv-fixture';
+import { CATEGORIES, writeFixtureCsv } from './csv-fixture';
 
 const APP_DIR = resolve(__dirname, '..');
 const RESULTS_DIR = join(APP_DIR, 'e2e-results');
@@ -211,6 +213,13 @@ test.describe('data path', () => {
 
     const baseline = {
       benchmark: 'open-to-first-page',
+      /** M1 exit gate: "open-to-first-query baseline recorded" (docs/technical-design.md). */
+      milestone: 'M1',
+      exitGate: {
+        name: 'open-to-first-query',
+        firstQuery: `first ${firstPage.detail.rows}-row page`,
+        roundTripMs: firstPage.duration,
+      },
       recordedAt: new Date().toISOString(),
       rows: ROWS,
       fileBytes,
@@ -235,6 +244,68 @@ test.describe('data path', () => {
         `(open ${firstPage.detail.openEngineMs.toFixed(1)} ms, page ${firstPage.detail.firstPageEngineMs.toFixed(1)} ms); ` +
         `profile ${profile.duration.toFixed(1)} ms (engine ${profile.detail.engineMs.toFixed(1)} ms) -> ${outFile}`,
     );
+  });
+
+  test('changes a column type in the UI and undoes it', async () => {
+    const amount = page.getByTestId('column-type-amount');
+    await expect(amount).toHaveValue('float');
+    const history = page.getByTestId('history-entry');
+    await expect(history).toHaveCount(1);
+    await expect(history.first()).toContainText(`Open ${basename(csvPath)}`);
+
+    await amount.selectOption('text');
+    await expect(amount).toHaveValue('text');
+    await expect(history).toHaveCount(2);
+    await expect(history.nth(1)).toHaveText('Set amount to text by you');
+
+    await page.getByTestId('undo').click();
+    await expect(amount).toHaveValue('float');
+    await expect(history.nth(1)).toHaveAttribute('data-undone', 'true');
+
+    // Keyboard: redo, then undo again (Ctrl on Linux/Windows, Cmd on macOS).
+    const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
+    await page.keyboard.press(`${mod}+Shift+KeyZ`);
+    await expect(amount).toHaveValue('text');
+    await page.keyboard.press(`${mod}+KeyZ`);
+    await expect(amount).toHaveValue('float');
+    await expect(page.getByTestId('redo')).toBeEnabled();
+
+    // The data views are untouched by state-only commands.
+    await expect(page.getByTestId('first-page')).toContainText('4 columns');
+    expect(rendererErrors, 'renderer console errors (CSP violations, exceptions)').toEqual([]);
+  });
+
+  test('runs a bar chart aggregate and shows its rows', async () => {
+    const previous = await measureCount(page, AGGREGATE_MEASURE);
+    await page.getByTestId('run-aggregate').click();
+    const measured = await nextMeasure(page, AGGREGATE_MEASURE, previous);
+    const detail = measured.detail as AggregateMeasureDetail;
+    expect(detail).toMatchObject({ mark: 'bar', rows: CATEGORIES.length, cached: false });
+
+    const result = page.getByTestId('aggregate-result');
+    await expect(page.getByTestId('aggregate-spec')).toHaveText('{"mark":"bar","x":{"column":"category"}}');
+    const rows = result.locator('tbody tr');
+    await expect(rows).toHaveCount(CATEGORIES.length);
+    // Every category holds the same number of rows (ROWS is a multiple of 5 here); ties sort by value.
+    const perCategory = String(Math.floor(ROWS / CATEGORIES.length));
+    for (const [i, category] of [...CATEGORIES].sort().entries()) {
+      const cells = rows.nth(i).locator('td');
+      await expect(cells.nth(0)).toHaveText(category);
+      // Strip locale-specific digit grouping.
+      expect((await cells.nth(1).textContent())?.replace(/\D/g, '')).toBe(perCategory);
+    }
+    expect(rendererErrors, 'renderer console errors (CSP violations, exceptions)').toEqual([]);
+
+    const outFile = await writeBaseline('aggregate-bar', {
+      benchmark: 'aggregate-bar',
+      recordedAt: new Date().toISOString(),
+      rows: ROWS,
+      fileBytes,
+      ...(await machineInfo(app)),
+      /** Renderer measure: click -> Arrow decoded; a cold bar chart (count by category) over the CSV. */
+      aggregate: { roundTripMs: measured.duration, engineMs: detail.engineMs, cached: detail.cached, rows: detail.rows },
+    });
+    console.log(`aggregate-bar ${ROWS} rows: ${measured.duration.toFixed(1)} ms (engine ${detail.engineMs.toFixed(1)} ms) -> ${outFile}`);
   });
 
   test(`counts ${ROWS.toLocaleString('en-US')} rows and records a baseline`, async () => {
