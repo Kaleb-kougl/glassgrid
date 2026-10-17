@@ -1,61 +1,141 @@
 import { describe, expect, it } from 'vitest';
 import { toFileHandle } from '../ids.js';
-import { EngineRequestSchema, EngineResponseSchema } from './engine.js';
+import {
+  EngineRequestSchema,
+  EngineResponseSchema,
+  TableHandleSchema,
+  isViewScopedRequest,
+  tableIdForFile,
+  type EngineRequest,
+} from './engine.js';
 
 const handle = toFileHandle('0b6c8f0e-6d0a-4f43-9d3e-2f1f1a0d9c11');
+const table = tableIdForFile(handle);
+const fingerprint = { sizeBytes: 10, mtimeMs: 1, headTailSha256: 'a'.repeat(64), key: 'b'.repeat(32) };
+
+describe('table ids', () => {
+  it('derive deterministically from file handles', () => {
+    expect(table).toBe('tb_0b6c8f0e-6d0a-4f43-9d3e-2f1f1a0d9c11');
+    expect(tableIdForFile(handle)).toBe(table);
+  });
+});
 
 describe('EngineRequestSchema', () => {
-  it('accepts a well-formed countRows request', () => {
-    const parsed = EngineRequestSchema.parse({ kind: 'countRows', requestId: 'r1', handle });
-    expect(parsed).toEqual({ kind: 'countRows', requestId: 'r1', handle });
+  it('accepts open, rows, count, profile, aggregate, cancel and cache requests', () => {
+    const requests: EngineRequest[] = [
+      { kind: 'open', requestId: 'r1', file: handle },
+      { kind: 'open', requestId: 'r1', file: handle, parquet: 'always' },
+      {
+        kind: 'rows',
+        requestId: 'r2',
+        viewId: 'grid',
+        seq: 3,
+        table,
+        query: { offset: 0, limit: 1000, sort: [{ column: 'a b', direction: 'desc', nulls: 'first' }] },
+      },
+      { kind: 'count', requestId: 'r3', viewId: 'grid', seq: 4, table },
+      { kind: 'profile', requestId: 'r4', viewId: 'profile', seq: 0, table },
+      { kind: 'aggregate', requestId: 'r5', viewId: 'chart:1', seq: 1, table, spec: { mark: 'bar' } },
+      { kind: 'cancel', requestId: 'r6', target: 'r2' },
+      { kind: 'ensureParquetCache', requestId: 'r7', table },
+      { kind: 'clearCache', requestId: 'r8', scope: 'parquet' },
+      { kind: 'cacheStats', requestId: 'r9' },
+    ];
+    for (const request of requests) expect(EngineRequestSchema.parse(request)).toEqual(request);
   });
 
-  it('rejects a raw filesystem path in place of a handle', () => {
-    const result = EngineRequestSchema.safeParse({
-      kind: 'countRows',
+  it('marks only query requests as view scoped', () => {
+    expect(isViewScopedRequest({ kind: 'count', requestId: 'r', viewId: 'v', seq: 1, table })).toBe(true);
+    expect(isViewScopedRequest({ kind: 'open', requestId: 'r', file: handle })).toBe(false);
+    expect(isViewScopedRequest({ kind: 'cancel', requestId: 'r', target: 'x' })).toBe(false);
+  });
+
+  it('rejects a raw filesystem path in place of a handle or table id', () => {
+    expect(EngineRequestSchema.safeParse({ kind: 'open', requestId: 'r1', file: '/etc/passwd' }).success).toBe(false);
+    expect(
+      EngineRequestSchema.safeParse({ kind: 'count', requestId: 'r1', viewId: 'v', seq: 1, table: '/etc/passwd' }).success,
+    ).toBe(false);
+  });
+
+  it('caps pages at 1,000 rows and rejects negative offsets', () => {
+    const base = { kind: 'rows', requestId: 'r1', viewId: 'grid', seq: 1, table };
+    expect(EngineRequestSchema.safeParse({ ...base, query: { offset: 0, limit: 1001 } }).success).toBe(false);
+    expect(EngineRequestSchema.safeParse({ ...base, query: { offset: -1, limit: 10 } }).success).toBe(false);
+    expect(EngineRequestSchema.safeParse({ ...base, query: { offset: 0, limit: 0 } }).success).toBe(false);
+  });
+
+  it('requires view id and sequence on query requests', () => {
+    expect(EngineRequestSchema.safeParse({ kind: 'count', requestId: 'r1', table }).success).toBe(false);
+    expect(EngineRequestSchema.safeParse({ kind: 'count', requestId: 'r1', viewId: 'v', seq: 1.5, table }).success).toBe(
+      false,
+    );
+  });
+
+  it('carries no SQL: unknown fields such as `where` are stripped', () => {
+    const parsed = EngineRequestSchema.parse({
+      kind: 'count',
       requestId: 'r1',
-      handle: '/etc/passwd',
+      viewId: 'v',
+      seq: 1,
+      table,
+      where: { sql: '1=1; DROP TABLE x', params: [] },
     });
-    expect(result.success).toBe(false);
+    expect('where' in parsed).toBe(false);
   });
 
-  it('rejects unknown request kinds', () => {
-    const result = EngineRequestSchema.safeParse({ kind: 'dropTable', requestId: 'r1', handle });
-    expect(result.success).toBe(false);
-  });
-
-  it('rejects an empty request id', () => {
-    const result = EngineRequestSchema.safeParse({ kind: 'countRows', requestId: '', handle });
-    expect(result.success).toBe(false);
+  it('rejects unknown request kinds and empty request ids', () => {
+    expect(EngineRequestSchema.safeParse({ kind: 'dropTable', requestId: 'r1', table }).success).toBe(false);
+    expect(EngineRequestSchema.safeParse({ kind: 'cacheStats', requestId: '' }).success).toBe(false);
   });
 });
 
 describe('EngineResponseSchema', () => {
   it('accepts an Arrow result carrying IPC bytes', () => {
     const ipc = new Uint8Array([0xff, 0xff, 0xff, 0xff]);
-    const parsed = EngineResponseSchema.parse({ kind: 'arrow', requestId: 'r1', ipc, engineMs: 12.5 });
+    const parsed = EngineResponseSchema.parse({ kind: 'arrow', requestId: 'r1', ipc, engineMs: 12.5, cached: false });
     expect(parsed.kind).toBe('arrow');
     if (parsed.kind === 'arrow') expect(parsed.ipc).toBe(ipc);
   });
 
-  it('rejects an Arrow result whose payload is not bytes', () => {
-    const result = EngineResponseSchema.safeParse({
-      kind: 'arrow',
-      requestId: 'r1',
-      ipc: [1, 2, 3],
-      engineMs: 1,
-    });
-    expect(result.success).toBe(false);
+  it('rejects an Arrow result whose payload is not bytes, or negative timings', () => {
+    const base = { kind: 'arrow', requestId: 'r1', cached: false };
+    expect(EngineResponseSchema.safeParse({ ...base, ipc: [1, 2, 3], engineMs: 1 }).success).toBe(false);
+    expect(EngineResponseSchema.safeParse({ ...base, ipc: new Uint8Array(), engineMs: -1 }).success).toBe(false);
   });
 
-  it('rejects negative timings', () => {
-    const result = EngineResponseSchema.safeParse({
-      kind: 'arrow',
-      requestId: 'r1',
-      ipc: new Uint8Array(),
-      engineMs: -1,
+  it('accepts table handles, profiles, counts and events', () => {
+    const tableHandle = TableHandleSchema.parse({
+      id: table,
+      file: handle,
+      fileName: 'data.csv',
+      fingerprint,
+      usingParquetCache: false,
+      columns: [{ name: 'id', type: 'integer', duckdbType: 'BIGINT' }],
     });
-    expect(result.success).toBe(false);
+    expect(EngineResponseSchema.parse({ kind: 'opened', requestId: 'r', table: tableHandle, engineMs: 1 }).kind).toBe(
+      'opened',
+    );
+    expect(
+      EngineResponseSchema.parse({
+        kind: 'profile',
+        requestId: 'r',
+        rowCount: 2,
+        engineMs: 1,
+        cached: true,
+        columns: [
+          { name: 'id', type: 'integer', duckdbType: 'BIGINT', nullFraction: 0.5, approxDistinct: 1, min: 1, max: 1 },
+        ],
+      }).kind,
+    ).toBe('profile');
+    expect(EngineResponseSchema.parse({ kind: 'count', requestId: 'r', rowCount: 5, engineMs: 0, cached: false }).kind).toBe(
+      'count',
+    );
+    expect(
+      EngineResponseSchema.parse({ kind: 'event', event: { type: 'parquetProgress', table, fraction: 0.5 } }).kind,
+    ).toBe('event');
+    expect(
+      EngineResponseSchema.safeParse({ kind: 'event', event: { type: 'parquetProgress', table, fraction: 2 } }).success,
+    ).toBe(false);
   });
 
   it('accepts an error without a request id (e.g. unparseable request)', () => {

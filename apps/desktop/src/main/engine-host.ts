@@ -10,10 +10,12 @@ import {
 } from 'electron';
 import {
   ControlReplySchema,
+  ENGINE_CONFIG_ARG,
   IpcChannel,
   toFileHandle,
   type ControlMessage,
   type ControlReply,
+  type EngineConfig,
   type FileHandle,
 } from '@glassgrid/core';
 
@@ -52,7 +54,14 @@ export class EngineHost extends EventEmitter<EngineHostEvents> {
   /** handle -> absolute path; replayed into a respawned engine. */
   private readonly sources = new Map<FileHandle, string>();
 
-  constructor(private readonly entryPath = join(__dirname, 'engine.js')) {
+  /**
+   * @param config Read at every (re)spawn, so it may depend on app paths that
+   *   are only final once the app is ready.
+   */
+  constructor(
+    private readonly config: () => EngineConfig,
+    private readonly entryPath = join(__dirname, 'engine.js'),
+  ) {
     super();
   }
 
@@ -60,9 +69,12 @@ export class EngineHost extends EventEmitter<EngineHostEvents> {
     if (this.child) return;
     this.stopping = false;
 
-    const child = utilityProcess.fork(this.entryPath, [], {
+    const child = utilityProcess.fork(this.entryPath, [ENGINE_CONFIG_ARG, JSON.stringify(this.config())], {
       serviceName: 'Glassgrid Engine',
       stdio: 'inherit',
+      // DuckDB calls run on libuv's pool; leave room for several views,
+      // a background Parquet conversion and file I/O at once.
+      env: { ...process.env, UV_THREADPOOL_SIZE: process.env['UV_THREADPOOL_SIZE'] ?? '8' },
     });
     this.child = child;
 

@@ -12,6 +12,7 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.preload.json && tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.e2e.json",
+    "test": "vitest run",
     "e2e": "playwright test",
     "e2e:10m": "cross-env GLASSGRID_E2E_ROWS=10000000 playwright test",
     "package": "electron-vite build && electron-builder --publish never",
@@ -36,6 +37,7 @@
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "typescript": "6.0.3",
-    "vite": "8.3.4"
+    "vite": "8.3.4",
+    "vitest": "5.0.5"
   }
 }

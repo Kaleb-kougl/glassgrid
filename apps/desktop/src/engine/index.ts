@@ -3,50 +3,40 @@
  *
  * - Control messages (from main) arrive on process.parentPort.
  * - Query requests arrive on MessagePorts that main brokers directly to
- *   renderers; results go back as Arrow IPC bytes on the same port.
+ *   renderers; each port gets an EngineSession. Results go back as Arrow IPC
+ *   bytes (pages) or small JSON objects (profiles, counts) on the same port.
  */
 import { stat } from 'node:fs/promises';
-import { DuckDBInstance, version as duckdbVersion } from '@duckdb/node-api';
-import { tableToIPC } from 'apache-arrow';
+import { version as duckdbVersion } from '@duckdb/node-api';
 import type { MessagePortMain } from 'electron';
 import {
   ControlMessageSchema,
-  EngineRequestSchema,
-  Sql,
+  ENGINE_CONFIG_ARG,
+  EngineConfigSchema,
   type ControlReply,
-  type CountRowsRequest,
-  type EngineErrorCode,
-  type EngineResponse,
-  type FileHandle,
+  type EngineConfig,
   type RegisterFileMessage,
 } from '@glassgrid/core';
-import { readerToArrowTable } from './arrow';
-
-class EngineFailure extends Error {
-  constructor(
-    readonly code: EngineErrorCode,
-    message: string,
-  ) {
-    super(message);
-    this.name = 'EngineFailure';
-  }
-}
+import { errorMessage } from './errors';
+import { QueryService } from './query-service';
+import { EngineSession } from './session';
 
 const parentPort = process.parentPort;
-const sources = new Map<FileHandle, string>();
-
-const instance = DuckDBInstance.create(':memory:', {
-  // An offline desktop app must never fetch extensions behind the user's back.
-  autoinstall_known_extensions: 'false',
-});
 
 function reply(message: ControlReply): void {
   parentPort.postMessage(message);
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+function readConfig(): EngineConfig {
+  const index = process.argv.indexOf(ENGINE_CONFIG_ARG);
+  const raw = index >= 0 ? process.argv[index + 1] : undefined;
+  if (raw === undefined) throw new Error(`Missing ${ENGINE_CONFIG_ARG} argument`);
+  return EngineConfigSchema.parse(JSON.parse(raw));
 }
+
+const service: Promise<QueryService> = (async () => QueryService.create(readConfig()))();
+// Failures are reported through the 'fatal' reply below and per request as engine_unavailable.
+service.catch(() => undefined);
 
 // ---------------------------------------------------------------------------
 // Control plane (main -> engine)
@@ -72,12 +62,17 @@ parentPort.on('message', (event) => {
 });
 
 async function registerFile({ requestId, handle, path }: RegisterFileMessage): Promise<ControlReply> {
+  // Register in a microtask, before any later port message can be handled:
+  // after a respawn, main replays registrations right before attaching new
+  // ports, and the renderer's re-issued queries must find their files.
+  const registered = service.then((ready) => ready.registerFile(handle, path));
   try {
+    await registered;
     const info = await stat(path);
-    if (!info.isFile()) return { kind: 'registerFailed', requestId, message: 'Not a regular file' };
-    sources.set(handle, path);
+    if (!info.isFile()) throw new Error('Not a regular file');
     return { kind: 'fileRegistered', requestId, handle, sizeBytes: info.size };
   } catch (error) {
+    await service.then((ready) => ready.unregisterFile(handle)).catch(() => undefined);
     return { kind: 'registerFailed', requestId, message: errorMessage(error) };
   }
 }
@@ -86,62 +81,24 @@ async function registerFile({ requestId, handle, path }: RegisterFileMessage): P
 // Data plane (renderer <-> engine)
 
 function attachPort(port: MessagePortMain): void {
-  port.on('message', (event) => {
-    void handleRequest(event.data).then((response) => port.postMessage(response));
-  });
+  const session = new EngineSession(service, (message) => port.postMessage(message));
+  port.on('message', (event) => session.handle(event.data));
+  port.on('close', () => session.dispose());
   port.start();
-}
-
-async function handleRequest(raw: unknown): Promise<EngineResponse> {
-  const parsed = EngineRequestSchema.safeParse(raw);
-  if (!parsed.success) {
-    const requestId =
-      typeof raw === 'object' && raw !== null && 'requestId' in raw && typeof raw.requestId === 'string'
-        ? raw.requestId
-        : null;
-    return { kind: 'error', requestId, code: 'bad_request', message: parsed.error.message };
-  }
-
-  const request = parsed.data;
-  try {
-    // M0 has a single request kind; dispatch on `request.kind` once there are more.
-    return await countRows(request);
-  } catch (error) {
-    const code = error instanceof EngineFailure ? error.code : 'query_failed';
-    return { kind: 'error', requestId: request.requestId, code, message: errorMessage(error) };
-  }
-}
-
-async function countRows(request: CountRowsRequest): Promise<EngineResponse> {
-  const path = sources.get(request.handle);
-  if (!path) throw new EngineFailure('unknown_handle', 'This file is no longer open');
-
-  let db: DuckDBInstance;
-  try {
-    db = await instance;
-  } catch (error) {
-    throw new EngineFailure('engine_unavailable', `DuckDB failed to start: ${errorMessage(error)}`);
-  }
-
-  const started = performance.now();
-  // One connection per request lets independent requests run concurrently.
-  const connection = await db.connect();
-  try {
-    const reader = await connection.runAndReadAll(Sql.countRows, [path]);
-    const ipc = tableToIPC(readerToArrowTable(reader), 'stream');
-    return { kind: 'arrow', requestId: request.requestId, ipc, engineMs: performance.now() - started };
-  } finally {
-    connection.closeSync();
-  }
 }
 
 // ---------------------------------------------------------------------------
 // Lifecycle
 
-instance.then(
+service.then(
   () => reply({ kind: 'ready', duckdbVersion: duckdbVersion() }),
   (error: unknown) => reply({ kind: 'fatal', message: `DuckDB failed to start: ${errorMessage(error)}` }),
 );
+
+process.on('unhandledRejection', (reason) => {
+  // A bug, but not one worth losing every open view over.
+  console.error('[engine] unhandled rejection', reason);
+});
 
 process.on('uncaughtException', (error) => {
   reply({ kind: 'fatal', message: errorMessage(error) });

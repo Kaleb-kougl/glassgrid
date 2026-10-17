@@ -5,5 +5,5 @@
     "lib": ["ES2023"],
     "types": ["node"]
   },
-  "include": ["src/main", "src/engine", "electron.vite.config.ts"]
+  "include": ["src/main", "src/engine", "electron.vite.config.ts", "vitest.config.mts"]
 }
