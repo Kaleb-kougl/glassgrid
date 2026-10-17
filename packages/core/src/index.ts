@@ -7,3 +7,5 @@ export * from './protocol/control.js';
 export * from './protocol/bridge.js';
 export * from './protocol/ipc.js';
 export * from './format.js';
+export * from './state/index.js';
+export * from './commands/index.js';
