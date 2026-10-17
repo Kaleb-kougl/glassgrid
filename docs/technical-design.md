@@ -452,11 +452,13 @@ M0 is front-loaded to retire the biggest risk (native DuckDB in Electron) in two
 
 Prove the riskiest integration first: native DuckDB inside Electron on two OSes.
 
-- [ ] pnpm monorepo: `packages/core`, `packages/ui`, `apps/desktop`, `apps/web`, with the ESLint boundary rule
-- [ ] electron-vite + React 19 + TypeScript shell, packaged with electron-builder, with hardened defaults (sandbox, context isolation, CSP)
-- [ ] `@duckdb/node-api` loads in a `utilityProcess` on macOS arm64 and Windows x64 without a rebuild
-- [ ] `MessageChannelMain` wired between renderer and engine; Arrow IPC round trip
-- [ ] GitHub Actions: lint, typecheck and unit tests; macOS and Windows build jobs
+- [x] pnpm monorepo: `packages/core`, `packages/ui`, `apps/desktop`, `apps/web`, with the ESLint boundary rule
+- [x] electron-vite + React 19 + TypeScript shell, packaged with electron-builder, with hardened defaults (sandbox, context isolation, CSP)
+- [x] `@duckdb/node-api` loads in a `utilityProcess` on macOS arm64 and Windows x64 without a rebuild
+- [x] `MessageChannelMain` wired between renderer and engine; Arrow IPC round trip
+- [x] GitHub Actions: lint, typecheck and unit tests; macOS and Windows build jobs
+
+macOS arm64 and Windows x64 are verified by the CI matrix (build, E2E and packaged E2E per OS), not on local machines; see [M0 notes](m0-notes.md).
 
 **Exit gate:** a `count(*)` over a 10M-row CSV returns to the renderer as Arrow on both OSes in CI. If the native module fails in Electron, add a rebuild step before moving on.
 
@@ -464,14 +466,16 @@ Prove the riskiest integration first: native DuckDB inside Electron on two OSes.
 
 Everything the UI and, later, MCP depend on.
 
-- [ ] `QueryService`: open, profile, rows, aggregate, count, cancel, with sequence numbers and `interrupt()`
-- [ ] `ChartSpec` and `Filter` Zod schemas; `compile.ts` with quoted identifiers and bound parameters
-- [ ] Property tests: compiled SQL matches a JS reference on small random tables
-- [ ] Command registry, state store and undo stack; first commands `openFile`, `setColumnType`, `undo`
-- [ ] Parquet cache keyed by fingerprint; LRU result cache
-- [ ] Benchmark harness (Playwright Electron + performance marks) writing a baseline JSON artifact
+- [x] `QueryService`: open, profile, rows, aggregate, count, cancel, with sequence numbers and `interrupt()`
+- [x] `ChartSpec` and `Filter` Zod schemas; `compile.ts` with quoted identifiers and bound parameters
+- [x] Property tests: compiled SQL matches a JS reference on small random tables
+- [x] Command registry, state store and undo stack; first commands `openFile`, `setColumnType`, `undo`
+- [x] Parquet cache keyed by fingerprint; LRU result cache
+- [x] Benchmark harness (Playwright Electron + performance marks) writing a baseline JSON artifact
 
 **Exit gate:** compiler property tests green; open-to-first-query baseline recorded.
+
+Result: both met; see [M1 notes](m1-notes.md).
 
 ### M2 · Virtualized grid (week 2)
 

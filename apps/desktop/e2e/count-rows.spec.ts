@@ -280,19 +280,21 @@ test.describe('data path', () => {
     await page.getByTestId('run-aggregate').click();
     const measured = await nextMeasure(page, AGGREGATE_MEASURE, previous);
     const detail = measured.detail as AggregateMeasureDetail;
-    expect(detail).toMatchObject({ mark: 'bar', rows: CATEGORIES.length, cached: false });
+    expect(detail).toMatchObject({ mark: 'bar', rows: Math.min(ROWS, CATEGORIES.length), cached: false });
 
     const result = page.getByTestId('aggregate-result');
     await expect(page.getByTestId('aggregate-spec')).toHaveText('{"mark":"bar","x":{"column":"category"}}');
     const rows = result.locator('tbody tr');
-    await expect(rows).toHaveCount(CATEGORIES.length);
-    // Every category holds the same number of rows (ROWS is a multiple of 5 here); ties sort by value.
-    const perCategory = String(Math.floor(ROWS / CATEGORIES.length));
-    for (const [i, category] of [...CATEGORIES].sort().entries()) {
+    await expect(rows).toHaveCount(Math.min(ROWS, CATEGORIES.length));
+    // Row i has category i % 5. Bars sort by count descending, ties by category.
+    const expected = CATEGORIES.map((category, k) => ({ category, count: Math.floor((ROWS - 1 - k) / CATEGORIES.length) + 1 }))
+      .filter((bar) => bar.count > 0)
+      .sort((a, b) => b.count - a.count || a.category.localeCompare(b.category));
+    for (const [i, bar] of expected.entries()) {
       const cells = rows.nth(i).locator('td');
-      await expect(cells.nth(0)).toHaveText(category);
+      await expect(cells.nth(0)).toHaveText(bar.category);
       // Strip locale-specific digit grouping.
-      expect((await cells.nth(1).textContent())?.replace(/\D/g, '')).toBe(perCategory);
+      expect((await cells.nth(1).textContent())?.replace(/\D/g, '')).toBe(String(bar.count));
     }
     expect(rendererErrors, 'renderer console errors (CSP violations, exceptions)').toEqual([]);
 
