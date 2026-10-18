@@ -1,0 +1,248 @@
+{
+  "benchmark": "crossfilter",
+  "label": "cube3",
+  "recordedAt": "2026-10-18T13:07:53.990Z",
+  "rows": 1000000,
+  "brushes": 20,
+  "dragMs": 300,
+  "gapMs": 300,
+  "machine": {
+    "platform": "linux",
+    "arch": "x64",
+    "cpuModel": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "cpuCount": 2,
+    "totalMemBytes": 8419655680
+  },
+  "results": {
+    "parquet.sql": {
+      "initialRenderMs": 122.5,
+      "prepareMs": null,
+      "cubes": null,
+      "brushMs": [
+        112,
+        24.9,
+        57.4,
+        62.9,
+        101.7,
+        99.2,
+        18.5,
+        91,
+        116.8,
+        104.1,
+        92.6,
+        94.8,
+        85.1,
+        101.7,
+        180.7,
+        88.3,
+        91.3,
+        79,
+        18,
+        88.5
+      ],
+      "firstBrushMs": 112,
+      "p50": 91,
+      "p95": 116.8,
+      "max": 180.7,
+      "steadyP50": 91,
+      "steadyP95": 180.7,
+      "perViewP50": {
+        "firstPage": 61.9,
+        "count": 55.4,
+        "payment": 65.5,
+        "zones": 68.8,
+        "pickups": 89.5
+      },
+      "perViewP95": {
+        "firstPage": 82.1,
+        "count": 86,
+        "payment": 87.9,
+        "zones": 113.9,
+        "pickups": 116.8
+      },
+      "fromCube": 0,
+      "answered": 80
+    },
+    "parquet.cube": {
+      "initialRenderMs": 156.5,
+      "prepareMs": 178.7,
+      "cubes": [
+        {
+          "status": "ready",
+          "rows": 210
+        },
+        {
+          "status": "ready",
+          "rows": 63485
+        },
+        {
+          "status": "ready",
+          "rows": 10209
+        },
+        {
+          "status": "ready",
+          "rows": 42
+        }
+      ],
+      "brushMs": [
+        54.1,
+        30.4,
+        73.2,
+        64.6,
+        44.1,
+        31.1,
+        21.1,
+        32,
+        57,
+        38.1,
+        38.2,
+        42.6,
+        58.9,
+        54.9,
+        43.1,
+        70.4,
+        85.4,
+        71.3,
+        14.9,
+        40.8
+      ],
+      "firstBrushMs": 54.1,
+      "p50": 43.1,
+      "p95": 73.2,
+      "max": 85.4,
+      "steadyP50": 43.1,
+      "steadyP95": 85.4,
+      "perViewP50": {
+        "payment": 25.9,
+        "count": 19.8,
+        "firstPage": 28.7,
+        "zones": 29.3,
+        "pickups": 43.1
+      },
+      "perViewP95": {
+        "payment": 43.3,
+        "count": 35.8,
+        "firstPage": 62.9,
+        "zones": 50.1,
+        "pickups": 73.2
+      },
+      "fromCube": 80,
+      "answered": 80
+    },
+    "csv.sql": {
+      "initialRenderMs": 1028.2,
+      "prepareMs": null,
+      "cubes": null,
+      "brushMs": [
+        913.9,
+        1162.2,
+        1114.7,
+        1062.8,
+        1038.6,
+        980.4,
+        1159.8,
+        910.7,
+        988,
+        1072.8,
+        947.4,
+        832.4,
+        888.6,
+        1480.9,
+        1155.3,
+        1623.4,
+        1420.2,
+        1352.9,
+        1369.5,
+        959.8
+      ],
+      "firstBrushMs": 913.9,
+      "p50": 1062.8,
+      "p95": 1480.9,
+      "max": 1623.4,
+      "steadyP50": 1072.8,
+      "steadyP95": 1623.4,
+      "perViewP50": {
+        "firstPage": 772.3,
+        "payment": 820.2,
+        "count": 970.3,
+        "zones": 948.1,
+        "pickups": 1033.1
+      },
+      "perViewP95": {
+        "firstPage": 1420.2,
+        "payment": 1363.4,
+        "count": 1480.9,
+        "zones": 1082.4,
+        "pickups": 1402
+      },
+      "fromCube": 0,
+      "answered": 80
+    },
+    "csv.cube": {
+      "initialRenderMs": 1044.7,
+      "prepareMs": 1177.1,
+      "cubes": [
+        {
+          "status": "ready",
+          "rows": 210
+        },
+        {
+          "status": "ready",
+          "rows": 63485
+        },
+        {
+          "status": "ready",
+          "rows": 10209
+        },
+        {
+          "status": "ready",
+          "rows": 42
+        }
+      ],
+      "brushMs": [
+        868.7,
+        211.7,
+        139.5,
+        68.7,
+        115.5,
+        33.7,
+        164.4,
+        46.2,
+        38.2,
+        36.5,
+        41.1,
+        55,
+        45.6,
+        274.7,
+        83.5,
+        279.3,
+        465.1,
+        371.7,
+        438.2,
+        58.2
+      ],
+      "firstBrushMs": 868.7,
+      "p50": 83.5,
+      "p95": 465.1,
+      "max": 868.7,
+      "steadyP50": 83.5,
+      "steadyP95": 465.1,
+      "perViewP50": {
+        "firstPage": 71.4,
+        "payment": 17.6,
+        "count": 17.5,
+        "pickups": 39.5,
+        "zones": 23
+      },
+      "perViewP95": {
+        "firstPage": 438.2,
+        "payment": 61.6,
+        "count": 64.9,
+        "pickups": 95.1,
+        "zones": 78.3
+      },
+      "fromCube": 80,
+      "answered": 80
+    }
+  }
+}
