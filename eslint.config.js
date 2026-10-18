@@ -33,6 +33,9 @@ export default defineConfig(
     '**/test-results/',
     '**/playwright-report/',
     '**/e2e-results/',
+    // Benchmark build output and results.
+    '**/bench/.out/',
+    '**/bench/results/',
     // Claude Design export (gitignored reference material).
     'design/',
   ]),
@@ -70,7 +73,7 @@ export default defineConfig(
 
   // --- Runtime environments -------------------------------------------------
   {
-    files: ['apps/desktop/src/main/**', 'apps/desktop/src/engine/**', '**/*.config.ts', 'apps/desktop/e2e/**', 'tools/**'],
+    files: ['apps/desktop/src/main/**', 'apps/desktop/src/engine/**', '**/*.config.ts', 'apps/desktop/e2e/**', 'tools/**', 'packages/ui/bench/*.ts'],
     languageOptions: { globals: globals.node },
   },
   {
@@ -78,7 +81,7 @@ export default defineConfig(
     languageOptions: { globals: { ...globals.browser, process: 'readonly' } },
   },
   {
-    files: ['apps/desktop/src/renderer/**', 'apps/web/src/**', 'packages/ui/src/**'],
+    files: ['apps/desktop/src/renderer/**', 'apps/web/src/**', 'packages/ui/src/**', 'packages/ui/bench/grid/**'],
     languageOptions: { globals: globals.browser },
   },
   {

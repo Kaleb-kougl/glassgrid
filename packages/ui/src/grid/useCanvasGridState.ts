@@ -21,6 +21,24 @@ export function moveItem<T>(items: readonly T[], from: number, to: number): T[] 
   return next;
 }
 
+/** Where display index `index` ends up after moving the column at `from` to `to`. */
+export function reorderedIndex(index: number, from: number, to: number): number {
+  if (index === from) return to;
+  if (from < to && index > from && index <= to) return index - 1;
+  if (from > to && index >= to && index < from) return index + 1;
+  return index;
+}
+
+/** A selection's corners after a column move, so it keeps pointing at the same columns' cells. */
+export function reorderSelection(selection: GridSelection | null, from: number, to: number): GridSelection | null {
+  if (!selection) return null;
+  const { anchor, focus } = selection;
+  return {
+    anchor: { row: anchor.row, col: reorderedIndex(anchor.col, from, to) },
+    focus: { row: focus.row, col: reorderedIndex(focus.col, from, to) },
+  };
+}
+
 /**
  * Local state for a CanvasGrid (gallery, benchmark, tests): selection,
  * sort (asc → desc → none on header click), resize and reorder. The app
@@ -48,6 +66,7 @@ export function useCanvasGridState(source: GridDataSource): CanvasGridState {
   }, []);
   const onColumnReorder = useCallback((from: number, to: number) => {
     setState((current) => ({ ...current, columns: moveItem(current.columns, from, to) }));
+    setSelection((current) => reorderSelection(current, from, to));
   }, []);
   return { columns, selection, sort, onSelectionChange: setSelection, onSortRequest, onColumnResize, onColumnReorder };
 }

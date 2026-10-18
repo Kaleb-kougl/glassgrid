@@ -56,7 +56,7 @@ export {
   type CanvasGridHandle,
   type GridCopyInfo,
 } from './grid/CanvasGrid.js';
-export { useCanvasGridState, type CanvasGridState } from './grid/useCanvasGridState.js';
+export { useCanvasGridState, moveItem, reorderedIndex, reorderSelection, type CanvasGridState } from './grid/useCanvasGridState.js';
 export { GridController, type GridWindow } from './grid/controller.js';
 export type { GridCellRef, GridDataSource, GridRange, GridSourceChange, GridSourceListener } from './grid/types.js';
 export { PagedGridSource, isAbortError, type PageColumns, type PagedSourceOptions } from './grid/PagedGridSource.js';

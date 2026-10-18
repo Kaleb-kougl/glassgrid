@@ -15,6 +15,7 @@ import {
   type MoveContext,
 } from './selection.js';
 import type { GridCell } from './types.js';
+import { moveItem, reorderedIndex, reorderSelection } from './useCanvasGridState.js';
 
 const key = (k: string, mods: Partial<KeyLike> = {}): KeyLike => ({ key: k, shiftKey: false, ctrlKey: false, metaKey: false, altKey: false, ...mods });
 
@@ -127,5 +128,19 @@ describe('TSV', () => {
     const wide = rangeToTsv({ top: 0, bottom: 9, left: 0, right: 11 }, () => 'v', { maxCells: 30 });
     expect(wide.rows).toBe(2);
     expect(wide.truncated).toBe(true);
+  });
+});
+
+describe('column reorder helpers', () => {
+  it('moves items and remaps indexes and selections', () => {
+    expect(moveItem(['a', 'b', 'c', 'd'], 0, 2)).toEqual(['b', 'c', 'a', 'd']);
+    expect(moveItem(['a', 'b', 'c', 'd'], 3, 0)).toEqual(['d', 'a', 'b', 'c']);
+    expect([0, 1, 2, 3].map((i) => reorderedIndex(i, 0, 2))).toEqual([2, 0, 1, 3]);
+    expect([0, 1, 2, 3].map((i) => reorderedIndex(i, 3, 1))).toEqual([0, 2, 3, 1]);
+    expect(reorderSelection({ anchor: { row: 1, col: 0 }, focus: { row: 4, col: 3 } }, 0, 3)).toEqual({
+      anchor: { row: 1, col: 3 },
+      focus: { row: 4, col: 2 },
+    });
+    expect(reorderSelection(null, 0, 1)).toBeNull();
   });
 });

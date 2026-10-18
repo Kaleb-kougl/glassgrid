@@ -437,10 +437,8 @@ export function paintGrid(ctx: GridContext, frame: GridFrame, res: PaintResource
     const w = frame.widths[from] ?? 0;
     // Ghost header following the pointer.
     const ghostX = Math.max(gutterWidth - w / 2, Math.min(width - w / 2, frame.reorderX - w / 2));
-    ctx.globalAlpha = 0.9;
     ctx.fillStyle = grid.headerSelBg;
     ctx.fillRect(ghostX, 0, w, headerHeight);
-    ctx.globalAlpha = 1;
     ctx.fillStyle = grid.selBorder;
     frameRect(ctx, ghostX, 0, w, headerHeight, 1);
     ctx.font = fonts.headerSelected;
