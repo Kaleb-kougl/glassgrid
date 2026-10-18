@@ -21,7 +21,7 @@ function setup(picked: OpenCsvResult, open: OpenFileDeps['engine']['open'] = () 
   let id = 0;
   const workspace = createAppWorkspace({ clock: () => 1_000, newId: (prefix) => `${prefix}_${++id}` });
   const engine = { open: vi.fn(open) };
-  const deps = { bridge: { openCsv: () => Promise.resolve(picked) }, engine, registry: workspace.registry };
+  const deps = { files: { pickCsv: () => Promise.resolve(picked) }, engine, registry: workspace.registry };
   return { workspace, engine, deps };
 }
 
@@ -80,9 +80,19 @@ describe('openFileAction', () => {
     expect(broken.workspace.store.getState().dataSource).toBeNull();
     expect(broken.workspace.store.getHistory().past).toEqual([]);
   });
+
+  it('refuses a file over the platform size limit before the engine opens it', async () => {
+    const { workspace, engine, deps } = setup(opened);
+    await expect(openFileAction({ ...deps, maxFileBytes: 1024 * 1024 })).rejects.toThrow(
+      'Could not open file: trips.csv is 30.4 MB; files up to 1.00 MB open here. The desktop app opens larger files.',
+    );
+    expect(engine.open).not.toHaveBeenCalled();
+    expect(workspace.store.getHistory().past).toEqual([]);
+    expect((await openFileAction({ ...deps, maxFileBytes: null })).status).toBe('opened');
+  });
 });
 
-describe('desktop policy', () => {
+describe('app policy', () => {
   it('lets a person confirm writes by clicking, refuses AI writes and raw reads', async () => {
     const { appPolicy } = await import('../workspace');
     const request = { command: 'saveWorkspace', tier: 'write' as const, input: {} };

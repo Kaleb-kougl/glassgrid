@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
-import { isThemePreference, type GlassgridBridge, type ThemePreference } from '@glassgrid/core';
+import { isThemePreference, type ThemePreference } from '@glassgrid/core';
 import type { ThemeName } from '@glassgrid/ui/tokens';
+import type { PlatformWindow } from './platform';
 
 /** localStorage key of the View → Theme override. */
 export const THEME_STORAGE_KEY = 'glassgrid.theme';
@@ -49,10 +50,10 @@ export function applyInitialTheme(): ThemeName {
 /**
  * The window's theme: follows the OS (`prefers-color-scheme`) unless View →
  * Theme overrides it; the override persists in localStorage. Sets
- * `data-gg-theme` on the document root and tells main, which colours the
- * native chrome and ticks the menu item.
+ * `data-gg-theme` on the document root and tells the native shell, if any
+ * (desktop: main colours the native chrome and ticks the menu item).
  */
-export function useTheme(bridge: Pick<GlassgridBridge, 'setTheme'>) {
+export function useTheme(shell: Pick<PlatformWindow, 'syncTheme'>) {
   const [preference, setPreferenceState] = useState<ThemePreference>(() => readThemePreference(safeStorage()));
   const systemDark = useSyncExternalStore(subscribeToSystem, systemPrefersDark, () => true);
   const theme = resolveTheme(preference, systemDark);
@@ -62,8 +63,8 @@ export function useTheme(bridge: Pick<GlassgridBridge, 'setTheme'>) {
   }, [theme]);
 
   useEffect(() => {
-    bridge.setTheme(preference);
-  }, [bridge, preference]);
+    shell.syncTheme?.(preference);
+  }, [shell, preference]);
 
   const setPreference = useCallback((next: ThemePreference) => {
     setPreferenceState(next);

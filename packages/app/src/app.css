@@ -44,7 +44,7 @@ body {
   user-select: none;
 }
 
-.app[data-platform='darwin'] .topbar {
+.app[data-titlebar-inset] .topbar {
   padding-left: 0;
 }
 
@@ -73,6 +73,16 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Unsaved changes (only with workspace files): a dot after the size. */
+.topbar__edited {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  align-self: center;
+  border-radius: 50%;
+  background: var(--gg-text-secondary);
 }
 
 .topbar__size,
@@ -344,6 +354,28 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+/* Sample datasets (platforms that offer them: the web demo). */
+.empty__samples {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.empty__samples-label {
+  margin: 0;
+  color: var(--gg-text-secondary);
+}
+
+.empty__sample-detail {
+  margin-left: 8px;
+  color: var(--gg-text-secondary);
+  font-weight: 400;
 }
 
 .drop-overlay {

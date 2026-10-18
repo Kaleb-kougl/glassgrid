@@ -15,7 +15,6 @@ import {
   type Filter,
   type FilterChip as FilterChipModel,
   type FilterInput,
-  type GlassgridBridge,
   type TableColumnProfile,
   type TableId,
   type UndoEntry,
@@ -38,7 +37,7 @@ import {
 } from '@glassgrid/ui';
 import { openFileAction } from './actions/open-file';
 import { chartTitle, describeEntry } from './describe';
-import { isAbandoned, type EngineClientLike, type RowsResult } from './engine';
+import { isAbandoned, type RowsResult } from './engine';
 import {
   CHART_CREATE_MEASURE,
   COUNT_ROWS_MEASURE,
@@ -68,14 +67,21 @@ import {
   toIndexSelection,
 } from './views/grid-source';
 import { TopBar } from './views/TopBar';
-import type { AppWorkspace } from './workspace';
+import { workspaceFilesOf, type Platform, type WorkspaceFileOutcome, type WorkspaceFilesApi } from './platform';
+import { createAppWorkspace, type AppWorkspace } from './workspace';
 
 export { describeEntry };
 
 export interface AppProps {
-  engine: EngineClientLike;
-  bridge: Pick<GlassgridBridge, 'openCsv' | 'openDroppedFile' | 'setTheme' | 'onMenuCommand' | 'platform' | 'clipboard'>;
-  workspace: AppWorkspace;
+  /** Everything platform-specific: engine, files, clipboard, window, capabilities. Stable for the app's lifetime. */
+  platform: Platform;
+  /**
+   * The workspace (store + command registry). Shells create it outside React
+   * (so StrictMode's double mount keeps one undo history, and render-perf
+   * builds can install their recorder on its store first); the app makes
+   * its own when none is given.
+   */
+  workspace?: AppWorkspace;
 }
 
 /** Started by an "Open" click or a drop; finished by the first rows of the new data source painted. */
@@ -108,6 +114,9 @@ interface ToastState {
   by?: string;
   action?: ToastAction;
 }
+
+/** Quiet time after the last change before `workspaceFiles.autosave` runs. */
+export const AUTOSAVE_DELAY_MS = 2_000;
 
 const numberFormat = new Intl.NumberFormat('en-US');
 const compact = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 2 });
@@ -177,12 +186,15 @@ function chartCallers(past: readonly UndoEntry[]): Map<string, 'user' | 'ai'> {
   return callers;
 }
 
-export function App({ engine, bridge, workspace }: AppProps) {
+export function App({ platform, workspace: givenWorkspace }: AppProps) {
+  const [ownWorkspace] = useState(() => (givenWorkspace === undefined ? createAppWorkspace() : null));
+  const workspace = (givenWorkspace ?? ownWorkspace) as AppWorkspace;
   const { store, registry } = workspace;
+  const { engine, files, clipboard, window: shell, capabilities } = platform;
   const state = useSyncExternalStore(store.subscribe, store.getState);
   const history = useSyncExternalStore(store.subscribe, store.getHistory);
   if (__GG_RENDER_PERF__) renderPerf.appRender(state.charts);
-  const { theme, setPreference } = useTheme(bridge);
+  const { theme, setPreference } = useTheme(shell);
   const tokens = tokensFor(theme);
 
   const tableId = state.dataSource ? tableIdForFile(state.dataSource.handleId) : null;
@@ -225,7 +237,7 @@ export function App({ engine, bridge, workspace }: AppProps) {
   );
 
   /** A shortcut as this platform writes it: ⌘Z on macOS, Ctrl+Z elsewhere. */
-  const mod = (key: string) => (bridge.platform === 'darwin' ? `⌘${key}` : `Ctrl+${key}`);
+  const mod = (key: string) => (shell.shortcuts === 'mac' ? `⌘${key}` : `Ctrl+${key}`);
 
   // ---------------------------------------------------------------------------
   // Views of the data source
@@ -344,13 +356,13 @@ export function App({ engine, bridge, workspace }: AppProps) {
       void engine.closeTable(previous).catch(() => undefined);
     }
   }, [engine, tableId]);
-  useEffect(() => {
-    const onPageHide = () => {
-      if (shownTable.current !== null) void engine.closeTable(shownTable.current).catch(() => undefined);
-    };
-    window.addEventListener('pagehide', onPageHide);
-    return () => window.removeEventListener('pagehide', onPageHide);
-  }, [engine]);
+  useEffect(
+    () =>
+      shell.onBeforeClose(() => {
+        if (shownTable.current !== null) void engine.closeTable(shownTable.current).catch(() => undefined);
+      }),
+    [engine, shell],
+  );
 
   // ---------------------------------------------------------------------------
   // Type overrides reach the engine: after setColumnType, undo/redo of one, or an engine restart
@@ -429,7 +441,7 @@ export function App({ engine, bridge, workspace }: AppProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engine, tableId, overridesKey, engineEpoch, showToast, dispatch]);
 
-  // copySelection: the selection as TSV, through the preload's clipboard.
+  // copySelection: the selection as TSV, through the platform's clipboard.
   const gridSource = useRef<EngineGridSource | null>(null);
   useLayoutEffect(() => {
     gridSource.current = grid;
@@ -445,11 +457,11 @@ export function App({ engine, bridge, workspace }: AppProps) {
         }
         const result = await copySelectionAsTsv(source, columns, selection);
         if (!result) throw new CommandError('precondition_failed', 'The selection is outside the rows of this view', { command: 'copySelection' });
-        await bridge.clipboard.writeText(result.text);
+        await clipboard.writeText(result.text);
         showToast({ tone: 'info', message: result.message });
         return { rows: result.rows, columns: result.columns, selectedRows: result.selectedRows, truncated: result.truncated, message: result.message };
       }),
-    [registry, bridge, showToast],
+    [registry, clipboard, showToast],
   );
 
   useEffect(() => {
@@ -558,9 +570,10 @@ export function App({ engine, bridge, workspace }: AppProps) {
       performance.mark(start);
       try {
         const outcome = await openFileAction({
-          bridge,
+          files,
           engine,
           registry,
+          maxFileBytes: capabilities.maxFileBytes,
           ...(pick ? { pick } : {}),
           // Armed before `openFile` changes the state, so the first-page view always finds it.
           onEngineOpened: (table, openEngineMs) => {
@@ -576,7 +589,7 @@ export function App({ engine, bridge, workspace }: AppProps) {
         setOpening(false);
       }
     },
-    [bridge, engine, registry, showToast, setOpening],
+    [files, engine, registry, capabilities.maxFileBytes, showToast, setOpening],
   );
 
   useEffect(() => {
@@ -720,24 +733,98 @@ export function App({ engine, bridge, workspace }: AppProps) {
     else if (forward > 0) for (let i = 0; i < forward; i += 1) dispatch('redo');
   };
 
-  // Cmd/Ctrl+Z undoes, Shift+Cmd/Ctrl+Z redoes; menu commands (File → Open, View → Theme).
+  // ---------------------------------------------------------------------------
+  // Workspace files (.glassgrid): only when the platform provides them
+
+  const workspaceFiles = workspaceFilesOf(platform);
+  /** The latest history entry when the workspace was last saved or opened (null: none, a new workspace). */
+  const [savedEntry, setSavedEntry] = useState<string | null>(() => store.getHistory().past.at(-1)?.id ?? null);
+  const [workspaceFileBusy, setWorkspaceFileBusy] = useState(false);
+  const edited = state.dataSource !== null && (history.past.at(-1)?.id ?? null) !== savedEntry;
+
+  const runWorkspaceFile = useCallback(
+    async (run: (api: WorkspaceFilesApi) => Promise<WorkspaceFileOutcome>, done: string) => {
+      if (!workspaceFiles) return;
+      setWorkspaceFileBusy(true);
+      try {
+        const outcome = await run(workspaceFiles);
+        if (outcome.status === 'done') {
+          setSavedEntry(store.getHistory().past.at(-1)?.id ?? null);
+          showToast({ tone: 'info', message: `${done} ${outcome.displayName}` });
+        } else if (outcome.status === 'failed') {
+          showToast({ tone: 'error', message: outcome.message });
+        }
+      } catch (cause) {
+        showToast({ tone: 'error', message: messageOf(cause) });
+      } finally {
+        setWorkspaceFileBusy(false);
+      }
+    },
+    [workspaceFiles, store, showToast],
+  );
+  const saveWorkspace = useCallback(
+    (saveAs: boolean) => runWorkspaceFile((api) => api.save({ workspace, engine }, { saveAs }), 'Saved'),
+    [runWorkspaceFile, workspace, engine],
+  );
+  const openWorkspace = useCallback(() => runWorkspaceFile((api) => api.open({ workspace, engine }), 'Opened'), [runWorkspaceFile, workspace, engine]);
+
+  // Opens the shell starts (File → Open Workspace…, a double-clicked file).
+  useEffect(() => workspaceFiles?.onOpenRequest?.(() => void openWorkspace()), [workspaceFiles, openWorkspace]);
+
+  // Crash recovery: one offer at start.
+  useEffect(() => {
+    const recovery = workspaceFiles?.recovery;
+    if (!recovery) return;
+    const run = { live: true };
+    recovery.check().then(
+      (offer) => {
+        if (!run.live || !offer) return;
+        showToast({
+          tone: 'info',
+          message: `Unsaved changes to ${offer.displayName} from ${new Date(offer.savedAt).toLocaleString()} can be restored`,
+          action: { label: 'Restore', onClick: () => void runWorkspaceFile(() => recovery.restore(offer, { workspace, engine }), 'Restored') },
+        });
+      },
+      () => undefined,
+    );
+    return () => {
+      run.live = false;
+    };
+    // Checked once per platform implementation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceFiles]);
+
+  // Autosave for crash recovery, after a quiet moment.
+  useEffect(() => {
+    if (!workspaceFiles?.autosave || state.dataSource === null) return;
+    const timer = setTimeout(() => workspaceFiles.autosave?.(store.getState()), AUTOSAVE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [workspaceFiles, state, store]);
+
+  // Cmd/Ctrl+Z undoes, Shift+Cmd/Ctrl+Z redoes, Cmd/Ctrl+S saves (with workspace files); menu commands (File → Open, View → Theme).
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.key.toLowerCase() !== 'z') return;
-      if (isEditableTarget(event.target)) return;
+      if (!(event.metaKey || event.ctrlKey) || event.altKey) return;
+      const key = event.key.toLowerCase();
+      if (key === 's' && workspaceFiles) {
+        event.preventDefault();
+        void saveWorkspace(event.shiftKey);
+        return;
+      }
+      if (key !== 'z' || isEditableTarget(event.target)) return;
       event.preventDefault();
       dispatch(event.shiftKey ? 'redo' : 'undo');
     };
     window.addEventListener('keydown', onKeyDown);
-    const offMenu = bridge.onMenuCommand((command) => {
+    const offMenu = shell.onMenuCommand?.((command) => {
       if (command.kind === 'open') void open();
       else setPreference(command.theme);
     });
     return () => {
       window.removeEventListener('keydown', onKeyDown);
-      offMenu();
+      offMenu?.();
     };
-  }, [dispatch, bridge, open, setPreference]);
+  }, [dispatch, shell, open, setPreference, workspaceFiles, saveWorkspace]);
 
   // ---------------------------------------------------------------------------
   // Drag and drop: a CSV anywhere on the window opens it; columns go to the charts.
@@ -752,8 +839,8 @@ export function App({ engine, bridge, workspace }: AppProps) {
     setFileOver(false);
     if (!event.dataTransfer.types.includes('Files')) return;
     event.preventDefault();
-    const file = event.dataTransfer.files[0];
-    if (file) void open(() => bridge.openDroppedFile(file));
+    const file = files.fileFromDrop(event.dataTransfer);
+    if (file) void open(() => files.openDropped(file));
   };
 
   // ---------------------------------------------------------------------------
@@ -805,7 +892,8 @@ export function App({ engine, bridge, workspace }: AppProps) {
   return (
     <div
       className="app"
-      data-platform={bridge.platform}
+      data-platform={platform.name}
+      data-titlebar-inset={shell.titleBarInset ? '' : undefined}
       data-parquet={tableId === null ? undefined : optimizingNow ? 'converting' : parquetReady.has(tableId) ? 'ready' : 'none'}
       data-testid="app"
       onDragOver={onWindowDragOver}
@@ -815,7 +903,8 @@ export function App({ engine, bridge, workspace }: AppProps) {
       onDrop={onWindowDrop}
     >
       {perfRegion('TopBar', <TopBar
-        platform={bridge.platform}
+        shortcuts={shell.shortcuts}
+        titleBarInset={shell.titleBarInset}
         state={state}
         history={history}
         opening={opening}
@@ -824,6 +913,11 @@ export function App({ engine, bridge, workspace }: AppProps) {
         onUndo={() => dispatch('undo')}
         onRedo={() => dispatch('redo')}
         onStepTo={stepTo}
+        workspaceFile={
+          workspaceFiles
+            ? { edited, busy: workspaceFileBusy, onSave: () => void saveWorkspace(false), onOpen: () => void openWorkspace() }
+            : undefined
+        }
       />)}
 
       <main className="workspace">
@@ -835,7 +929,7 @@ export function App({ engine, bridge, workspace }: AppProps) {
               </div>
               <div className="empty__text">
                 <h1 className="empty__title">Drop a CSV file here</h1>
-                <p className="empty__hint">The file is read on this computer and never uploaded.</p>
+                <p className="empty__hint">{files.privacyNote}</p>
               </div>
               <div className="empty__actions">
                 <Button variant="primary" size="lg" onClick={() => void open()} disabled={opening} data-testid="open-csv-empty">
@@ -843,6 +937,28 @@ export function App({ engine, bridge, workspace }: AppProps) {
                 </Button>
                 <kbd className="gg-kbd">{mod('O')}</kbd>
               </div>
+              {files.samples !== undefined && files.samples.length > 0 && (
+                <>
+                  <p className="empty__samples-label" id="empty-samples-label">
+                    Or try a sample
+                  </p>
+                  <ul className="empty__samples" aria-labelledby="empty-samples-label">
+                    {files.samples.map((sample) => (
+                      <li key={sample.id}>
+                        <Button
+                          variant="secondary"
+                          onClick={() => void open(() => files.openSample?.(sample.id) ?? Promise.resolve({ status: 'cancelled' }))}
+                          disabled={opening}
+                          data-testid={`sample-${sample.id}`}
+                        >
+                          {sample.label}
+                          {sample.detail !== undefined && <span className="empty__sample-detail">{sample.detail}</span>}
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
             </div>
           </section>
         ) : (
