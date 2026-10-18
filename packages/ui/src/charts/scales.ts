@@ -56,13 +56,9 @@ function numberTickFormat(domain: readonly [number, number], count: number) {
     const si = scale.tickFormat(count, '~s');
     return (value: number) => (value === 0 ? '0' : si(value).replace(/[G]$/, (unit) => SI_FIX[unit] ?? unit).replace('−', '-'));
   }
-  const plain = scale.tickFormat(count, ',');
-  const fine = scale.tickFormat(count);
-  // d3 picks the precision from the tick step; ',' adds grouping without changing it.
-  return (value: number) => {
-    const text = max >= 1000 ? plain(value) : fine(value);
-    return text.replace('−', '-');
-  };
+  // ',f': grouped fixed-point; d3 picks the decimals from the tick step.
+  const fixed = scale.tickFormat(count, ',f');
+  return (value: number) => fixed(value).replace('−', '-');
 }
 
 const formatMillisecond = utcFormat('.%L');

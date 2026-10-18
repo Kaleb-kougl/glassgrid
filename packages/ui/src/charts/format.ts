@@ -15,7 +15,7 @@ const grouped = new Intl.NumberFormat('en-US', { maximumFractionDigits: 6 });
 export function formatAggregate(value: number): string {
   if (Number.isNaN(value)) return '–';
   // Very small magnitudes would round to 0 with 6 decimals: keep their digits.
-  if (value !== 0 && Math.abs(value) < 1e-4 && Number.isFinite(value)) return value.toPrecision(6).replace(/\.?0+e/, 'e');
+  if (value !== 0 && Math.abs(value) < 1e-4 && Number.isFinite(value)) return String(Number(value.toPrecision(6)));
   return grouped.format(value);
 }
 
