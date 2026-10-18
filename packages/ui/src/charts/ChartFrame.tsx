@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
+import { useCallback, useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import { Tooltip } from '../components/Tooltip.js';
 import type { ResolvedTokens } from '../tokens.js';
 import { crisp } from './axes.js';
@@ -55,6 +55,17 @@ export interface ChartFrameProps {
   /** Called after the layers were rebuilt and painted (new model or theme). */
   onDrawn?: () => void;
   testId?: string;
+}
+
+/**
+ * The hidden screen-reader table, rendered in a background pass after the
+ * chart is painted (first mount: nothing until then; new data: the previous
+ * table until then). Up to 300 formatted rows cost 10-25 ms of DOM work on a
+ * slow machine, which would otherwise delay every new chart and every
+ * cross-filter repaint.
+ */
+function DeferredTable({ table }: { table: ReactNode }): ReactNode {
+  return useDeferredValue(table, null);
 }
 
 /** How long a committed brush is shown while waiting for the `selection` prop to catch up. */
@@ -431,7 +442,11 @@ export function ChartFrame({
         {announcement}
       </div>
       {legend}
-      {dataTable !== undefined && <div className="gg-visually-hidden">{dataTable}</div>}
+      {dataTable !== undefined && (
+        <div className="gg-visually-hidden">
+          <DeferredTable table={dataTable} />
+        </div>
+      )}
       {hover && (
         <Tooltip anchor={{ x: hover.info.anchor.x + hover.offsetX, y: hover.info.anchor.y + hover.offsetY }} title={hover.info.title} rows={hover.info.rows} />
       )}

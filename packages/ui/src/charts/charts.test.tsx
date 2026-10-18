@@ -46,6 +46,18 @@ describe('ChartFrame through LineChart', () => {
     expect(img.getAttribute('aria-describedby')).toBeNull();
   });
 
+  it('paints the chart before it renders the hidden data table (new chart, then new data)', () => {
+    const rowsAtDraw: number[] = [];
+    const onDrawn = () => rowsAtDraw.push(document.querySelectorAll('.gg-visually-hidden table tr').length);
+    const { rerender } = render(<LineChart table={lineTable} tokens={tokens} label="L" xLabel="x" yLabel="y" onDrawn={onDrawn} testId="line" />);
+    expect(rowsAtDraw).toEqual([0]);
+    expect(within(screen.getByRole('table', { name: 'L data', hidden: true })).getAllByRole('row', { hidden: true })).toHaveLength(6);
+    // New data: drawn while the table still lists the previous rows, then the table follows.
+    rerender(<LineChart table={new Table({ x: f64([0, 1]), y: f64([1, 2]) })} tokens={tokens} label="L" xLabel="x" yLabel="y" onDrawn={onDrawn} testId="line" />);
+    expect(rowsAtDraw).toEqual([0, 6]);
+    expect(within(screen.getByRole('table', { name: 'L data', hidden: true })).getAllByRole('row', { hidden: true })).toHaveLength(3);
+  });
+
   it('reports onDrawn once the layers are painted for new data, not for brush frames', () => {
     const onDrawn = vi.fn();
     const { rerender } = render(<LineChart table={lineTable} tokens={tokens} label="L" xLabel="x" yLabel="y" onBrush={() => undefined} onDrawn={onDrawn} testId="line" />);
