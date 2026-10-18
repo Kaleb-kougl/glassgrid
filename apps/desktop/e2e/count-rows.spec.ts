@@ -6,11 +6,11 @@ import { _electron as electron, expect, test, type ElectronApplication, type Pag
 import {
   AGGREGATE_MEASURE,
   COUNT_ROWS_MEASURE,
-  OPEN_TO_FIRST_PAGE_MEASURE,
+  OPEN_TO_FIRST_ROWS_MEASURE,
   PROFILE_MEASURE,
   type AggregateMeasureDetail,
   type CountRowsMeasureDetail,
-  type OpenToFirstPageMeasureDetail,
+  type OpenToFirstRowsMeasureDetail,
   type ProfileMeasureDetail,
 } from '../src/renderer/src/perf';
 import { e2eRowCount } from './config';
@@ -234,12 +234,12 @@ test.describe('data path', () => {
     await expect(page.getByRole('alert')).toContainText('made-up.csv is not a file on this computer');
     await page.getByRole('alert').getByRole('button', { name: 'Dismiss' }).click();
 
-    const previousOpen = await measureCount(page, OPEN_TO_FIRST_PAGE_MEASURE);
+    const previousOpen = await measureCount(page, OPEN_TO_FIRST_ROWS_MEASURE);
     const previousProfile = await measureCount(page, PROFILE_MEASURE);
     const clickedAt = performance.now();
     await page.getByTestId('open-csv').click();
-    const opened = await nextMeasure(page, OPEN_TO_FIRST_PAGE_MEASURE, previousOpen);
-    const firstPage = { duration: opened.duration, detail: opened.detail as OpenToFirstPageMeasureDetail };
+    const opened = await nextMeasure(page, OPEN_TO_FIRST_ROWS_MEASURE, previousOpen);
+    const firstPage = { duration: opened.duration, detail: opened.detail as OpenToFirstRowsMeasureDetail };
     const firstPageWallMs = performance.now() - clickedAt;
     await expect(page.getByTestId('file-name')).toHaveText(basename(csvPath));
     expect(firstPage.detail).toMatchObject({ rows: 1000, columns: 4, usingParquetCache: false });

@@ -92,6 +92,10 @@ export function describeEntry(entry: Pick<UndoEntry, 'name' | 'input'>, state?: 
       if (sort.length === 0) return 'Cleared the sort';
       return `Sorted by ${sort.map((key) => `${key.column} ${key.direction === 'desc' ? '↓' : '↑'}`).join(', ')}`;
     }
+    case 'resizeColumn':
+      return `Resized ${text(input, 'column')} to ${typeof input['width'] === 'number' ? input['width'] : '?'} px`;
+    case 'reorderColumn':
+      return `Moved ${text(input, 'column')} to position ${typeof input['toIndex'] === 'number' ? input['toIndex'] + 1 : '?'}`;
     case 'setFilter': {
       const filter = input['filter'] as Filter | undefined;
       if (!filter) return 'Set a filter';

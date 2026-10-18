@@ -57,6 +57,12 @@ export interface CanvasGridProps {
   onColumnReorder?: ((from: number, to: number) => void) | undefined;
   /** Cmd/Ctrl+C. Without it the TSV goes to `navigator.clipboard`. */
   onCopy?: ((tsv: string, info: GridCopyInfo) => void) | undefined;
+  /**
+   * Cmd/Ctrl+C, handled by the app instead of the grid (e.g. a `copySelection`
+   * command that builds the TSV with `copySelectionAsTsv`). When set, the grid
+   * neither builds the TSV nor calls `onCopy`; the app reports the outcome.
+   */
+  onCopyRequest?: (() => void) | undefined;
   /** The window on screen changed (throttled). */
   onVisibleWindowChange?: ((window: GridWindow) => void) | undefined;
   /** Once per source and view: the first frame that showed rows with data. */
@@ -152,6 +158,7 @@ export function CanvasGrid({
   onColumnResize,
   onColumnReorder,
   onCopy,
+  onCopyRequest,
   onVisibleWindowChange,
   onFirstRowsPainted,
   label,
@@ -397,7 +404,8 @@ export function CanvasGrid({
     const mod = event.metaKey || event.ctrlKey;
     if (mod && !event.altKey && (event.key === 'c' || event.key === 'C')) {
       event.preventDefault();
-      void runCopy();
+      if (onCopyRequest) onCopyRequest();
+      else void runCopy();
       return;
     }
     if (mod && !event.altKey && (event.key === 'a' || event.key === 'A')) {

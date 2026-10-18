@@ -113,7 +113,10 @@ export function createInitialGridState(): GridState {
 }
 
 /** Column names in display order: `grid.columnOrder` first (known names only), then the rest in file order. */
-export function gridColumnOrder(state: Pick<WorkspaceState, 'columns' | 'grid'>): string[] {
+export function gridColumnOrder(state: {
+  readonly columns: readonly Pick<ColumnState, 'name'>[];
+  readonly grid: { readonly columnOrder: readonly string[] };
+}): string[] {
   const known = new Set(state.columns.map((column) => column.name));
   const ordered = state.grid.columnOrder.filter((name) => known.delete(name));
   for (const column of state.columns) if (known.has(column.name)) ordered.push(column.name);

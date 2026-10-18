@@ -21,6 +21,8 @@ describe('words for state', () => {
     expect(describeEntry({ name: 'setFilter', input: { viewId: 'c1', filter: { kind: 'in', column: 'payment_type', values: ['Cash'] } } })).toBe(
       'Selected payment_type = Cash',
     );
+    expect(describeEntry({ name: 'resizeColumn', input: { column: 'amount', width: 180 } })).toBe('Resized amount to 180 px');
+    expect(describeEntry({ name: 'reorderColumn', input: { column: 'amount', toIndex: 0 } })).toBe('Moved amount to position 1');
     expect(describeEntry({ name: 'sortGrid', input: { sort: [{ column: 'id', direction: 'desc' }] } })).toBe('Sorted by id ↓');
     expect(describeEntry({ name: 'addChart', input: { spec: { mark: 'bar', x: { column: 'category' } } } })).toBe('Added chart “Rows by category”');
     expect(describeEntry({ name: 'clearFilter', input: { viewId: 'c1' } }, { charts: [{ id: 'c1', spec: { mark: 'bar', x: { column: 'a' }, filters: [] } }] })).toBe(

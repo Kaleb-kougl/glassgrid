@@ -38,17 +38,6 @@ export {
   type BarLayout,
 } from './components/BarChart.js';
 export {
-  DataGrid,
-  defaultColumnWidth,
-  scrollMapping,
-  MAX_SCROLL_HEIGHT,
-  ROW_HEIGHT,
-  type DataGridProps,
-  type GridColumn,
-  type GridCell,
-  type GridSelection,
-} from './components/DataGrid.js';
-export {
   CanvasGrid,
   copySelectionAsTsv,
   copyMessage,
@@ -58,7 +47,16 @@ export {
 } from './grid/CanvasGrid.js';
 export { useCanvasGridState, moveItem, reorderedIndex, reorderSelection, type CanvasGridState } from './grid/useCanvasGridState.js';
 export { GridController, type GridWindow } from './grid/controller.js';
-export type { GridCellRef, GridDataSource, GridRange, GridSourceChange, GridSourceListener } from './grid/types.js';
+export type {
+  GridCell,
+  GridCellRef,
+  GridColumn,
+  GridDataSource,
+  GridRange,
+  GridSelection,
+  GridSourceChange,
+  GridSourceListener,
+} from './grid/types.js';
 export { PagedGridSource, isAbortError, type PageColumns, type PagedSourceOptions } from './grid/PagedGridSource.js';
 export { ArrowPagedSource, tableToColumns, type ArrowPagedSourceOptions, type FetchArrowPage } from './grid/ArrowPagedSource.js';
 export {
@@ -95,7 +93,9 @@ export {
   columnOffsets,
   PAGE_SIZE,
   OVERSCAN,
-  MAX_SCROLL_HEIGHT as CANVAS_MAX_SCROLL_HEIGHT,
+  MAX_SCROLL_HEIGHT,
+  MIN_COLUMN_WIDTH,
+  MAX_COLUMN_WIDTH,
   type ScrollMapping,
   type HitResult,
 } from './grid/geometry.js';

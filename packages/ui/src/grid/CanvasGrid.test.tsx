@@ -462,6 +462,15 @@ describe('CanvasGrid keyboard', () => {
     expect(text(screen.getByRole('status'))).toBe('Copied 3 rows × 2 columns.');
   });
 
+  it('hands Cmd/Ctrl+C to onCopyRequest instead of copying itself', () => {
+    const onCopyRequest = vi.fn();
+    const { mirror, onCopy } = setup({ initialSelection: { anchor: { row: 0, col: 0 }, focus: { row: 1, col: 1 } }, onCopyRequest });
+    focusGrid(mirror);
+    fireEvent.keyDown(document.activeElement as Element, { key: 'c', ctrlKey: true });
+    expect(onCopyRequest).toHaveBeenCalledOnce();
+    expect(onCopy).not.toHaveBeenCalled();
+  });
+
   it('caps large copies and says so', async () => {
     const { mirror, onCopy } = setup({
       source: makeSource(50_000),

@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent } from 'react';
 import {
+  CommandError,
   effectiveColumnType,
   isNumericType,
   tableIdForFile,
@@ -13,15 +14,15 @@ import {
 } from '@glassgrid/core';
 import {
   Button,
+  CanvasGrid,
   ColumnListRow,
-  DataGrid,
-  defaultColumnWidth,
+  copySelectionAsTsv,
   draggedColumn,
   FilterChip,
   isColumnDrag,
   Toast,
   tokensFor,
-  type GridColumn,
+  type GridSelection as IndexSelection,
   type ToastAction,
 } from '@glassgrid/ui';
 import { openFileAction } from './actions/open-file';
@@ -29,32 +30,51 @@ import { chartTitle, describeEntry, filterCondition } from './describe';
 import { isAbandoned, type EngineClient, type RowsResult } from './engine-client';
 import {
   COUNT_ROWS_MEASURE,
-  OPEN_TO_FIRST_PAGE_MEASURE,
+  OPEN_TO_FIRST_ROWS_MEASURE,
   PROFILE_MEASURE,
+  SORT_TO_FIRST_ROWS_MEASURE,
   type CountRowsMeasureDetail,
-  type OpenToFirstPageMeasureDetail,
+  type OpenToFirstRowsMeasureDetail,
   type ProfileMeasureDetail,
+  type SortToFirstRowsMeasureDetail,
 } from './perf';
 import { useTheme } from './theme';
 import { ChartView } from './views/ChartView';
-import { useGridRows } from './views/grid-data';
+import {
+  displayColumns,
+  EngineGridSource,
+  fromIndexSelection,
+  selectedColumnNames,
+  sourceColumns,
+  toIndexSelection,
+} from './views/grid-source';
 import { TopBar } from './views/TopBar';
 import type { AppWorkspace } from './workspace';
 
 export { describeEntry };
 
 export interface AppProps {
-  engine: Pick<EngineClient, 'open' | 'rows' | 'profile' | 'count' | 'aggregate' | 'onEvent'>;
-  bridge: Pick<GlassgridBridge, 'openCsv' | 'openDroppedFile' | 'setTheme' | 'onMenuCommand' | 'platform'>;
+  engine: Pick<
+    EngineClient,
+    'open' | 'pageFetcher' | 'profile' | 'count' | 'aggregate' | 'onEvent' | 'onRestarted' | 'setColumnTypes' | 'closeTable'
+  >;
+  bridge: Pick<GlassgridBridge, 'openCsv' | 'openDroppedFile' | 'setTheme' | 'onMenuCommand' | 'platform' | 'clipboard'>;
   workspace: AppWorkspace;
 }
 
-/** Started by an "Open" click or a drop; finished by the first page of the new data source. */
+/** Started by an "Open" click or a drop; finished by the first rows of the new data source painted. */
 interface PendingOpen {
   start: string;
   table: TableId;
   openEngineMs: number;
   usingParquetCache: boolean;
+}
+
+/** Started by a header click; finished by the first rows of the sorted view painted. */
+interface PendingSort {
+  start: string;
+  table: TableId;
+  sort: string;
 }
 
 interface ToastState {
@@ -122,7 +142,6 @@ export function App({ engine, bridge, workspace }: AppProps) {
   const [profile, setProfile] = useState<{ table: TableId; rowCount: number; columns: TableColumnProfile[] } | null>(null);
   const [count, setCount] = useState<{ table: TableId; key: string; rowCount: number } | null>(null);
   const [optimizing, setOptimizing] = useState<{ table: TableId; fraction: number | null } | null>(null);
-  const [selectedColumns, setSelectedColumns] = useState<readonly string[]>([]);
   const [draggingColumn, setDraggingColumn] = useState<string | null>(null);
   const [fileOver, setFileOver] = useState(false);
   const [chartsOver, setChartsOver] = useState(false);
@@ -149,32 +168,121 @@ export function App({ engine, bridge, workspace }: AppProps) {
   // Views of the data source
 
   const filters = useMemo(() => Object.values(state.filters), [state.filters]);
-  const columnNames = useMemo(() => state.columns.map((column) => column.name), [state.columns]);
+  // Bumped when the engine's data for the table changes under the same view (type overrides applied, engine restart).
+  const [dataVersion, setDataVersion] = useState(0);
 
-  const onPage = useCallback((page: number, result: RowsResult) => {
-    if (page !== 0) return;
-    const pending = pendingOpen.current;
-    if (pending) {
+  // ---------------------------------------------------------------------------
+  // The grid: one paged source per table, reset whenever its view changes
+
+  const countKey = tableId === null ? '' : JSON.stringify([tableId, filters, dataVersion]);
+  const knownRowCount = count?.key === countKey ? count.rowCount : null;
+  const fileColumns = useMemo(() => sourceColumns(state.columns), [state.columns]);
+  const gridColumns = useMemo(
+    () => displayColumns(state.columns, state.grid),
+    // Only order and widths matter, not sort or selection.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [state.columns, state.grid.columnOrder, state.grid.columnWidths],
+  );
+  const gridSelection = useMemo(() => toIndexSelection(state.grid.selection, gridColumns), [state.grid.selection, gridColumns]);
+  const selectedColumns = useMemo(() => selectedColumnNames(state.grid.selection, gridColumns), [state.grid.selection, gridColumns]);
+  const view = useMemo(
+    () => ({ sort: state.grid.sort, filters, dataVersion, columns: fileColumns, rowCount: knownRowCount }),
+    [state.grid.sort, filters, dataVersion, fileColumns, knownRowCount],
+  );
+  const grid = useMemo(
+    () => (tableId === null ? null : new EngineGridSource(engine, tableId, view)),
+    // A new table is a new source, built with the view of that render; later view changes reset it (below).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [engine, tableId],
+  );
+  useLayoutEffect(() => {
+    grid?.update(view);
+  }, [grid, view]);
+  useEffect(() => () => grid?.cancel(), [grid]);
+
+  // The first page of a view: the open/sort measures read its engine time; the first one unlocks the profile and the count.
+  const firstPage = useRef<{ table: TableId; result: RowsResult } | null>(null);
+  useLayoutEffect(() => {
+    if (!grid) return;
+    const table = grid.table;
+    const offPage = grid.onFirstPage((result) => {
+      firstPage.current = { table, result };
+      setFirstPageTable(table);
+    });
+    const offErrors = grid.source.subscribe((change) => {
+      if (change.kind === 'error' && !isAbandoned(change.error)) showToast({ tone: 'error', message: messageOf(change.error) });
+    });
+    return () => {
+      offPage();
+      offErrors();
+    };
+  }, [grid, showToast]);
+
+  const pendingSort = useRef<PendingSort | null>(null);
+  const onFirstRowsPainted = useCallback(() => {
+    const page = firstPage.current;
+    const open = pendingOpen.current;
+    if (open && open.table === page?.table) {
       pendingOpen.current = null;
-      measure(OPEN_TO_FIRST_PAGE_MEASURE, pending.start, {
-        openEngineMs: pending.openEngineMs,
-        firstPageEngineMs: result.engineMs,
-        rows: result.table.numRows,
-        columns: result.table.numCols,
-        usingParquetCache: pending.usingParquetCache,
-      } satisfies OpenToFirstPageMeasureDetail);
+      measure(OPEN_TO_FIRST_ROWS_MEASURE, open.start, {
+        openEngineMs: open.openEngineMs,
+        firstPageEngineMs: page.result.engineMs,
+        rows: page.result.table.numRows,
+        columns: page.result.table.numCols,
+        usingParquetCache: open.usingParquetCache,
+      } satisfies OpenToFirstRowsMeasureDetail);
+    }
+    const sorted = pendingSort.current;
+    if (sorted && sorted.table === page?.table) {
+      pendingSort.current = null;
+      measure(SORT_TO_FIRST_ROWS_MEASURE, sorted.start, {
+        sort: sorted.sort,
+        firstPageEngineMs: page.result.engineMs,
+        cached: page.result.cached,
+      } satisfies SortToFirstRowsMeasureDetail);
     }
   }, []);
-  const onGridError = useCallback((cause: unknown) => showToast({ tone: 'error', message: messageOf(cause) }), [showToast]);
-  // The first page of a new table unlocks the profile and the count, so the full-table scans never delay it.
-  const onGridPage = useCallback(
-    (page: number, result: RowsResult) => {
-      onPage(page, result);
-      if (page === 0) setFirstPageTable(tableId);
-    },
-    [onPage, tableId],
+
+  // The previous table's DuckDB instance is freed when another file replaces it (and when the window goes away).
+  const shownTable = useRef<TableId | null>(null);
+  useEffect(() => {
+    const previous = shownTable.current;
+    shownTable.current = tableId;
+    if (previous !== null && previous !== tableId) void engine.closeTable(previous).catch(() => undefined);
+  }, [engine, tableId]);
+  useEffect(() => {
+    const onPageHide = () => {
+      if (shownTable.current !== null) void engine.closeTable(shownTable.current).catch(() => undefined);
+    };
+    window.addEventListener('pagehide', onPageHide);
+    return () => window.removeEventListener('pagehide', onPageHide);
+  }, [engine]);
+
+  // After an engine restart every view re-queries (in-flight requests were dropped).
+  useEffect(() => engine.onRestarted(() => setDataVersion((version) => version + 1)), [engine]);
+
+  // copySelection: the selection as TSV, through the preload's clipboard.
+  const gridSource = useRef<EngineGridSource | null>(null);
+  useLayoutEffect(() => {
+    gridSource.current = grid;
+  }, [grid]);
+  useEffect(
+    () =>
+      registry.provide('copySelection', async (_input, { state: current }) => {
+        const columns = displayColumns(current.columns, current.grid);
+        const selection = toIndexSelection(current.grid.selection, columns);
+        const source = gridSource.current?.source;
+        if (!source || !selection) {
+          throw new CommandError('precondition_failed', 'Nothing is selected in the grid; select cells first', { command: 'copySelection' });
+        }
+        const result = await copySelectionAsTsv(source, columns, selection);
+        if (!result) throw new CommandError('precondition_failed', 'The selection is outside the rows of this view', { command: 'copySelection' });
+        await bridge.clipboard.writeText(result.text);
+        showToast({ tone: 'info', message: result.message });
+        return { rows: result.rows, columns: result.columns, selectedRows: result.selectedRows, truncated: result.truncated, message: result.message };
+      }),
+    [registry, bridge, showToast],
   );
-  const grid = useGridRows({ engine, tableId, columns: columnNames, sort: state.grid.sort, filters, onPage: onGridPage, onError: onGridError });
 
   useEffect(() => {
     if (tableId === null || firstPageTable !== tableId) return;
@@ -198,9 +306,8 @@ export function App({ engine, bridge, workspace }: AppProps) {
     return () => {
       run.live = false;
     };
-  }, [engine, tableId, firstPageTable, showToast]);
+  }, [engine, tableId, firstPageTable, dataVersion, showToast]);
 
-  const countKey = tableId === null ? '' : JSON.stringify([tableId, filters]);
   useEffect(() => {
     if (tableId === null || firstPageTable !== tableId) return;
     const run = { live: true };
@@ -244,7 +351,7 @@ export function App({ engine, bridge, workspace }: AppProps) {
   const open = useCallback(
     async (pick?: () => Promise<unknown>) => {
       setOpening(true);
-      const start = `${OPEN_TO_FIRST_PAGE_MEASURE}:start:${performance.now()}`;
+      const start = `${OPEN_TO_FIRST_ROWS_MEASURE}:start:${performance.now()}`;
       performance.mark(start);
       try {
         const outcome = await openFileAction({
@@ -266,7 +373,7 @@ export function App({ engine, bridge, workspace }: AppProps) {
         setOpening(false);
       }
     },
-    [bridge, engine, registry, showToast],
+    [bridge, engine, registry, showToast, setOpening],
   );
 
   useEffect(() => {
@@ -343,24 +450,30 @@ export function App({ engine, bridge, workspace }: AppProps) {
   // While a new count runs (filters changed), keep showing the last one for this table.
   const rowCount = count?.table === tableId ? count.rowCount : null;
   const totalRows = profiled?.rowCount ?? (filters.length === 0 ? rowCount : null);
-  const gridColumns: GridColumn[] = useMemo(
-    () =>
-      state.columns.map((column) => ({
-        name: column.name,
-        type: column.inferredType,
-        width: defaultColumnWidth(column.name, column.inferredType),
-      })),
-    [state.columns],
-  );
   const callers = useMemo(() => chartCallers(history.past), [history.past]);
   const filterEntries = Object.entries(state.filters);
   const optimizingNow = optimizing && optimizing.table === tableId ? { fraction: optimizing.fraction } : null;
 
-  const onSortColumn = (column: string) => {
+  // Header click: ascending, then descending, then file order.
+  const onSortRequest = (column: string) => {
     const current = state.grid.sort[0];
-    if (current?.column !== column) dispatch('sortGrid', { sort: [{ column, direction: 'asc' }] });
-    else if (current.direction === 'asc') dispatch('sortGrid', { sort: [{ column, direction: 'desc' }] });
-    else dispatch('sortGrid', { sort: [] });
+    const sort =
+      current?.column !== column
+        ? [{ column, direction: 'asc' as const }]
+        : current.direction === 'asc'
+          ? [{ column, direction: 'desc' as const }]
+          : [];
+    if (tableId !== null) {
+      const start = `${SORT_TO_FIRST_ROWS_MEASURE}:start:${performance.now()}`;
+      performance.mark(start);
+      if (pendingSort.current) performance.clearMarks(pendingSort.current.start);
+      pendingSort.current = { start, table: tableId, sort: sort.map((key) => `${key.column} ${key.direction}`).join(', ') || 'file order' };
+    }
+    dispatch('sortGrid', { sort });
+  };
+
+  const onSelectionChange = (next: IndexSelection | null) => {
+    dispatch('setSelection', { selection: fromIndexSelection(next, gridColumns) });
   };
 
   const newChartColumn = (): ColumnState | undefined =>
@@ -481,18 +594,27 @@ export function App({ engine, bridge, workspace }: AppProps) {
                   )}
                 </div>
               </div>
-              <DataGrid
-                columns={gridColumns}
-                rowCount={rowCount ?? (profiling ? 1_000 : null)}
-                getRow={grid.getRow}
-                onVisibleRangeChange={grid.requestRange}
-                sort={state.grid.sort}
-                onSortColumn={onSortColumn}
-                onSelectedColumnsChange={setSelectedColumns}
-                resetKey={grid.viewKey}
-                label={state.dataSource.fileName}
-                testId="grid"
-              />
+              {grid && (
+                <CanvasGrid
+                  source={grid.source}
+                  columns={gridColumns}
+                  tokens={tokens}
+                  selection={gridSelection}
+                  onSelectionChange={onSelectionChange}
+                  sort={state.grid.sort}
+                  onSortRequest={onSortRequest}
+                  onColumnResize={(column, width) => dispatch('resizeColumn', { column, width: Math.round(width) })}
+                  onColumnReorder={(from, to) => {
+                    const column = gridColumns[from];
+                    if (column) dispatch('reorderColumn', { column: column.name, toIndex: to });
+                  }}
+                  onCopyRequest={() => dispatch('copySelection')}
+                  onFirstRowsPainted={onFirstRowsPainted}
+                  label={state.dataSource.fileName}
+                  emptyMessage={filters.length > 0 ? 'No rows match the filters' : 'The file has no rows'}
+                  testId="grid"
+                />
+              )}
               {toast && (
                 <div className="toast-slot">
                   <Toast
@@ -560,6 +682,7 @@ export function App({ engine, bridge, workspace }: AppProps) {
                     key={chart.id}
                     engine={engine}
                     tableId={tableId}
+                    dataVersion={dataVersion}
                     chart={chart}
                     selection={state.filters[chart.id]}
                     crossFilters={filterEntries.filter(([viewId]) => viewId !== chart.id).map(([, filter]) => filter)}

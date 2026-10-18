@@ -16,6 +16,8 @@ import { useChartData, valueKey, type BarRow } from './chart-data';
 export interface ChartViewProps {
   engine: Pick<EngineClient, 'aggregate'>;
   tableId: TableId | null;
+  /** Bumped when the engine's data changed under the same spec (type overrides, engine restart). */
+  dataVersion: number;
   chart: ChartState;
   /** This chart's own selection, if any. */
   selection: Filter | undefined;
@@ -44,6 +46,7 @@ function aggregateAllowed(aggregate: Aggregate, column: ColumnState | undefined)
 export function ChartView({
   engine,
   tableId,
+  dataVersion,
   chart,
   selection,
   crossFilters,
@@ -55,7 +58,7 @@ export function ChartView({
   onRemove,
 }: ChartViewProps) {
   const { spec } = chart;
-  const data = useChartData(engine, tableId, chart.id, spec, crossFilters);
+  const data = useChartData(engine, tableId, chart.id, spec, crossFilters, dataVersion);
   const [viewData, setViewData] = useState(false);
   const title = chartTitle(chart);
   const testId = `chart-${chart.id}`;

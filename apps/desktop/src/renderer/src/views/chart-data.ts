@@ -3,7 +3,7 @@ import type { ChartSpec, Filter, TableId } from '@glassgrid/core';
 import { filterValue, formatterFor, valueKind, type BarDatum } from '@glassgrid/ui';
 import { isAbandoned, type EngineClient } from '../engine-client';
 import { AGGREGATE_MEASURE, type AggregateMeasureDetail } from '../perf';
-import type { FilterValue } from '../types';
+import type { FilterValue } from '@glassgrid/core';
 
 export interface BarRow extends BarDatum {
   /** The x value as an `in` filter value. */
@@ -39,8 +39,9 @@ export function useChartData(
   chartId: string,
   spec: ChartSpec,
   crossFilters: readonly Filter[],
+  dataVersion = 0,
 ): ChartData {
-  const requestKey = JSON.stringify([tableId, spec, crossFilters]);
+  const requestKey = JSON.stringify([tableId, spec, crossFilters, dataVersion]);
   const [data, setData] = useState<{ key: string; value: ChartData } | null>(null);
 
   useEffect(() => {
@@ -88,7 +89,7 @@ export function useChartData(
     return () => {
       live.current = false;
     };
-    // requestKey captures spec, crossFilters and tableId by value.
+    // requestKey captures spec, crossFilters, tableId and dataVersion by value.
   }, [engine, chartId, requestKey]);
 
   if (data?.key === requestKey) return data.value;

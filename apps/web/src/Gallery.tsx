@@ -8,7 +8,6 @@ import {
   ChartCard,
   ChartSkeleton,
   ColumnListRow,
-  DataGrid,
   FilterChip,
   FocusRing,
   HistoryItem,
@@ -23,7 +22,6 @@ import {
   tokensFor,
   useCanvasGridState,
   type BarDatum,
-  type GridColumn,
   type ThemeName,
 } from '@glassgrid/ui';
 
@@ -45,18 +43,22 @@ const bars: BarDatum[] = [
   { key: '"Dispute"', label: 'Dispute', value: 12_640 },
 ];
 
-const gridColumns: GridColumn[] = [
-  { name: 'pickup_datetime', type: 'timestamp', width: 168 },
-  { name: 'passenger_count', type: 'integer', width: 116 },
-  { name: 'trip_distance', type: 'float', width: 104 },
-  { name: 'payment_type', type: 'text', width: 112 },
-];
-const gridRows = Array.from({ length: 6 }, (_, i) => [
-  `2023-01-01 00:0${i}:${String(20 + i * 7).padStart(2, '0')}`,
-  i === 4 ? null : String((i % 3) + 1),
-  (2.24 + i * 0.61).toFixed(2),
-  i % 3 === 2 ? 'Cash' : 'Credit card',
-]);
+/** Six rows for the focus demo: the focused cell has the inset ring. */
+const sampleRows = new SyntheticSource({ rowCount: 6, columnCount: 4, latencyMs: 0 });
+
+function FocusGridDemo({ theme }: { theme: ThemeName }) {
+  const state = useCanvasGridState(sampleRows);
+  return (
+    <CanvasGrid
+      source={sampleRows}
+      tokens={tokensFor(theme)}
+      label={`Sample rows (${theme})`}
+      testId={`focus-grid-${theme}`}
+      {...state}
+      selection={state.selection ?? { anchor: { row: 2, col: 1 }, focus: { row: 2, col: 1 } }}
+    />
+  );
+}
 
 /** One million deterministic rows, shared by both sheets (pages load after 40 ms). */
 const syntheticRows = new SyntheticSource({ rowCount: 1_000_000, latencyMs: 40 });
@@ -305,7 +307,7 @@ function Sheet({ theme }: { theme: ThemeName }) {
           </FocusRing>
         </div>
         <div className="sheet__grid">
-          <DataGrid columns={gridColumns} rowCount={gridRows.length} getRow={(i) => gridRows[i]} sort={[{ column: 'pickup_datetime', direction: 'asc' }]} label="Sample rows" />
+          <FocusGridDemo theme={theme} />
         </div>
       </Section>
 

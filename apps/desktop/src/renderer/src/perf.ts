@@ -18,12 +18,13 @@ export interface CountRowsMeasureDetail {
 }
 
 /**
- * performance.measure name for "Open CSV" click -> first grid page decoded
- * (dialog or E2E hook, file registration, engine open, first 1,000 rows).
+ * performance.measure name for "Open CSV" click -> first rows painted on the
+ * grid's canvas (dialog or E2E hook, file registration, engine open, the
+ * first 1,000-row page, formatting and the first frame that shows rows).
  */
-export const OPEN_TO_FIRST_PAGE_MEASURE = 'glassgrid:open-to-first-page';
+export const OPEN_TO_FIRST_ROWS_MEASURE = 'glassgrid:open-to-first-rows';
 
-export interface OpenToFirstPageMeasureDetail {
+export interface OpenToFirstRowsMeasureDetail {
   /** Engine time for `open` (fingerprint, view, DESCRIBE). */
   openEngineMs: number;
   /** Engine time for the first `rows` page (query + Arrow encode). */
@@ -32,6 +33,21 @@ export interface OpenToFirstPageMeasureDetail {
   rows: number;
   columns: number;
   usingParquetCache: boolean;
+}
+
+/**
+ * performance.measure name for a header click (sort) -> the first rows of
+ * the sorted view painted (the engine's top-K path for the first 5,000 rows).
+ */
+export const SORT_TO_FIRST_ROWS_MEASURE = 'glassgrid:sort-to-first-rows';
+
+export interface SortToFirstRowsMeasureDetail {
+  /** The sort that was requested, e.g. `amount desc`. */
+  sort: string;
+  /** Engine time for the first page of the sorted view. */
+  firstPageEngineMs: number;
+  /** Served from the engine's result cache (a sort seen before). */
+  cached: boolean;
 }
 
 /** performance.measure name for one profile round trip, started after the first page. */
