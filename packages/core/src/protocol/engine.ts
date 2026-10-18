@@ -72,6 +72,22 @@ export const FingerprintSchema = z.object({
 });
 export type Fingerprint = z.infer<typeof FingerprintSchema>;
 
+/**
+ * One column type override: the engine reads `column` through
+ * `TRY_CAST(... AS <type>)`, so values that do not convert become NULL.
+ * Logical types map to DuckDB types as integer -> BIGINT, float -> DOUBLE,
+ * decimal -> DECIMAL(38,6) (an inferred DECIMAL keeps its own width and
+ * scale), boolean -> BOOLEAN, date -> DATE, timestamp -> TIMESTAMP,
+ * text -> VARCHAR.
+ */
+export const ColumnTypeOverrideSchema = z.object({
+  column: z.string().min(1),
+  type: ColumnTypeSchema,
+});
+export type ColumnTypeOverride = z.infer<typeof ColumnTypeOverrideSchema>;
+
+export const MAX_TYPE_OVERRIDES = 4096;
+
 export const TableHandleSchema = z.object({
   id: TableIdSchema,
   file: FileHandleSchema,
@@ -81,7 +97,14 @@ export const TableHandleSchema = z.object({
   fingerprint: FingerprintSchema,
   /** True once queries read the cached Parquet copy instead of the CSV. */
   usingParquetCache: z.boolean(),
+  /** Columns with their effective types (type overrides applied). */
   columns: z.array(ColumnInfoSchema),
+  /**
+   * Overrides the engine currently applies, if any. The engine forgets them
+   * when it restarts (tables reopen with inferred types), so a renderer that
+   * sees fewer overrides here than in its workspace re-sends `setColumnTypes`.
+   */
+  typeOverrides: z.array(ColumnTypeOverrideSchema).optional(),
 });
 export type TableHandle = z.infer<typeof TableHandleSchema>;
 
@@ -152,6 +175,14 @@ export const RowsRequestSchema = z.object({
   query: RowsQuerySchema,
   /** Only rows matching every filter; compiled with `compileWhere`. */
   filters: RequestFiltersSchema.optional(),
+  /**
+   * A grid page fetched alongside other pages of the same view: it neither
+   * supersedes nor is superseded by other requests of `viewId` (the grid
+   * cancels pages it no longer needs). `viewId` still ties the request to its
+   * view's sort index, so a background index build keeps running while the
+   * view pages through it.
+   */
+  concurrent: z.boolean().optional(),
 });
 
 export const CountRequestSchema = z.object({
@@ -197,6 +228,24 @@ export const CacheStatsRequestSchema = z.object({
   requestId: RequestIdSchema,
 });
 
+/**
+ * Replace a table's column type overrides. `overrides` is the complete set:
+ * columns not listed (and columns set to their inferred type) are read with
+ * their inferred types. The engine redefines the table's views with
+ * `TRY_CAST` per overridden column, drops the table's cached results and sort
+ * indexes and recomputes the profile of the affected columns. Answered with
+ * `columnTypes`, which counts the values that failed to convert.
+ */
+export const SetColumnTypesRequestSchema = z.object({
+  kind: z.literal('setColumnTypes'),
+  requestId: RequestIdSchema,
+  table: TableIdSchema,
+  overrides: z
+    .array(ColumnTypeOverrideSchema)
+    .max(MAX_TYPE_OVERRIDES)
+    .refine((list) => new Set(list.map((entry) => entry.column)).size === list.length, 'Each column may appear once'),
+});
+
 export const EngineRequestSchema = z.discriminatedUnion('kind', [
   OpenRequestSchema,
   ProfileRequestSchema,
@@ -207,6 +256,7 @@ export const EngineRequestSchema = z.discriminatedUnion('kind', [
   EnsureParquetCacheRequestSchema,
   ClearCacheRequestSchema,
   CacheStatsRequestSchema,
+  SetColumnTypesRequestSchema,
 ]);
 export type EngineRequest = z.infer<typeof EngineRequestSchema>;
 export type OpenRequest = z.infer<typeof OpenRequestSchema>;
@@ -218,6 +268,7 @@ export type CancelRequest = z.infer<typeof CancelRequestSchema>;
 export type EnsureParquetCacheRequest = z.infer<typeof EnsureParquetCacheRequestSchema>;
 export type ClearCacheRequest = z.infer<typeof ClearCacheRequestSchema>;
 export type CacheStatsRequest = z.infer<typeof CacheStatsRequestSchema>;
+export type SetColumnTypesRequest = z.infer<typeof SetColumnTypesRequestSchema>;
 
 /** Requests subject to per-view ordering and superseding. */
 export type ViewScopedRequest = ProfileRequest | RowsRequest | CountRequest | AggregateRequest;
@@ -339,6 +390,28 @@ export const CacheStatsResultSchema = z.object({
   parquet: ParquetCacheStatsSchema,
 });
 
+/** One overridden column after `setColumnTypes`. */
+export const ColumnTypeResultSchema = z.object({
+  column: z.string(),
+  /** The effective logical type (the override, or the inferred type when equal). */
+  type: ColumnTypeSchema,
+  /** The DuckDB type the column is read as, e.g. `BIGINT` or `DECIMAL(38,6)`. */
+  duckdbType: z.string(),
+  /** Non-NULL source values that did not convert and now read as NULL. */
+  failedCasts: z.number().int().nonnegative(),
+});
+export type ColumnTypeResult = z.infer<typeof ColumnTypeResultSchema>;
+
+export const ColumnTypesResultSchema = z.object({
+  kind: z.literal('columnTypes'),
+  requestId: RequestIdSchema,
+  /** The table with its new effective column types and `typeOverrides`. */
+  table: TableHandleSchema,
+  /** One entry per requested override, in request order. */
+  columns: z.array(ColumnTypeResultSchema),
+  ...Timing,
+});
+
 export const AckResultSchema = z.object({
   kind: z.literal('ack'),
   requestId: RequestIdSchema,
@@ -394,6 +467,7 @@ export const EngineResponseSchema = z.discriminatedUnion('kind', [
   CountResultSchema,
   ParquetCacheResultSchema,
   CacheStatsResultSchema,
+  ColumnTypesResultSchema,
   AckResultSchema,
   EngineErrorSchema,
   EngineEventMessageSchema,
@@ -407,6 +481,7 @@ export type CountResult = z.infer<typeof CountResultSchema>;
 export type ParquetCacheResult = z.infer<typeof ParquetCacheResultSchema>;
 export type CacheStatsResult = z.infer<typeof CacheStatsResultSchema>;
 export type AckResult = z.infer<typeof AckResultSchema>;
+export type ColumnTypesResult = z.infer<typeof ColumnTypesResultSchema>;
 export type EngineError = z.infer<typeof EngineErrorSchema>;
 export type EngineEventMessage = z.infer<typeof EngineEventMessageSchema>;
 

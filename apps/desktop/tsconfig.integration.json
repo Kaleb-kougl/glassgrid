@@ -1,0 +1,10 @@
+{
+  // Tests that drive the renderer's EngineClient against the real engine:
+  // DOM typings for the client, Node typings for DuckDB and the harness.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node"]
+  },
+  "include": ["src/engine/client-integration.test.ts"]
+}

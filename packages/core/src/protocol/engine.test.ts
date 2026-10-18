@@ -118,6 +118,32 @@ describe('EngineRequestSchema', () => {
     expect(EngineRequestSchema.safeParse({ ...base, spec: { mark: 'bar', x: { column: 'a' }, sql: 'x' } }).success).toBe(false);
   });
 
+  it('accepts concurrent grid pages and type override requests', () => {
+    const page = { kind: 'rows', requestId: 'p', viewId: 'grid', seq: 0, table, query: { offset: 0, limit: 1000 }, concurrent: true };
+    expect(EngineRequestSchema.parse(page)).toEqual(page);
+    expect(isViewScopedRequest(EngineRequestSchema.parse(page))).toBe(true);
+
+    const types = { kind: 'setColumnTypes', requestId: 't', table, overrides: [{ column: 'a b', type: 'integer' }] };
+    expect(EngineRequestSchema.parse(types)).toEqual(types);
+    expect(isViewScopedRequest(EngineRequestSchema.parse(types))).toBe(false);
+    expect(EngineRequestSchema.parse({ ...types, overrides: [] }).kind).toBe('setColumnTypes');
+  });
+
+  it('rejects malformed type overrides', () => {
+    const base = { kind: 'setColumnTypes', requestId: 't', table };
+    const dup = [
+      { column: 'a', type: 'integer' },
+      { column: 'a', type: 'text' },
+    ];
+    expect(EngineRequestSchema.safeParse({ ...base, overrides: dup }).success).toBe(false);
+    expect(EngineRequestSchema.safeParse({ ...base, overrides: [{ column: 'a', type: 'time' }] }).success).toBe(false);
+    expect(EngineRequestSchema.safeParse({ ...base, overrides: [{ column: '', type: 'text' }] }).success).toBe(false);
+    expect(EngineRequestSchema.safeParse({ ...base, overrides: [{ column: 'a', type: 'text', sql: 'x' }] }).data).toEqual({
+      ...base,
+      overrides: [{ column: 'a', type: 'text' }],
+    });
+  });
+
   it('rejects unknown request kinds and empty request ids', () => {
     expect(EngineRequestSchema.safeParse({ kind: 'dropTable', requestId: 'r1', table }).success).toBe(false);
     expect(EngineRequestSchema.safeParse({ kind: 'cacheStats', requestId: '' }).success).toBe(false);
@@ -170,6 +196,30 @@ describe('EngineResponseSchema', () => {
     ).toBe('event');
     expect(
       EngineResponseSchema.safeParse({ kind: 'event', event: { type: 'parquetProgress', table, fraction: 2 } }).success,
+    ).toBe(false);
+  });
+
+  it('accepts columnTypes results and handles with type overrides', () => {
+    const tableHandle = {
+      id: table,
+      file: handle,
+      fileName: 'data.csv',
+      fingerprint,
+      usingParquetCache: true,
+      columns: [{ name: 'code', type: 'integer', duckdbType: 'BIGINT' }],
+      typeOverrides: [{ column: 'code', type: 'integer' }],
+    };
+    const reply = {
+      kind: 'columnTypes',
+      requestId: 't',
+      table: tableHandle,
+      columns: [{ column: 'code', type: 'integer', duckdbType: 'BIGINT', failedCasts: 3 }],
+      engineMs: 5,
+    };
+    expect(EngineResponseSchema.parse(reply)).toEqual(reply);
+    expect(
+      EngineResponseSchema.safeParse({ ...reply, columns: [{ column: 'code', type: 'integer', duckdbType: 'BIGINT', failedCasts: -1 }] })
+        .success,
     ).toBe(false);
   });
 

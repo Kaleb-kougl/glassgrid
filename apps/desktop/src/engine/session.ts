@@ -25,6 +25,8 @@ import type { SqlFragment, SqlParam } from './sql-text';
 interface InFlight {
   controller: AbortController;
   viewId: string | undefined;
+  /** A concurrent grid page: never supersedes, never superseded. */
+  concurrent: boolean;
 }
 
 /** The compiler's output as an engine SQL fragment (its params are always JSON scalars). */
@@ -97,12 +99,19 @@ export async function runAggregate(
  *   higher seq interrupts every in-flight request of the same view; their
  *   responses are dropped. A request whose seq is not newer than one already
  *   seen is answered `superseded` without running.
+ * - `rows` with `concurrent: true` (grid pages) opts out of both: pages of
+ *   one view run side by side and the grid cancels the ones it no longer
+ *   needs. Identical in-flight pages share one query (QueryService).
  * - `cancel` interrupts the target and answers it `cancelled` at once; a
  *   late result for it is dropped.
  * - Every failure becomes an `error` reply with a code; nothing a renderer
  *   sends can throw out of `handle()`.
  */
+let nextSessionId = 0;
+
 export class EngineSession {
+  /** Scopes view ids in the shared QueryService, so two windows' `grid` views stay independent. */
+  private readonly id = `s${(nextSessionId += 1)}`;
   private readonly inflight = new Map<string, InFlight>();
   private readonly latestSeq = new Map<string, number>();
   private readonly onEvent = (event: EngineEvent) => this.send({ kind: 'event', event });
@@ -143,7 +152,10 @@ export class EngineSession {
     }
 
     let viewId: string | undefined;
-    if (isViewScopedRequest(request)) {
+    const concurrent = request.kind === 'rows' && request.concurrent === true;
+    if (isViewScopedRequest(request) && concurrent) {
+      viewId = request.viewId;
+    } else if (isViewScopedRequest(request)) {
       viewId = request.viewId;
       const latest = this.latestSeq.get(viewId);
       if (latest !== undefined && request.seq <= latest) {
@@ -157,15 +169,16 @@ export class EngineSession {
       }
       this.latestSeq.set(viewId, request.seq);
       for (const [requestId, flight] of this.inflight) {
-        if (flight.viewId === viewId) {
+        if (flight.viewId === viewId && !flight.concurrent) {
           this.abort(requestId, new EngineFailure('superseded', 'Superseded by a newer request for the same view'));
         }
       }
     }
 
     const controller = new AbortController();
-    this.inflight.set(request.requestId, { controller, viewId });
-    void this.run(request, { signal: controller.signal, ...(viewId === undefined ? {} : { viewId }) }).then((reply) => {
+    this.inflight.set(request.requestId, { controller, viewId, concurrent });
+    const ctx = { signal: controller.signal, ...(viewId === undefined ? {} : { viewId: `${this.id}:${viewId}` }) };
+    void this.run(request, ctx).then((reply) => {
       // Superseded or cancelled requests were already answered (or are dropped).
       if (this.inflight.get(request.requestId)?.controller !== controller) return;
       this.inflight.delete(request.requestId);
@@ -181,7 +194,13 @@ export class EngineSession {
       flight.controller.abort(new EngineFailure('cancelled', 'Connection closed'));
     }
     this.inflight.clear();
-    void this.service.then((ready) => ready.off('event', this.onEvent), () => undefined);
+    void this.service.then(
+      (ready) => {
+        ready.off('event', this.onEvent);
+        ready.releaseViews(`${this.id}:`);
+      },
+      () => undefined,
+    );
   }
 
   private abort(requestId: string, reason: EngineFailure): void {
@@ -250,6 +269,10 @@ export class EngineSession {
         case 'clearCache':
           await service.clearCache(request.scope ?? 'all');
           return { kind: 'ack', requestId };
+        case 'setColumnTypes': {
+          const outcome = await service.setColumnTypes(request.table, request.overrides, ctx);
+          return { kind: 'columnTypes', requestId, table: outcome.table, columns: outcome.columns, engineMs: elapsed() };
+        }
         case 'cacheStats':
           return {
             kind: 'cacheStats',
