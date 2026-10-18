@@ -286,53 +286,55 @@ export function BarChart({ data, selected, onToggle, tokens, valueLabel, label, 
   const canvasTop = 14;
 
   return (
-    <div
-      ref={wrapperRef}
-      className="gg-bar-chart"
-      role="listbox"
-      aria-label={label}
-      aria-multiselectable="true"
-      aria-activedescendant={data.length > 0 ? `${optionPrefix}-${activeIndex}` : undefined}
-      tabIndex={0}
-      data-testid={testId}
-      onKeyDown={onKeyDown}
-      onKeyUp={() => setKeyboardFocus(true)}
-      onBlur={() => setKeyboardFocus(false)}
-      onMouseDown={() => setKeyboardFocus(false)}
-    >
-      <canvas
-        ref={canvasRef}
-        aria-hidden="true"
-        onMouseMove={(event) => {
-          const point = pointFromEvent(event);
-          const index = point ? hitTestBars(layout, point) : -1;
-          setHover(point && index >= 0 ? { index, point } : null);
-        }}
-        onMouseLeave={() => setHover(null)}
-        onClick={(event) => {
-          const point = pointFromEvent(event);
-          const index = point ? hitTestBars(layout, point) : -1;
-          const datum = data[index];
-          if (datum) {
-            setActive(index);
-            onToggle?.(datum);
-          }
-        }}
-      />
-      <ul className="gg-visually-hidden">
-        {data.map((d, i) => (
-          <li
-            key={d.key}
-            id={`${optionPrefix}-${i}`}
-            role="option"
-            aria-selected={selected.has(d.key)}
-            data-testid={testId ? `${testId}-bar` : undefined}
-            data-key={d.key}
-          >
-            {d.label}: {d.value === null ? 'no value' : formatValue(d.value)}
-          </li>
-        ))}
-      </ul>
+    // The tooltip sits beside the listbox, not in it: a listbox may only own options (axe aria-required-children).
+    <div ref={wrapperRef} className="gg-bar-chart">
+      <div
+        className="gg-bar-chart__plot"
+        role="listbox"
+        aria-label={label}
+        aria-multiselectable="true"
+        aria-activedescendant={data.length > 0 ? `${optionPrefix}-${activeIndex}` : undefined}
+        tabIndex={0}
+        data-testid={testId}
+        onKeyDown={onKeyDown}
+        onKeyUp={() => setKeyboardFocus(true)}
+        onBlur={() => setKeyboardFocus(false)}
+        onMouseDown={() => setKeyboardFocus(false)}
+      >
+        <canvas
+          ref={canvasRef}
+          aria-hidden="true"
+          onMouseMove={(event) => {
+            const point = pointFromEvent(event);
+            const index = point ? hitTestBars(layout, point) : -1;
+            setHover(point && index >= 0 ? { index, point } : null);
+          }}
+          onMouseLeave={() => setHover(null)}
+          onClick={(event) => {
+            const point = pointFromEvent(event);
+            const index = point ? hitTestBars(layout, point) : -1;
+            const datum = data[index];
+            if (datum) {
+              setActive(index);
+              onToggle?.(datum);
+            }
+          }}
+        />
+        <div className="gg-visually-hidden">
+          {data.map((d, i) => (
+            <div
+              key={d.key}
+              id={`${optionPrefix}-${i}`}
+              role="option"
+              aria-selected={selected.has(d.key)}
+              data-testid={testId ? `${testId}-bar` : undefined}
+              data-key={d.key}
+            >
+              {d.label}: {d.value === null ? 'no value' : formatValue(d.value)}
+            </div>
+          ))}
+        </div>
+      </div>
       {hover && hovered && (
         <Tooltip
           anchor={{ x: hover.point.x + canvasLeft, y: hover.point.y + canvasTop }}

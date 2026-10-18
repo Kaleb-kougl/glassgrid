@@ -67,6 +67,8 @@ body {
 }
 
 .topbar__name {
+  margin: 0;
+  font-size: inherit;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
@@ -184,12 +186,18 @@ body {
   border-bottom: var(--gg-border-width) solid var(--gg-grid-line-strong);
 }
 
-.grid-panel__filters {
+.grid-panel__filters,
+.grid-panel__chips {
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
   overflow: hidden;
+}
+
+.grid-panel__chips > [role='listitem'] {
+  display: flex;
+  min-width: 0;
 }
 
 .grid-panel__note {

@@ -272,7 +272,8 @@ export function CanvasGrid({
   if (focusTrail.row !== focusRow || focusTrail.col !== focusCol) {
     setFocusTrail({ row: focusRow, col: focusCol, previousRow: focusTrail.row, previousCol: focusTrail.col });
   }
-  const keptFocus = { row: focusTrail.previousRow, col: focusTrail.previousCol };
+  // Only while a cell has focus: once the selection is cleared (e.g. a new view), the old cell is not mirrored.
+  const keptFocus = focusRow >= 0 ? { row: focusTrail.previousRow, col: focusTrail.previousCol } : { row: -1, col: -1 };
   useLayoutEffect(() => {
     const controller = controllerRef.current;
     if (!controller || focusRow < 0) return;

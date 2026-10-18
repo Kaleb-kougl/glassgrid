@@ -273,10 +273,14 @@ export function App({ engine, bridge, workspace }: AppProps) {
     [state.columns],
   );
   const overridesKey = JSON.stringify(overrides);
-  /** The override set (as `overridesKey`) the engine applies per table; tables open with none. */
+  /**
+   * The override set (as `overridesKey`) last sent to the engine per table; tables open with none. The
+   * engine applies a table's calls in order, so the last one sent is what it ends up with.
+   */
   const engineOverrides = useRef(new Map<TableId, string>());
   const [engineEpoch, setEngineEpoch] = useState(0);
-  const [retyping, setRetyping] = useState<string | null>(null);
+  /** "Reading amount as text…" while the engine applies the override set `key` to `table`. */
+  const [retyping, setRetyping] = useState<{ table: TableId; key: string; message: string } | null>(null);
   const latestOverrides = useRef(overridesKey);
   useLayoutEffect(() => {
     latestOverrides.current = overridesKey;
@@ -300,12 +304,16 @@ export function App({ engine, bridge, workspace }: AppProps) {
     const before = new Map((JSON.parse(applied) as { column: string; type: string }[]).map((entry) => [entry.column, entry.type]));
     const changed = overrides.filter((entry) => before.get(entry.column) !== entry.type);
     const run = { live: true };
-    setRetyping(changed.length === 1 && changed[0] ? `Reading ${changed[0].column} as ${changed[0].type}…` : 'Applying column types…');
+    engineOverrides.current.set(tableId, overridesKey);
+    setRetyping({
+      table: tableId,
+      key: overridesKey,
+      message: changed.length === 1 && changed[0] ? `Reading ${changed[0].column} as ${changed[0].type}…` : 'Applying column types…',
+    });
     engine.setColumnTypes(tableId, overrides).then(
       (result) => {
-        engineOverrides.current.set(tableId, overridesKey);
         if (!run.live) return;
-        setRetyping(null);
+        setRetyping((current) => (current?.key === overridesKey ? null : current));
         // The engine dropped the table's cached pages, counts, charts and sort indexes: every view re-queries.
         setDataVersion((version) => version + 1);
         const failed = result.columns.filter((entry) => entry.failedCasts > 0 && before.get(entry.column) !== entry.type);
@@ -320,8 +328,10 @@ export function App({ engine, bridge, workspace }: AppProps) {
         }
       },
       (cause: unknown) => {
+        // Unknown what the engine applies now: the next change (or restart) sends the full set again.
+        if (engineOverrides.current.get(tableId) === overridesKey) engineOverrides.current.delete(tableId);
         if (!run.live) return;
-        setRetyping(null);
+        setRetyping((current) => (current?.key === overridesKey ? null : current));
         if (!isAbandoned(cause)) showToast({ tone: 'error', message: messageOf(cause) });
       },
     );
@@ -632,23 +642,26 @@ export function App({ engine, bridge, workspace }: AppProps) {
             <section className="panel grid-panel" aria-label="Rows">
               <div className="grid-panel__bar">
                 {filterEntries.length > 0 ? (
-                  <div className="grid-panel__filters" role="list" aria-label="Active filters">
-                    {filterEntries.map(([viewId, filter]) => (
-                      <FilterChip
-                        key={viewId}
-                        column={filter.column}
-                        condition={filterCondition(filter)}
-                        onRemove={() => removeFilter(viewId, filter)}
-                        testId={`filter-${filter.column}`}
-                      />
-                    ))}
+                  <div className="grid-panel__filters">
+                    <div className="grid-panel__chips" role="list" aria-label="Active filters">
+                      {filterEntries.map(([viewId, filter]) => (
+                        <div role="listitem" key={viewId}>
+                          <FilterChip
+                            column={filter.column}
+                            condition={filterCondition(filter)}
+                            onRemove={() => removeFilter(viewId, filter)}
+                            testId={`filter-${filter.column}`}
+                          />
+                        </div>
+                      ))}
+                    </div>
                     <Button variant="ghost" size="sm" disabled title="The filter editor arrives with M3; click a bar to filter for now.">
                       + Filter
                     </Button>
                   </div>
-                ) : retyping !== null ? (
+                ) : retyping !== null && retyping.table === tableId && retyping.key === overridesKey ? (
                   <span className="grid-panel__note" data-testid="retyping">
-                    {retyping}
+                    {retyping.message}
                   </span>
                 ) : profiling ? (
                   <span className="grid-panel__note">Showing the first rows while the file is read.</span>

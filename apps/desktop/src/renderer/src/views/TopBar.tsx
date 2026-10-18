@@ -36,9 +36,9 @@ export function TopBar({ platform, state, history, opening, optimizing, onOpen, 
       {platform === 'darwin' && <div className="topbar__inset" aria-hidden="true" />}
       {state.dataSource ? (
         <div className="topbar__file">
-          <span className="topbar__name" data-testid="file-name">
+          <h1 className="topbar__name" data-testid="file-name">
             {state.dataSource.fileName}
-          </span>
+          </h1>
           <span className="topbar__size">{formatBytes(state.dataSource.fingerprint.sizeBytes)}</span>
         </div>
       ) : (

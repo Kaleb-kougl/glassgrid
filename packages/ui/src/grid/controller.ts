@@ -118,6 +118,7 @@ export class GridController {
   private drag: DragMode = { kind: 'none' };
   private pointer = { x: 0, y: 0 };
   private autoScrollRaf = 0;
+  private columnEdges = '';
   private cursor = '';
   private lastSelection: GridSelection | null = null;
   private pointerSelection: GridSelection | null = null;
@@ -326,6 +327,14 @@ export class GridController {
     this.mapping = createScrollMapping(frame.rowCount, frame.rowHeight, frame.height - frame.headerHeight, props.maxScrollHeight || MAX_SCROLL_HEIGHT);
     const spacerWidth = frame.offsets[frame.colCount] ?? frame.gutterWidth;
     const spacerHeight = frame.headerHeight + this.mapping.spacerHeight;
+    // Column edges in content px (gutter, then each column's right edge), for tests and tools that need to
+    // point at a column: the canvas has no element per header or cell.
+    let edges = String(Math.round(frame.gutterWidth));
+    for (let c = 1; c <= frame.colCount; c += 1) edges += ` ${Math.round(frame.offsets[c] ?? 0)}`;
+    if (edges !== this.columnEdges) {
+      this.columnEdges = edges;
+      this.spacer.dataset['columnEdges'] = edges;
+    }
     if (spacerWidth !== this.spacerWidth || spacerHeight !== this.spacerHeight) {
       this.spacerWidth = spacerWidth;
       this.spacerHeight = spacerHeight;

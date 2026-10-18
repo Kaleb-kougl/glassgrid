@@ -832,7 +832,11 @@ button.gg-shelf-chip {
   cursor: pointer;
 }
 
-.gg-bar-chart:focus-visible canvas {
+.gg-bar-chart__plot {
+  outline: none;
+}
+
+.gg-bar-chart__plot:focus-visible canvas {
   outline: var(--gg-focus-width) solid var(--gg-focus);
   outline-offset: var(--gg-focus-offset);
   border-radius: 2px;
@@ -1114,7 +1118,8 @@ button.gg-shelf-chip {
 .gg-agent--off {
   border-style: dashed;
   border-color: var(--gg-border);
-  color: var(--gg-text-disabled);
+  /* Secondary, not disabled: it is status text people read, so it keeps 4.5:1 on the title bar (axe, WCAG 1.4.3). */
+  color: var(--gg-text-secondary);
 }
 
 .gg-agent__dot {

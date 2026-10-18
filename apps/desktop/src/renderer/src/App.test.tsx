@@ -272,6 +272,19 @@ describe('App', () => {
     expect(engine.setColumnTypes).toHaveBeenLastCalledWith(tableId, [{ column: 'id', type: 'text' }]);
   });
 
+  it('ends with the engine on the latest overrides after quick undo and redo', async () => {
+    const { engine } = await openFile();
+    const original = engine.setColumnTypes.getMockImplementation();
+    // Slow replies: each change is sent before the previous one is answered.
+    engine.setColumnTypes.mockImplementation((tableId, overrides) => new Promise((resolve) => setTimeout(() => resolve(original?.(tableId, overrides) as never), 30)));
+    await setType('amount', 'Text');
+    fireEvent.click(screen.getByTestId('undo'));
+    fireEvent.click(screen.getByTestId('redo'));
+    fireEvent.click(screen.getByTestId('undo'));
+    await waitFor(() => expect(engine.setColumnTypes.mock.calls.map(([, overrides]) => overrides.length)).toEqual([1, 0, 1, 0]));
+    await waitFor(() => expect(screen.queryByTestId('retyping')).toBeNull());
+  });
+
   it('labels changes made by an AI caller in History', async () => {
     const { workspace } = await openFile();
     await act(() => workspace.registry.dispatch('setColumnType', { column: 'amount', type: 'decimal' }, { caller: 'ai' }));

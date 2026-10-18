@@ -236,6 +236,15 @@ function settleMirror() {
 }
 
 describe('CanvasGrid painting', () => {
+  it('publishes column edges on the spacer for tests and tools', () => {
+    const { scroller } = setup();
+    const edges = (scroller.firstElementChild as HTMLElement).dataset['columnEdges']?.split(' ').map(Number) ?? [];
+    expect(edges).toHaveLength(columns.length + 1);
+    const [gutter = 0] = edges;
+    expect(gutter).toBeGreaterThan(0);
+    expect(edges.slice(1)).toEqual([gutter + 100, gutter + 220, gutter + 340]);
+  });
+
   it('draws the header, row numbers, values and nulls of a small grid', () => {
     const { ctx, canvas } = setup();
     const dark = tokensFor('dark');
@@ -460,6 +469,25 @@ describe('CanvasGrid keyboard', () => {
     expect(tsv).toBe('alpha\t2026-01-01\n\t2026-02-02\n"a ""quoted""\tvalue"\t2026-03-03');
     expect(info).toMatchObject({ rows: 3, truncated: false });
     expect(text(screen.getByRole('status'))).toBe('Copied 3 rows × 2 columns.');
+  });
+
+  it('stops mirroring the previously focused cell once the selection is cleared', () => {
+    vi.useFakeTimers();
+    try {
+      const { mirror, rerender } = setup({ source: makeSource(1_000), initialSelection: { anchor: { row: 900, col: 1 }, focus: { row: 900, col: 1 } } });
+      settleMirror();
+      focusGrid(mirror);
+      fireEvent.keyDown(document.activeElement as Element, { key: 'ArrowDown' });
+      settleMirror();
+      // A new view: back at the top with nothing selected, so rows 900 and 901 are no longer mirrored.
+      rerender(<Harness source={makeSource(1_000)} />);
+      flushFrames();
+      settleMirror();
+      const rows = [...screen.getByRole('grid', { name: 'Rows' }).querySelectorAll('[role="row"][aria-rowindex]')].map((row) => Number(row.getAttribute('aria-rowindex')));
+      expect(Math.max(...rows)).toBeLessThan(50);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('hands Cmd/Ctrl+C to onCopyRequest instead of copying itself', () => {
