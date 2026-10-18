@@ -56,6 +56,7 @@ export function ColumnListRow({
     <li
       className={cx('gg-column-row', dragging && 'gg-column-row--dragging')}
       data-selected={selected}
+      data-column={name}
       data-testid={testId}
       tabIndex={0}
       draggable

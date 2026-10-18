@@ -12,6 +12,12 @@ export interface OpenFileDeps {
   readonly bridge: Pick<GlassgridBridge, 'openCsv'>;
   readonly engine: Pick<EngineClient, 'open'>;
   readonly registry: Pick<CommandRegistry, 'dispatch'>;
+  /**
+   * Where the file comes from; defaults to main's open dialog. Drag and drop
+   * passes `() => bridge.openDroppedFile(file)`: the preload resolves the path
+   * and main registers it, so either way the page only sees a handle.
+   */
+  readonly pick?: () => Promise<unknown>;
   /** Called after the engine opened the table, just before `openFile` changes the state. */
   readonly onEngineOpened?: (table: TableHandle, engineMs: number) => void;
 }
@@ -40,7 +46,7 @@ export type OpenFileOutcome =
  * appears without waiting for a full-table profile scan.
  */
 export async function openFileAction(deps: OpenFileDeps): Promise<OpenFileOutcome> {
-  const picked = OpenCsvResultSchema.parse(await deps.bridge.openCsv());
+  const picked = OpenCsvResultSchema.parse(await (deps.pick ?? (() => deps.bridge.openCsv()))());
   if (picked.status === 'cancelled') return { status: 'cancelled' };
   if (picked.status === 'failed') throw new Error(`Could not open file: ${picked.message}`);
 

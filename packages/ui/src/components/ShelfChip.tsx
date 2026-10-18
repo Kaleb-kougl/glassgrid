@@ -23,6 +23,8 @@ export interface ShelfChipProps {
   menuLabel?: string;
   /** Clears the shelf (×, or Backspace/Delete on the focused chip). */
   onRemove?: () => void;
+  /** Tooltip, e.g. why an empty shelf does not accept drops yet. */
+  title?: string;
   testId?: string;
 }
 
@@ -40,6 +42,7 @@ export function ShelfChip({
   menu,
   menuLabel,
   onRemove,
+  title,
   testId,
 }: ShelfChipProps) {
   const [over, setOver] = useState(false);
@@ -90,7 +93,7 @@ export function ShelfChip({
     </>
   );
   const accessibleName = empty
-    ? `${shelf} shelf, empty. Drop a column here.`
+    ? `${shelf} shelf, empty.${onDropColumn ? ' Drop a column here.' : ''}`
     : `${shelf}: ${value}${addedBy === 'ai' ? ', added by AI' : ''}`;
   const onKeyDown = onRemove
     ? (event: KeyboardEvent) => {
@@ -132,7 +135,8 @@ export function ShelfChip({
         className={classes}
         role="group"
         tabIndex={empty ? undefined : 0}
-        aria-label={accessibleName}
+        aria-label={title ? `${accessibleName} ${title}` : accessibleName}
+        title={title}
         data-testid={testId}
         onKeyDown={onKeyDown}
         {...dropHandlers}

@@ -1,62 +1,55 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent } from 'react';
 import {
-  APP_NAME,
-  COLUMN_TYPES,
   effectiveColumnType,
-  formatBytes,
-  formatDuration,
+  isNumericType,
   tableIdForFile,
   type ChartSpecInput,
   type ColumnState,
-  type ColumnType,
+  type Filter,
   type GlassgridBridge,
   type TableColumnProfile,
   type TableId,
   type UndoEntry,
-  type WorkspaceState,
 } from '@glassgrid/core';
-import { Button, Stat } from '@glassgrid/ui';
-import { openFileAction } from './actions/open-file';
-import { isAbandoned, type EngineClient } from './engine-client';
 import {
-  AGGREGATE_MEASURE,
+  Button,
+  ColumnListRow,
+  DataGrid,
+  defaultColumnWidth,
+  draggedColumn,
+  FilterChip,
+  isColumnDrag,
+  Toast,
+  tokensFor,
+  type GridColumn,
+  type ToastAction,
+} from '@glassgrid/ui';
+import { openFileAction } from './actions/open-file';
+import { chartTitle, describeEntry, filterCondition } from './describe';
+import { isAbandoned, type EngineClient, type RowsResult } from './engine-client';
+import {
   COUNT_ROWS_MEASURE,
   OPEN_TO_FIRST_PAGE_MEASURE,
   PROFILE_MEASURE,
-  type AggregateMeasureDetail,
   type CountRowsMeasureDetail,
   type OpenToFirstPageMeasureDetail,
   type ProfileMeasureDetail,
 } from './perf';
+import { useTheme } from './theme';
+import { ChartView } from './views/ChartView';
+import { useGridRows } from './views/grid-data';
+import { TopBar } from './views/TopBar';
 import type { AppWorkspace } from './workspace';
 
-type Busy = 'idle' | 'opening' | 'counting' | 'aggregating';
+export { describeEntry };
 
-interface CountResult {
-  rowCount: number;
-  roundTripMs: number;
-  engineMs: number;
+export interface AppProps {
+  engine: Pick<EngineClient, 'open' | 'rows' | 'profile' | 'count' | 'aggregate' | 'onEvent'>;
+  bridge: Pick<GlassgridBridge, 'openCsv' | 'openDroppedFile' | 'setTheme' | 'onMenuCommand' | 'platform'>;
+  workspace: AppWorkspace;
 }
 
-interface FirstPage {
-  table: TableId;
-  rows: number;
-  roundTripMs: number | null;
-}
-
-interface AggregateDebug {
-  table: TableId;
-  spec: ChartSpecInput;
-  mark: string;
-  fellBackToHeatmap: boolean;
-  columns: string[];
-  rows: string[][];
-  engineMs: number;
-  roundTripMs: number;
-  cached: boolean;
-}
-
-/** Started by an "Open CSV" click; finished by the first page of the new data source. */
+/** Started by an "Open" click or a drop; finished by the first page of the new data source. */
 interface PendingOpen {
   start: string;
   table: TableId;
@@ -64,15 +57,16 @@ interface PendingOpen {
   usingParquetCache: boolean;
 }
 
-export interface AppProps {
-  engine: Pick<EngineClient, 'open' | 'rows' | 'profile' | 'count' | 'aggregate'>;
-  bridge: Pick<GlassgridBridge, 'openCsv'>;
-  workspace: AppWorkspace;
+interface ToastState {
+  id: number;
+  tone: 'info' | 'error';
+  message: string;
+  by?: string;
+  action?: ToastAction;
 }
 
-const numberFormat = new Intl.NumberFormat();
-const PAGE_ROWS = 1000;
-const DEBUG_ROWS = 50;
+const numberFormat = new Intl.NumberFormat('en-US');
+const compact = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 2 });
 
 function measure(name: string, start: string, detail: unknown): number {
   const end = `${name}:end`;
@@ -83,43 +77,8 @@ function measure(name: string, start: string, detail: unknown): number {
   return entry.duration;
 }
 
-function formatScalar(value: TableColumnProfile['min']): string {
-  if (value === null) return '—';
-  if (typeof value === 'number') return numberFormat.format(value);
-  return String(value);
-}
-
-function formatCell(value: unknown): string {
-  if (value === null || value === undefined) return '—';
-  if (typeof value === 'bigint') return value.toString();
-  if (typeof value === 'number') return numberFormat.format(value);
-  if (typeof value === 'string' || typeof value === 'boolean') return String(value);
-  if (value instanceof Date) return value.toISOString();
-  return JSON.stringify(value);
-}
-
 function messageOf(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
-}
-
-/** One line per undo entry, e.g. `Set amount to text`. */
-export function describeEntry(entry: Pick<UndoEntry, 'name' | 'input'>): string {
-  const input = (typeof entry.input === 'object' && entry.input !== null ? entry.input : {}) as Record<string, unknown>;
-  const text = (key: string) => (typeof input[key] === 'string' ? input[key] : '?');
-  switch (entry.name) {
-    case 'openFile':
-      return `Open ${text('fileName')}`;
-    case 'setColumnType':
-      return `Set ${text('column')} to ${text('type')}`;
-    default:
-      return entry.name;
-  }
-}
-
-/** A bar chart spec for the debug panel: the first text column, counted. */
-function debugBarSpec(state: WorkspaceState): ChartSpecInput | null {
-  const column = state.columns.find((c) => c.inferredType === 'text') ?? state.columns[0];
-  return column ? { mark: 'bar', x: { column: column.name } } : null;
 }
 
 function isEditableTarget(target: EventTarget | null): boolean {
@@ -127,381 +86,513 @@ function isEditableTarget(target: EventTarget | null): boolean {
   return target.isContentEditable || target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement;
 }
 
+/** Distinct counts as the column list shows them: exact below a million, then compact (8.41M). */
+export function formatDistinct(count: number): string {
+  return count < 1_000_000 ? numberFormat.format(count) : compact.format(count);
+}
+
+/** A bar chart over `column`, the v1 default for a dropped column (other marks arrive in M3). */
+export function barSpecFor(column: string): ChartSpecInput {
+  return { mark: 'bar', x: { column } };
+}
+
+/** Which caller created each chart, from the history's `addChart` patches. */
+function chartCallers(past: readonly UndoEntry[]): Map<string, 'user' | 'ai'> {
+  const callers = new Map<string, 'user' | 'ai'>();
+  for (const entry of past) {
+    if (entry.name !== 'addChart') continue;
+    for (const patch of entry.patches) {
+      const value = patch.value as { id?: unknown } | undefined;
+      if (patch.op === 'add' && patch.path[0] === 'charts' && typeof value?.id === 'string') callers.set(value.id, entry.caller);
+    }
+  }
+  return callers;
+}
+
 export function App({ engine, bridge, workspace }: AppProps) {
   const { store, registry } = workspace;
   const state = useSyncExternalStore(store.subscribe, store.getState);
   const history = useSyncExternalStore(store.subscribe, store.getHistory);
+  const { theme, setPreference } = useTheme(bridge);
+  const tokens = tokensFor(theme);
 
   const tableId = state.dataSource ? tableIdForFile(state.dataSource.handleId) : null;
-  const [usingParquet, setUsingParquet] = useState<{ table: TableId; value: boolean } | null>(null);
-  const [firstPage, setFirstPage] = useState<FirstPage | null>(null);
-  const [profile, setProfile] = useState<{ table: TableId; columns: TableColumnProfile[] } | null>(null);
-  const [busy, setBusy] = useState<Busy>('idle');
-  const [result, setResult] = useState<CountResult | null>(null);
-  const [aggregateDebug, setAggregateDebug] = useState<AggregateDebug | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [opening, setOpening] = useState(false);
+  const [firstPageTable, setFirstPageTable] = useState<TableId | null>(null);
+  const [profile, setProfile] = useState<{ table: TableId; rowCount: number; columns: TableColumnProfile[] } | null>(null);
+  const [count, setCount] = useState<{ table: TableId; key: string; rowCount: number } | null>(null);
+  const [optimizing, setOptimizing] = useState<{ table: TableId; fraction: number | null } | null>(null);
+  const [selectedColumns, setSelectedColumns] = useState<readonly string[]>([]);
+  const [draggingColumn, setDraggingColumn] = useState<string | null>(null);
+  const [fileOver, setFileOver] = useState(false);
+  const [chartsOver, setChartsOver] = useState(false);
+  const [toast, setToast] = useState<ToastState | null>(null);
   const pendingOpen = useRef<PendingOpen | null>(null);
+  const toastId = useRef(0);
+
+  const showToast = useCallback((next: Omit<ToastState, 'id'>) => {
+    toastId.current += 1;
+    setToast({ ...next, id: toastId.current });
+  }, []);
+  const dismissToast = useCallback(() => setToast(null), []);
 
   const dispatch = useCallback(
-    async (name: string, input?: unknown) => {
-      setError(null);
-      try {
-        await registry.dispatch(name, input, { caller: 'user' });
-      } catch (cause) {
-        setError(messageOf(cause));
-      }
+    (name: string, input: unknown = {}) => {
+      registry.dispatch(name, input, { caller: 'user' }).catch((cause: unknown) => {
+        showToast({ tone: 'error', message: messageOf(cause) });
+      });
     },
-    [registry],
+    [registry, showToast],
   );
 
-  // Views of the data source: the first grid page, then the profile.
-  useEffect(() => {
-    if (tableId === null) return;
-    const run = { live: true };
-    // A function, so TypeScript does not narrow `run.live` across awaits.
-    const stale = () => !run.live;
-    void (async () => {
-      try {
-        const page = await engine.rows(tableId, { offset: 0, limit: PAGE_ROWS }, { viewId: 'grid' });
-        if (stale()) return;
-        let roundTripMs: number | null = null;
-        const pending = pendingOpen.current;
-        if (pending?.table === tableId) {
-          pendingOpen.current = null;
-          roundTripMs = measure(OPEN_TO_FIRST_PAGE_MEASURE, pending.start, {
-            openEngineMs: pending.openEngineMs,
-            firstPageEngineMs: page.engineMs,
-            rows: page.table.numRows,
-            columns: page.table.numCols,
-            usingParquetCache: pending.usingParquetCache,
-          } satisfies OpenToFirstPageMeasureDetail);
-        }
-        setFirstPage({ table: tableId, rows: page.table.numRows, roundTripMs });
+  // ---------------------------------------------------------------------------
+  // Views of the data source
 
-        const profileStart = `${PROFILE_MEASURE}:start:${tableId}`;
-        performance.mark(profileStart);
-        const profiled = await engine.profile(tableId, { viewId: 'profile' });
-        if (stale()) return;
-        measure(PROFILE_MEASURE, profileStart, {
+  const filters = useMemo(() => Object.values(state.filters), [state.filters]);
+  const columnNames = useMemo(() => state.columns.map((column) => column.name), [state.columns]);
+
+  const onPage = useCallback((page: number, result: RowsResult) => {
+    if (page !== 0) return;
+    const pending = pendingOpen.current;
+    if (pending) {
+      pendingOpen.current = null;
+      measure(OPEN_TO_FIRST_PAGE_MEASURE, pending.start, {
+        openEngineMs: pending.openEngineMs,
+        firstPageEngineMs: result.engineMs,
+        rows: result.table.numRows,
+        columns: result.table.numCols,
+        usingParquetCache: pending.usingParquetCache,
+      } satisfies OpenToFirstPageMeasureDetail);
+    }
+  }, []);
+  const onGridError = useCallback((cause: unknown) => showToast({ tone: 'error', message: messageOf(cause) }), [showToast]);
+  // The first page of a new table unlocks the profile and the count, so the full-table scans never delay it.
+  const onGridPage = useCallback(
+    (page: number, result: RowsResult) => {
+      onPage(page, result);
+      if (page === 0) setFirstPageTable(tableId);
+    },
+    [onPage, tableId],
+  );
+  const grid = useGridRows({ engine, tableId, columns: columnNames, sort: state.grid.sort, filters, onPage: onGridPage, onError: onGridError });
+
+  useEffect(() => {
+    if (tableId === null || firstPageTable !== tableId) return;
+    const run = { live: true };
+    const start = `${PROFILE_MEASURE}:start:${tableId}`;
+    performance.mark(start);
+    engine.profile(tableId, { viewId: 'profile' }).then(
+      (profiled) => {
+        if (!run.live) return;
+        measure(PROFILE_MEASURE, start, {
           engineMs: profiled.engineMs,
           rowCount: profiled.rowCount,
           columns: profiled.columns.length,
         } satisfies ProfileMeasureDetail);
-        setProfile({ table: tableId, columns: profiled.columns });
-      } catch (cause) {
-        if (!stale() && !isAbandoned(cause)) setError(messageOf(cause));
-      }
-    })();
+        setProfile({ table: tableId, rowCount: profiled.rowCount, columns: profiled.columns });
+      },
+      (cause: unknown) => {
+        if (run.live && !isAbandoned(cause)) showToast({ tone: 'error', message: messageOf(cause) });
+      },
+    );
     return () => {
       run.live = false;
     };
-  }, [engine, tableId]);
+  }, [engine, tableId, firstPageTable, showToast]);
 
-  // Cmd/Ctrl+Z undoes, Shift+Cmd/Ctrl+Z redoes.
+  const countKey = tableId === null ? '' : JSON.stringify([tableId, filters]);
+  useEffect(() => {
+    if (tableId === null || firstPageTable !== tableId) return;
+    const run = { live: true };
+    const start = `${COUNT_ROWS_MEASURE}:start:${countKey}`;
+    performance.mark(start);
+    engine.count(tableId, { viewId: 'status', filters }).then(
+      (result) => {
+        if (!run.live) return;
+        measure(COUNT_ROWS_MEASURE, start, {
+          rowCount: String(result.rowCount),
+          engineMs: result.engineMs,
+          cached: result.cached,
+        } satisfies CountRowsMeasureDetail);
+        setCount({ table: tableId, key: countKey, rowCount: result.rowCount });
+      },
+      (cause: unknown) => {
+        performance.clearMarks(start);
+        if (run.live && !isAbandoned(cause)) showToast({ tone: 'error', message: messageOf(cause) });
+      },
+    );
+    return () => {
+      run.live = false;
+    };
+  }, [engine, tableId, firstPageTable, countKey, filters, showToast]);
+
+  // "Optimizing file": the engine's background Parquet conversion of large CSVs.
+  useEffect(
+    () =>
+      engine.onEvent((event) => {
+        if (event.type === 'parquetProgress') setOptimizing({ table: event.table, fraction: event.fraction });
+        else if (event.type === 'parquetReady' || event.type === 'parquetFailed') setOptimizing(null);
+      }),
+    [engine],
+  );
+
+  // ---------------------------------------------------------------------------
+  // Actions
+
+  // The Retry action of an open error re-runs the latest `open` (called from an event handler).
+  const retryOpen = useRef<(pick?: () => Promise<unknown>) => Promise<void>>(() => Promise.resolve());
+  const open = useCallback(
+    async (pick?: () => Promise<unknown>) => {
+      setOpening(true);
+      const start = `${OPEN_TO_FIRST_PAGE_MEASURE}:start:${performance.now()}`;
+      performance.mark(start);
+      try {
+        const outcome = await openFileAction({
+          bridge,
+          engine,
+          registry,
+          ...(pick ? { pick } : {}),
+          // Armed before `openFile` changes the state, so the first-page view always finds it.
+          onEngineOpened: (table, openEngineMs) => {
+            pendingOpen.current = { start, table: table.id, openEngineMs, usingParquetCache: table.usingParquetCache };
+          },
+        });
+        if (outcome.status !== 'opened') performance.clearMarks(start);
+      } catch (cause) {
+        pendingOpen.current = null;
+        performance.clearMarks(start);
+        showToast({ tone: 'error', message: messageOf(cause), action: { label: 'Retry', onClick: () => void retryOpen.current(pick) } });
+      } finally {
+        setOpening(false);
+      }
+    },
+    [bridge, engine, registry, showToast],
+  );
+
+  useEffect(() => {
+    retryOpen.current = open;
+  }, [open]);
+
+  const addChartFor = useCallback(
+    (column: string) => {
+      dispatch('addChart', { spec: barSpecFor(column) });
+    },
+    [dispatch],
+  );
+
+  const mod = (key: string) => (bridge.platform === 'darwin' ? `⌘${key}` : `Ctrl+${key}`);
+
+  const removeFilter = (viewId: string, filter: Filter) => {
+    dispatch('clearFilter', { viewId });
+    showToast({ tone: 'info', message: `Removed filter ${filter.column}`, action: { label: 'Undo', shortcut: mod('Z'), onClick: () => dispatch('undo') } });
+  };
+
+  const stepTo = (entryId: string) => {
+    const { past, future } = store.getHistory();
+    const back = past.length - 1 - past.findIndex((entry) => entry.id === entryId);
+    const forward = future.findIndex((entry) => entry.id === entryId) + 1;
+    if (back > 0 && back < past.length) for (let i = 0; i < back; i += 1) dispatch('undo');
+    else if (forward > 0) for (let i = 0; i < forward; i += 1) dispatch('redo');
+  };
+
+  // Cmd/Ctrl+Z undoes, Shift+Cmd/Ctrl+Z redoes; menu commands (File → Open, View → Theme).
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey) || event.altKey || event.key.toLowerCase() !== 'z') return;
       if (isEditableTarget(event.target)) return;
       event.preventDefault();
-      void dispatch(event.shiftKey ? 'redo' : 'undo');
+      dispatch(event.shiftKey ? 'redo' : 'undo');
     };
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [dispatch]);
+    const offMenu = bridge.onMenuCommand((command) => {
+      if (command.kind === 'open') void open();
+      else setPreference(command.theme);
+    });
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      offMenu();
+    };
+  }, [dispatch, bridge, open, setPreference]);
 
-  async function openCsv() {
-    setBusy('opening');
-    setError(null);
-    const start = `${OPEN_TO_FIRST_PAGE_MEASURE}:start:${performance.now()}`;
-    performance.mark(start);
-    try {
-      const outcome = await openFileAction({
-        bridge,
-        engine,
-        registry,
-        // Armed before `openFile` changes the state, so the first-page view always finds it.
-        onEngineOpened: (table, openEngineMs) => {
-          pendingOpen.current = { start, table: table.id, openEngineMs, usingParquetCache: table.usingParquetCache };
-        },
-      });
-      if (outcome.status !== 'opened') {
-        performance.clearMarks(start);
-        return;
-      }
-      setUsingParquet({ table: outcome.table.id, value: outcome.table.usingParquetCache });
-      setResult(null);
-      setAggregateDebug(null);
-    } catch (cause) {
-      pendingOpen.current = null;
-      performance.clearMarks(start);
-      setError(messageOf(cause));
-    } finally {
-      setBusy('idle');
-    }
-  }
+  // ---------------------------------------------------------------------------
+  // Drag and drop: a CSV anywhere on the window opens it; columns go to the charts.
 
-  async function countRows() {
-    if (!tableId) return;
-    setBusy('counting');
-    setError(null);
-    const start = `${COUNT_ROWS_MEASURE}:start`;
-    try {
-      performance.mark(start);
-      const { rowCount, engineMs, cached } = await engine.count(tableId, { viewId: 'count' });
-      const roundTripMs = measure(COUNT_ROWS_MEASURE, start, {
-        rowCount: String(rowCount),
-        engineMs,
-        cached,
-      } satisfies CountRowsMeasureDetail);
-      setResult({ rowCount, engineMs, roundTripMs });
-    } catch (cause) {
-      setError(messageOf(cause));
-    } finally {
-      performance.clearMarks(start);
-      setBusy('idle');
-    }
-  }
+  const onWindowDragOver = (event: DragEvent) => {
+    if (!event.dataTransfer.types.includes('Files')) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+    setFileOver(true);
+  };
+  const onWindowDrop = (event: DragEvent) => {
+    setFileOver(false);
+    if (!event.dataTransfer.types.includes('Files')) return;
+    event.preventDefault();
+    const file = event.dataTransfer.files[0];
+    if (file) void open(() => bridge.openDroppedFile(file));
+  };
 
-  async function runAggregate() {
-    const spec = debugBarSpec(state);
-    if (!tableId || !spec) return;
-    setBusy('aggregating');
-    setError(null);
-    const start = `${AGGREGATE_MEASURE}:start`;
-    try {
-      performance.mark(start);
-      const reply = await engine.aggregate(tableId, spec, { viewId: 'chart:debug' });
-      const roundTripMs = measure(AGGREGATE_MEASURE, start, {
-        engineMs: reply.engineMs,
-        cached: reply.cached,
-        mark: reply.mark,
-        rows: reply.table.numRows,
-      } satisfies AggregateMeasureDetail);
-      const columns = reply.table.schema.fields.map((field) => field.name);
-      const rows = reply.table
-        .toArray()
-        .slice(0, DEBUG_ROWS)
-        .map((row: Record<string, unknown>) => columns.map((name) => formatCell(row[name])));
-      setAggregateDebug({
-        table: tableId,
-        spec,
-        mark: reply.mark,
-        fellBackToHeatmap: reply.fellBackToHeatmap,
-        columns,
-        rows,
-        engineMs: reply.engineMs,
-        roundTripMs,
-        cached: reply.cached,
-      });
-    } catch (cause) {
-      if (!isAbandoned(cause)) setError(messageOf(cause));
-    } finally {
-      performance.clearMarks(start);
-      setBusy('idle');
-    }
-  }
+  // ---------------------------------------------------------------------------
+  // Render
 
-  const page = firstPage && firstPage.table === tableId ? firstPage : null;
-  const profiled = profile && profile.table === tableId ? profile.columns : null;
-  const debug = aggregateDebug && aggregateDebug.table === tableId ? aggregateDebug : null;
+  const profiled = profile?.table === tableId ? profile : null;
+  const profiling = tableId !== null && profiled === null;
+  const distinctByColumn = useMemo(
+    () => new Map((profiled?.columns ?? []).map((column) => [column.name, column.distinctCount])),
+    [profiled],
+  );
+  // While a new count runs (filters changed), keep showing the last one for this table.
+  const rowCount = count?.table === tableId ? count.rowCount : null;
+  const totalRows = profiled?.rowCount ?? (filters.length === 0 ? rowCount : null);
+  const gridColumns: GridColumn[] = useMemo(
+    () =>
+      state.columns.map((column) => ({
+        name: column.name,
+        type: column.inferredType,
+        width: defaultColumnWidth(column.name, column.inferredType),
+      })),
+    [state.columns],
+  );
+  const callers = useMemo(() => chartCallers(history.past), [history.past]);
+  const filterEntries = Object.entries(state.filters);
+  const optimizingNow = optimizing && optimizing.table === tableId ? { fraction: optimizing.fraction } : null;
+
+  const onSortColumn = (column: string) => {
+    const current = state.grid.sort[0];
+    if (current?.column !== column) dispatch('sortGrid', { sort: [{ column, direction: 'asc' }] });
+    else if (current.direction === 'asc') dispatch('sortGrid', { sort: [{ column, direction: 'desc' }] });
+    else dispatch('sortGrid', { sort: [] });
+  };
+
+  const newChartColumn = (): ColumnState | undefined =>
+    state.columns.find((column) => column.name === selectedColumns[0]) ??
+    state.columns.find((column) => column.inferredType === 'text') ??
+    state.columns.find((column) => !isNumericType(column.inferredType)) ??
+    state.columns[0];
 
   return (
-    <main className="app">
-      <header className="app__header">
-        <h1>{APP_NAME}</h1>
-        <p className="app__tagline">Local CSV exploration, powered by DuckDB.</p>
-      </header>
+    <div
+      className="app"
+      data-platform={bridge.platform}
+      data-testid="app"
+      onDragOver={onWindowDragOver}
+      onDragLeave={(event) => {
+        if (event.currentTarget === event.target || !event.currentTarget.contains(event.relatedTarget as Node | null)) setFileOver(false);
+      }}
+      onDrop={onWindowDrop}
+    >
+      <TopBar
+        platform={bridge.platform}
+        state={state}
+        history={history}
+        opening={opening}
+        optimizing={optimizingNow}
+        onOpen={() => void open()}
+        onUndo={() => dispatch('undo')}
+        onRedo={() => dispatch('redo')}
+        onStepTo={stepTo}
+      />
 
-      <section className="app__toolbar" aria-label="Actions">
-        <Button variant="primary" onClick={() => void openCsv()} disabled={busy !== 'idle'} data-testid="open-csv">
-          {busy === 'opening' ? 'Opening…' : 'Open CSV'}
-        </Button>
-        <Button onClick={() => void countRows()} disabled={!tableId || busy !== 'idle'} data-testid="count-rows">
-          {busy === 'counting' ? 'Counting…' : 'Count rows'}
-        </Button>
-        <Button
-          onClick={() => void dispatch('undo')}
-          disabled={history.past.length === 0}
-          data-testid="undo"
-          title="Undo (Ctrl+Z / ⌘Z)"
-        >
-          Undo
-        </Button>
-        <Button
-          onClick={() => void dispatch('redo')}
-          disabled={history.future.length === 0}
-          data-testid="redo"
-          title="Redo (Shift+Ctrl+Z / ⇧⌘Z)"
-        >
-          Redo
-        </Button>
-      </section>
-
-      <section className="app__file" aria-live="polite">
-        {state.dataSource ? (
-          <p>
-            <span className="app__file-name" data-testid="file-name">
-              {state.dataSource.fileName}
-            </span>{' '}
-            <span className="app__muted">({formatBytes(state.dataSource.fingerprint.sizeBytes)})</span>
-          </p>
-        ) : (
-          <p className="app__muted">No file open.</p>
-        )}
-        {page && (
-          <p className="app__muted" data-testid="first-page">
-            {state.columns.length} columns · first {numberFormat.format(page.rows)} rows
-            {page.roundTripMs === null ? '' : ` in ${formatDuration(page.roundTripMs)}`}
-            {usingParquet?.table === tableId && usingParquet.value ? ' · cached Parquet' : ''}
-          </p>
-        )}
-      </section>
-
-      {result && (
-        <dl className="app__stats" data-testid="count-result">
-          <Stat label="Rows" value={numberFormat.format(result.rowCount)} testId="row-count" />
-          <Stat label="Round trip" value={formatDuration(result.roundTripMs)} testId="elapsed-ms" />
-          <Stat label="Engine" value={formatDuration(result.engineMs)} testId="engine-ms" />
-        </dl>
-      )}
-
-      {state.columns.length > 0 && (
-        <section aria-label="Columns">
-          <h2 className="app__section-title">Columns</h2>
-          <ul className="app__columns" data-testid="columns">
-            {state.columns.map((column) => (
-              <ColumnRow
-                key={column.name}
-                column={column}
-                onChange={(type) => void dispatch('setColumnType', { column: column.name, type })}
-              />
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {(history.past.length > 0 || history.future.length > 0) && (
-        <section aria-label="History">
-          <h2 className="app__section-title">History</h2>
-          <ol className="app__history" data-testid="history">
-            {history.past.map((entry) => (
-              <HistoryItem key={entry.id} entry={entry} undone={false} />
-            ))}
-            {[...history.future].reverse().map((entry) => (
-              <HistoryItem key={entry.id} entry={entry} undone />
-            ))}
-          </ol>
-        </section>
-      )}
-
-      {profiled && (
-        <table className="app__profile" data-testid="profile">
-          <thead>
-            <tr>
-              <th scope="col">Column</th>
-              <th scope="col">Type</th>
-              <th scope="col">Nulls</th>
-              <th scope="col">Distinct (approx.)</th>
-              <th scope="col">Min</th>
-              <th scope="col">Max</th>
-            </tr>
-          </thead>
-          <tbody>
-            {profiled.map((column) => (
-              <tr key={column.name}>
-                <td className="app__file-name">{column.name}</td>
-                <td>{column.type}</td>
-                <td>{(column.nullFraction * 100).toFixed(1)}%</td>
-                <td>{numberFormat.format(column.distinctCount)}</td>
-                <td>{formatScalar(column.min)}</td>
-                <td>{formatScalar(column.max)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-
-      {tableId && (
-        <section aria-label="Chart query (debug)">
-          <h2 className="app__section-title">Chart query (debug)</h2>
-          <Button onClick={() => void runAggregate()} disabled={busy !== 'idle'} data-testid="run-aggregate">
-            {busy === 'aggregating' ? 'Running…' : 'Run bar chart query'}
-          </Button>
-          {debug && (
-            <div data-testid="aggregate-result">
-              <p className="app__muted" data-testid="aggregate-meta">
-                {debug.mark}
-                {debug.fellBackToHeatmap ? ' (scatter fell back to heatmap)' : ''} · {debug.rows.length} rows ·{' '}
-                {formatDuration(debug.roundTripMs)} (engine {formatDuration(debug.engineMs)}
-                {debug.cached ? ', cached' : ''})
-              </p>
-              <pre className="app__spec" data-testid="aggregate-spec">
-                {JSON.stringify(debug.spec)}
-              </pre>
-              <table className="app__profile">
-                <thead>
-                  <tr>
-                    {debug.columns.map((name) => (
-                      <th key={name} scope="col">
-                        {name}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {debug.rows.map((cells, i) => (
-                    <tr key={i}>
-                      {cells.map((cell, j) => (
-                        <td key={j}>{cell}</td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+      <main className="workspace">
+        {state.dataSource === null ? (
+          <section className="panel empty" aria-label="Open a file" data-testid="empty-state" data-over={fileOver}>
+            <div className="empty__zone">
+              <div className="empty__icon" aria-hidden="true">
+                CSV
+              </div>
+              <div className="empty__text">
+                <h1 className="empty__title">Drop a CSV file here</h1>
+                <p className="empty__hint">The file is read on this computer and never uploaded.</p>
+              </div>
+              <div className="empty__actions">
+                <Button variant="primary" size="lg" onClick={() => void open()} disabled={opening} data-testid="open-csv-empty">
+                  {opening ? 'Opening…' : 'Open CSV…'}
+                </Button>
+                <kbd className="gg-kbd">{mod('O')}</kbd>
+              </div>
             </div>
-          )}
-        </section>
+          </section>
+        ) : (
+          <>
+            <section className="panel columns" aria-label="Columns">
+              <div className="panel__head">
+                <h2 className="panel__label">Columns</h2>
+                <span className="panel__count">{state.columns.length}</span>
+                <span className="panel__spacer" />
+                <span className="panel__hint">{profiling ? 'Profiling…' : 'distinct'}</span>
+              </div>
+              <ul
+                className="gg-column-list columns__list gg-scroll"
+                data-testid="columns"
+                onDragStart={(event) => setDraggingColumn((event.target as HTMLElement).dataset['column'] ?? null)}
+                onDragEnd={() => setDraggingColumn(null)}
+              >
+                {state.columns.map((column) => {
+                  const distinct = distinctByColumn.get(column.name);
+                  return (
+                    <ColumnListRow
+                      key={column.name}
+                      name={column.name}
+                      type={effectiveColumnType(column)}
+                      inferredType={column.inferredType}
+                      distinct={distinct === undefined ? '–' : formatDistinct(distinct)}
+                      profiling={profiling}
+                      selected={selectedColumns.includes(column.name)}
+                      onTypeChange={(type) => dispatch('setColumnType', { column: column.name, type })}
+                      onActivate={() => addChartFor(column.name)}
+                      testId={`column-${column.name}`}
+                    />
+                  );
+                })}
+              </ul>
+            </section>
+
+            <section className="panel grid-panel" aria-label="Rows">
+              <div className="grid-panel__bar">
+                {filterEntries.length > 0 ? (
+                  <div className="grid-panel__filters" role="list" aria-label="Active filters">
+                    {filterEntries.map(([viewId, filter]) => (
+                      <FilterChip
+                        key={viewId}
+                        column={filter.column}
+                        condition={filterCondition(filter)}
+                        onRemove={() => removeFilter(viewId, filter)}
+                        testId={`filter-${filter.column}`}
+                      />
+                    ))}
+                    <Button variant="ghost" size="sm" disabled title="The filter editor arrives with M3; click a bar to filter for now.">
+                      + Filter
+                    </Button>
+                  </div>
+                ) : profiling ? (
+                  <span className="grid-panel__note">Showing the first rows while the file is read.</span>
+                ) : null}
+                <span className="panel__spacer" />
+                <div className="grid-panel__count" data-testid="row-count" aria-live="polite">
+                  {rowCount === null ? (
+                    profiling ? 'Reading…' : ''
+                  ) : filters.length > 0 && totalRows !== null ? (
+                    <>
+                      <strong>{numberFormat.format(rowCount)}</strong> of {numberFormat.format(totalRows)} rows
+                    </>
+                  ) : (
+                    <>
+                      <strong>{numberFormat.format(rowCount)}</strong> rows
+                    </>
+                  )}
+                </div>
+              </div>
+              <DataGrid
+                columns={gridColumns}
+                rowCount={rowCount ?? (profiling ? 1_000 : null)}
+                getRow={grid.getRow}
+                onVisibleRangeChange={grid.requestRange}
+                sort={state.grid.sort}
+                onSortColumn={onSortColumn}
+                onSelectedColumnsChange={setSelectedColumns}
+                resetKey={grid.viewKey}
+                label={state.dataSource.fileName}
+                testId="grid"
+              />
+              {toast && (
+                <div className="toast-slot">
+                  <Toast
+                    key={toast.id}
+                    tone={toast.tone}
+                    message={toast.message}
+                    {...(toast.by === undefined ? {} : { by: toast.by })}
+                    {...(toast.action ? { action: toast.action } : {})}
+                    onDismiss={dismissToast}
+                  />
+                </div>
+              )}
+            </section>
+
+            <section
+              className="panel charts"
+              aria-label="Charts"
+              data-over={chartsOver}
+              onDragOver={(event) => {
+                if (!isColumnDrag(event.dataTransfer)) return;
+                event.preventDefault();
+                event.dataTransfer.dropEffect = 'copy';
+                setChartsOver(true);
+              }}
+              onDragLeave={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setChartsOver(false);
+              }}
+              onDrop={(event) => {
+                setChartsOver(false);
+                const column = draggedColumn(event.dataTransfer);
+                if (column === null) return;
+                event.preventDefault();
+                addChartFor(column);
+              }}
+            >
+              <div className="panel__head">
+                <h2 className="panel__label">Charts</h2>
+                <span className="panel__count">{state.charts.length}</span>
+                <span className="panel__spacer" />
+                <Button
+                  variant="ghost"
+                  className="gg-button--accent-text"
+                  onClick={() => {
+                    const column = newChartColumn();
+                    if (column) addChartFor(column.name);
+                  }}
+                  data-testid="new-chart"
+                >
+                  + New chart
+                </Button>
+              </div>
+              <div className="charts__list gg-scroll">
+                {state.charts.length === 0 && (
+                  <div className="charts__drop" data-testid="charts-drop">
+                    <strong>Drag a column here to start a chart</strong>
+                    <span>
+                      {profiling
+                        ? 'Charts compute on the full file once reading finishes.'
+                        : 'Or focus a column in the list and press Enter.'}
+                    </span>
+                  </div>
+                )}
+                {state.charts.map((chart) => (
+                  <ChartView
+                    key={chart.id}
+                    engine={engine}
+                    tableId={tableId}
+                    chart={chart}
+                    selection={state.filters[chart.id]}
+                    crossFilters={filterEntries.filter(([viewId]) => viewId !== chart.id).map(([, filter]) => filter)}
+                    columns={state.columns}
+                    tokens={tokens}
+                    addedBy={callers.get(chart.id) ?? 'user'}
+                    draggingColumn={draggingColumn}
+                    dispatch={dispatch}
+                    onRemove={() => {
+                      dispatch('removeChart', { chartId: chart.id });
+                      showToast({
+                        tone: 'info',
+                        message: `Removed chart “${chartTitle(chart)}”`,
+                        action: { label: 'Undo', shortcut: mod('Z'), onClick: () => dispatch('undo') },
+                      });
+                    }}
+                  />
+                ))}
+              </div>
+            </section>
+          </>
+        )}
+      </main>
+      {state.dataSource === null && toast && (
+        <div className="toast-slot toast-slot--window">
+          <Toast key={toast.id} tone={toast.tone} message={toast.message} {...(toast.action ? { action: toast.action } : {})} onDismiss={dismissToast} />
+        </div>
       )}
-
-      {error && (
-        <p className="app__error" role="alert" data-testid="error">
-          {error}
-        </p>
+      {fileOver && state.dataSource !== null && (
+        <div className="drop-overlay" aria-hidden="true">
+          Drop to open
+        </div>
       )}
-    </main>
-  );
-}
-
-function ColumnRow({ column, onChange }: { column: ColumnState; onChange: (type: ColumnType) => void }) {
-  const type = effectiveColumnType(column);
-  return (
-    <li className="app__column" data-testid={`column-${column.name}`}>
-      <span className="app__file-name">{column.name}</span>
-      <select
-        aria-label={`Type of ${column.name}`}
-        data-testid={`column-type-${column.name}`}
-        value={type}
-        onChange={(event) => onChange(event.target.value as ColumnType)}
-      >
-        {COLUMN_TYPES.map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
-      </select>
-      {column.typeOverride !== null && <span className="app__muted">inferred {column.inferredType}</span>}
-    </li>
-  );
-}
-
-function HistoryItem({ entry, undone }: { entry: UndoEntry; undone: boolean }) {
-  return (
-    <li className={undone ? 'app__history-undone' : undefined} data-testid="history-entry" data-undone={undone}>
-      {describeEntry(entry)}{' '}
-      <span className="app__muted" data-testid="history-caller">
-        {entry.caller === 'ai' ? 'by AI' : 'by you'}
-      </span>
-      {undone && <span className="app__muted"> (undone)</span>}
-    </li>
+    </div>
   );
 }

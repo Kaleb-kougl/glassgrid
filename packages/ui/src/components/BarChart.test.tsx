@@ -15,7 +15,7 @@ describe('layoutBars', () => {
     const layout = layoutBars(data, 432, 60);
     expect(layout.height).toBe(3 * 20 + 2 * 6);
     expect(layout.bars.map((bar) => bar.rowTop)).toEqual([0, 26, 52]);
-    const full = 432 - (BAR_LABEL_WIDTH + 8) - 1 - 6 - 60;
+    const full = 432 - (BAR_LABEL_WIDTH + 8) - 1 - 4 - 6 - 60;
     expect(layout.bars[0]?.width).toBeCloseTo(full);
     expect(layout.bars[1]?.width).toBeCloseTo((full * 631_488) / 2_688_301);
   });

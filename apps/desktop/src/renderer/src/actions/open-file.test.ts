@@ -53,6 +53,16 @@ describe('openFileAction', () => {
     expect(engine.open).toHaveBeenCalledTimes(1); // undo never re-runs engine work
   });
 
+  it('opens a dropped file through the injected picker instead of the dialog', async () => {
+    const { workspace, engine, deps } = setup({ status: 'cancelled' });
+    const pick = vi.fn(() => Promise.resolve(opened));
+    const outcome = await openFileAction({ ...deps, pick });
+    expect(pick).toHaveBeenCalledOnce();
+    expect(engine.open).toHaveBeenCalledWith(handle);
+    expect(outcome.status).toBe('opened');
+    expect(workspace.store.getState().dataSource?.fileName).toBe('trips.csv');
+  });
+
   it('does nothing when the dialog is cancelled', async () => {
     const { workspace, engine, deps } = setup({ status: 'cancelled' });
     expect(await openFileAction(deps)).toEqual({ status: 'cancelled' });

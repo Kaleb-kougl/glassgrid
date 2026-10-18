@@ -36,6 +36,8 @@ export const BAR_HEIGHT = 16;
 export const BAR_LABEL_WIDTH = 84;
 const LABEL_GAP = 8;
 const VALUE_GAP = 6;
+/** Selection outline: 1px gap plus the stroke, on the bar's right edge. */
+const SELECTION_ROOM = 4;
 
 const grouped = new Intl.NumberFormat('en-US', { maximumFractionDigits: 6 });
 
@@ -73,7 +75,8 @@ export function layoutBars(data: readonly BarDatum[], width: number, maxValueLab
   const max = Math.max(0, ...data.map((d) => d.value ?? 0));
   const x = scaleLinear()
     .domain([0, max > 0 ? max : 1])
-    .range([0, Math.max(0, width - axisX - 1 - VALUE_GAP - maxValueLabelWidth)]);
+    // Room after the longest bar for the selection outline and the value label.
+    .range([0, Math.max(0, width - axisX - 1 - SELECTION_ROOM - VALUE_GAP - maxValueLabelWidth)]);
   const bars = data.map((d, i) => {
     const rowTop = band(i) ?? 0;
     return {

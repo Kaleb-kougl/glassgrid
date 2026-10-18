@@ -72,28 +72,48 @@ async function nextMeasure(page: Page, name: string, previous: number): Promise<
   return outcome;
 }
 
-async function countOnce(page: Page, label: CountRun['label']): Promise<CountRun> {
-  const previous = await measureCount(page, COUNT_ROWS_MEASURE);
-  const clickedAt = performance.now();
-  await page.getByTestId('count-rows').click();
-  const measured = await nextMeasure(page, COUNT_ROWS_MEASURE, previous);
-  const outcome = { duration: measured.duration, detail: measured.detail as CountRowsMeasureDetail };
-  const wallMs = performance.now() - clickedAt;
-  expect(outcome.detail.rowCount).toBe(String(ROWS));
-
-  // The rendered value must match too (strip locale-specific separators).
-  await expect
-    .poll(async () => (await page.getByTestId('row-count').textContent())?.replace(/\D/g, ''))
-    .toBe(String(ROWS));
-
-  return {
-    label,
-    roundTripMs: outcome.duration,
-    engineMs: outcome.detail.engineMs,
-    cached: outcome.detail.cached,
-    wallMs,
-  };
+/** A COUNT_ROWS_MEASURE entry (the grid's "N of M rows" status count). */
+interface CountEntry {
+  duration: number;
+  detail: CountRowsMeasureDetail;
 }
+
+async function countEntries(page: Page): Promise<CountEntry[]> {
+  return page.evaluate(
+    (name) =>
+      (performance.getEntriesByName(name, 'measure') as PerformanceMeasure[]).map((entry) => ({
+        duration: entry.duration,
+        detail: entry.detail as CountRowsMeasureDetail,
+      })),
+    COUNT_ROWS_MEASURE,
+  );
+}
+
+function toRun(label: CountRun['label'], entry: CountEntry, wallMs: number): CountRun {
+  return { label, roundTripMs: entry.duration, engineMs: entry.detail.engineMs, cached: entry.detail.cached, wallMs };
+}
+
+/** Switch the window's theme the way a person does: View → Theme in the application menu. */
+async function setTheme(app: ElectronApplication, page: Page, theme: 'light' | 'dark'): Promise<void> {
+  await app.evaluate(({ Menu }, id) => {
+    const item = Menu.getApplicationMenu()?.getMenuItemById(id);
+    if (!item) throw new Error(`No menu item ${id}`);
+    (item.click as () => void).call(item);
+  }, `theme-${theme}`);
+  await expect(page.locator('html')).toHaveAttribute('data-gg-theme', theme);
+}
+
+/** Screenshot the window once fonts and pending paints have settled. */
+async function screenshot(page: Page, name: string): Promise<string> {
+  await page.evaluate(() => document.fonts.ready.then(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))));
+  await mkdir(RESULTS_DIR, { recursive: true });
+  const path = join(RESULTS_DIR, `${name}.png`);
+  await page.screenshot({ path });
+  await test.info().attach(name, { path, contentType: 'image/png' });
+  return path;
+}
+
+const digits = (text: string | null) => text?.replace(/\D/g, '') ?? '';
 
 async function machineInfo(app: ElectronApplication | undefined) {
   if (!app) throw new Error('Electron app failed to launch');
@@ -191,6 +211,29 @@ test.describe('data path', () => {
   });
 
   test(`opens ${ROWS.toLocaleString('en-US')} rows, fetches the first page and profiles`, async () => {
+    if (!app) throw new Error('Electron app failed to launch');
+    // Design frames are 1440x900; the window content matches them for the screenshots.
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setContentSize(1440, 900));
+    await expect(page.getByTestId('empty-state')).toBeVisible();
+
+    // State B (empty) in both themes.
+    for (const theme of ['dark', 'light'] as const) {
+      await setTheme(app, page, theme);
+      await screenshot(page, `main-empty-${theme}`);
+    }
+    await setTheme(app, page, 'dark');
+
+    // Drag and drop goes through the preload: a File the page made up has no path, so main never sees one.
+    await page.evaluate(() => {
+      const transfer = new DataTransfer();
+      transfer.items.add(new File(['a,b\n1,2\n'], 'made-up.csv', { type: 'text/csv' }));
+      const target = document.querySelector('[data-testid="app"]');
+      target?.dispatchEvent(new DragEvent('dragover', { dataTransfer: transfer, bubbles: true, cancelable: true }));
+      target?.dispatchEvent(new DragEvent('drop', { dataTransfer: transfer, bubbles: true, cancelable: true }));
+    });
+    await expect(page.getByRole('alert')).toContainText('made-up.csv is not a file on this computer');
+    await page.getByRole('alert').getByRole('button', { name: 'Dismiss' }).click();
+
     const previousOpen = await measureCount(page, OPEN_TO_FIRST_PAGE_MEASURE);
     const previousProfile = await measureCount(page, PROFILE_MEASURE);
     const clickedAt = performance.now();
@@ -200,14 +243,17 @@ test.describe('data path', () => {
     const firstPageWallMs = performance.now() - clickedAt;
     await expect(page.getByTestId('file-name')).toHaveText(basename(csvPath));
     expect(firstPage.detail).toMatchObject({ rows: 1000, columns: 4, usingParquetCache: false });
-    await expect(page.getByTestId('first-page')).toContainText('4 columns');
+    const grid = page.getByTestId('grid');
+    await expect(grid.getByRole('columnheader')).toHaveText(['', 'id', 'category', 'amount', 'created_on']);
+    await expect(grid.getByRole('row').nth(1).getByRole('gridcell')).toHaveText(['1', 'alpha', '0', '2026-01-01']);
 
     const profiled = await nextMeasure(page, PROFILE_MEASURE, previousProfile);
     const profile = { duration: profiled.duration, detail: profiled.detail as ProfileMeasureDetail };
     expect(profile.detail).toMatchObject({ rowCount: ROWS, columns: 4 });
-    const profileTable = page.getByTestId('profile');
-    await expect(profileTable.locator('tbody tr')).toHaveCount(4);
-    await expect(profileTable.locator('tbody tr').first()).toContainText('integer');
+    // The column list shows the profile's distinct counts (category has exactly five values).
+    await expect(page.getByTestId('column-category')).toContainText(String(Math.min(ROWS, CATEGORIES.length)));
+    await expect(page.getByTestId('column-id-type')).toHaveAttribute('data-type', 'integer');
+    await expect.poll(async () => digits(await page.getByTestId('row-count').textContent())).toBe(String(ROWS));
 
     expect(rendererErrors, 'renderer console errors (CSP violations, exceptions)').toEqual([]);
 
@@ -226,7 +272,7 @@ test.describe('data path', () => {
       csvGenerationMs,
       ...(await machineInfo(app)),
       openToFirstPage: {
-        /** Renderer measure: Open CSV click -> first 1,000-row page decoded. */
+        /** Renderer measure: Open click -> first 1,000-row page decoded. */
         roundTripMs: firstPage.duration,
         openEngineMs: firstPage.detail.openEngineMs,
         firstPageEngineMs: firstPage.detail.firstPageEngineMs,
@@ -247,55 +293,101 @@ test.describe('data path', () => {
   });
 
   test('changes a column type in the UI and undoes it', async () => {
-    const amount = page.getByTestId('column-type-amount');
-    await expect(amount).toHaveValue('float');
-    const history = page.getByTestId('history-entry');
-    await expect(history).toHaveCount(1);
-    await expect(history.first()).toContainText(`Open ${basename(csvPath)}`);
+    const amount = page.getByTestId('column-amount-type');
+    await expect(amount).toHaveAttribute('data-type', 'float');
+    const historyButton = page.getByTestId('history-button');
+    const entries = page.getByTestId('history-entry');
+    await historyButton.click();
+    await expect(entries).toHaveCount(1);
+    await expect(entries.first()).toContainText(`Opened ${basename(csvPath)}`);
+    await historyButton.click();
 
-    await amount.selectOption('text');
-    await expect(amount).toHaveValue('text');
-    await expect(history).toHaveCount(2);
-    await expect(history.nth(1)).toHaveText('Set amount to text by you');
+    await amount.click();
+    await page.getByRole('menuitemradio', { name: /Text/ }).click();
+    await expect(amount).toHaveAttribute('data-type', 'text');
+    await historyButton.click();
+    await expect(entries).toHaveCount(2);
+    // Newest first, with its caller.
+    await expect(entries.first()).toContainText('Set amount to text');
+    await expect(entries.first().getByTestId('history-entry-caller')).toContainText('by you');
+    await historyButton.click();
 
     await page.getByTestId('undo').click();
-    await expect(amount).toHaveValue('float');
-    await expect(history.nth(1)).toHaveAttribute('data-undone', 'true');
+    await expect(amount).toHaveAttribute('data-type', 'float');
+    await historyButton.click();
+    await expect(entries.first()).toHaveAttribute('data-undone', 'true');
+    await historyButton.click();
 
     // Keyboard: redo, then undo again (Ctrl on Linux/Windows, Cmd on macOS).
     const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
     await page.keyboard.press(`${mod}+Shift+KeyZ`);
-    await expect(amount).toHaveValue('text');
+    await expect(amount).toHaveAttribute('data-type', 'text');
     await page.keyboard.press(`${mod}+KeyZ`);
-    await expect(amount).toHaveValue('float');
+    await expect(amount).toHaveAttribute('data-type', 'float');
     await expect(page.getByTestId('redo')).toBeEnabled();
 
     // The data views are untouched by state-only commands.
-    await expect(page.getByTestId('first-page')).toContainText('4 columns');
+    await expect(page.getByTestId('grid').getByRole('row').nth(1).getByRole('gridcell')).toHaveText(['1', 'alpha', '0', '2026-01-01']);
     expect(rendererErrors, 'renderer console errors (CSP violations, exceptions)').toEqual([]);
   });
 
-  test('runs a bar chart aggregate and shows its rows', async () => {
+  test('charts a column, selects a bar and cross-filters the grid', async () => {
+    if (!app) throw new Error('Electron app failed to launch');
     const previous = await measureCount(page, AGGREGATE_MEASURE);
-    await page.getByTestId('run-aggregate').click();
+    // Drag the category column onto the charts panel: addChart with a bar spec.
+    await page.getByTestId('column-category').dragTo(page.getByTestId('charts-drop'));
     const measured = await nextMeasure(page, AGGREGATE_MEASURE, previous);
     const detail = measured.detail as AggregateMeasureDetail;
     expect(detail).toMatchObject({ mark: 'bar', rows: Math.min(ROWS, CATEGORIES.length), cached: false });
 
-    const result = page.getByTestId('aggregate-result');
-    await expect(page.getByTestId('aggregate-spec')).toHaveText('{"mark":"bar","x":{"column":"category"}}');
-    const rows = result.locator('tbody tr');
-    await expect(rows).toHaveCount(Math.min(ROWS, CATEGORIES.length));
+    const card = page.locator('[data-testid^="chart-"][data-status]').first();
+    await expect(card.getByRole('heading')).toHaveText('Rows by category');
+    await expect(card.locator('[data-testid$="-shelf-y"]')).toContainText('count(*)');
+    const bars = card.getByRole('listbox');
+    const options = bars.getByRole('option');
     // Row i has category i % 5. Bars sort by count descending, ties by category.
     const expected = CATEGORIES.map((category, k) => ({ category, count: Math.floor((ROWS - 1 - k) / CATEGORIES.length) + 1 }))
       .filter((bar) => bar.count > 0)
       .sort((a, b) => b.count - a.count || a.category.localeCompare(b.category));
+    await expect(options).toHaveCount(expected.length);
     for (const [i, bar] of expected.entries()) {
-      const cells = rows.nth(i).locator('td');
-      await expect(cells.nth(0)).toHaveText(bar.category);
-      // Strip locale-specific digit grouping.
-      expect((await cells.nth(1).textContent())?.replace(/\D/g, '')).toBe(String(bar.count));
+      await expect(options.nth(i)).toHaveText(`${bar.category}: ${bar.count.toLocaleString('en-US')}`);
     }
+
+    // Click the second bar on the canvas: an `in` filter on category.
+    const selected = expected[1] ?? expected[0];
+    if (!selected) throw new Error('no bars');
+    const box = await bars.locator('canvas').boundingBox();
+    if (!box) throw new Error('chart canvas has no box');
+    const index = expected.indexOf(selected);
+    await page.mouse.click(box.x + box.width / 2, box.y + index * 26 + 10);
+    await expect(options.nth(index)).toHaveAttribute('aria-selected', 'true');
+    await expect(card).toContainText('1 selected');
+    const chip = page.getByTestId('filter-category');
+    await expect(chip).toHaveText(`category= ${selected.category}×`);
+    await expect.poll(async () => digits(await page.getByTestId('row-count').textContent())).toBe(`${selected.count}${ROWS}`);
+    const firstRow = page.getByTestId('grid').getByRole('row').nth(1).getByRole('gridcell');
+    await expect(firstRow.nth(1)).toHaveText(selected.category);
+
+    // State A: sort by id, select a range of cells and focus one, as in the design frame.
+    await page.getByTestId('grid-header-id').click();
+    await expect(page.getByTestId('grid-header-id')).toHaveAttribute('aria-sort', 'ascending');
+    await expect(firstRow.nth(0)).toHaveText(String(CATEGORIES.indexOf(selected.category) + 1));
+    await expect(page.getByTestId('grid').locator('.gg-grid__cell--placeholder')).toHaveCount(0);
+    const cell = (row: number, col: number) => page.getByTestId('grid').getByRole('row').nth(row).getByRole('gridcell').nth(col);
+    await cell(7, 2).hover();
+    await page.mouse.down();
+    await cell(10, 3).hover();
+    await page.mouse.up();
+    await page.keyboard.press('Shift+ArrowUp');
+    await expect(page.getByTestId('column-amount')).toHaveAttribute('data-selected', 'true');
+    await page.mouse.move(box.x + box.width / 2, box.y + index * 26 + 10);
+    await expect(page.getByRole('tooltip')).toContainText(selected.category);
+    for (const theme of ['dark', 'light'] as const) {
+      await setTheme(app, page, theme);
+      await screenshot(page, `main-populated-${theme}`);
+    }
+    await setTheme(app, page, 'dark');
     expect(rendererErrors, 'renderer console errors (CSP violations, exceptions)').toEqual([]);
 
     const outFile = await writeBaseline('aggregate-bar', {
@@ -304,7 +396,7 @@ test.describe('data path', () => {
       rows: ROWS,
       fileBytes,
       ...(await machineInfo(app)),
-      /** Renderer measure: click -> Arrow decoded; a cold bar chart (count by category) over the CSV. */
+      /** Renderer measure: column dropped -> Arrow decoded; a cold bar chart (count by category) over the CSV. */
       aggregate: { roundTripMs: measured.duration, engineMs: detail.engineMs, cached: detail.cached, rows: detail.rows },
     });
     console.log(`aggregate-bar ${ROWS} rows: ${measured.duration.toFixed(1)} ms (engine ${detail.engineMs.toFixed(1)} ms) -> ${outFile}`);
@@ -312,12 +404,25 @@ test.describe('data path', () => {
 
   test(`counts ${ROWS.toLocaleString('en-US')} rows and records a baseline`, async () => {
     await expect(page.getByTestId('file-name')).toHaveText(basename(csvPath));
+    // The cold count ran when the file opened ("N rows" in the grid bar).
+    const [coldEntry] = (await countEntries(page)).filter((entry) => entry.detail.rowCount === String(ROWS));
+    if (!coldEntry) throw new Error('no unfiltered count was measured');
+    expect(coldEntry.detail.cached).toBe(false);
 
-    const cold = await countOnce(page, 'cold');
-    const warm = await countOnce(page, 'warm');
-    expect(cold.cached).toBe(false);
-    expect(warm.cached).toBe(true);
+    // Removing the filter chip asks for the unfiltered count again: a result-cache hit.
+    const before = (await countEntries(page)).length;
+    const clearedAt = performance.now();
+    await page.getByTestId('filter-category').getByRole('button', { name: 'Remove filter on category' }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'Removed filter category' })).toBeVisible();
+    await expect.poll(async () => (await countEntries(page)).length).toBeGreaterThan(before);
+    const warmEntry = (await countEntries(page)).at(-1);
+    if (!warmEntry) throw new Error('no warm count');
+    const wallMs = performance.now() - clearedAt;
+    expect(warmEntry.detail).toMatchObject({ rowCount: String(ROWS), cached: true });
+    await expect.poll(async () => digits(await page.getByTestId('row-count').textContent())).toBe(String(ROWS));
 
+    const cold = toRun('cold', coldEntry, coldEntry.duration);
+    const warm = toRun('warm', warmEntry, wallMs);
     expect(rendererErrors, 'renderer console errors (CSP violations, exceptions)').toEqual([]);
 
     const baseline = {

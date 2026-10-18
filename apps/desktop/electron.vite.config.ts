@@ -47,6 +47,8 @@ export default defineConfig({
     root: resolve(import.meta.dirname, 'src/renderer'),
     plugins: [react(), relaxCspForDevServer()],
     build: {
+      // The CSP is `font-src 'self'`: fonts must ship as files, never as data: URIs.
+      assetsInlineLimit: (file) => (/\.(woff2?|ttf|otf)$/.test(file) ? false : undefined),
       rolldownOptions: {
         input: { index: resolve(import.meta.dirname, 'src/renderer/index.html') },
       },

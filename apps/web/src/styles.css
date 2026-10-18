@@ -1,18 +1,172 @@
+/* Gallery page chrome. The sheets themselves use only token custom properties. */
 html,
 body {
   margin: 0;
-  background: var(--gg-bg);
-  color: var(--gg-text);
-  font: 15px/1.6 var(--gg-font);
+  background: #2a2f36;
 }
 
-.web {
-  max-width: 680px;
-  margin: 0 auto;
-  padding: 48px 24px;
+.gallery {
+  padding: 48px;
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  color: #e7eaee;
 }
 
-.web code {
+.gallery__head {
+  max-width: 960px;
+  margin-bottom: 32px;
+}
+
+.gallery__head h1 {
+  margin: 0 0 8px;
+  font-size: 28px;
+  line-height: 36px;
+  font-weight: 600;
+}
+
+.gallery__head p {
+  margin: 0;
+  color: #c2c8d0;
+  font-size: 15px;
+  line-height: 24px;
+}
+
+.gallery__head code {
+  font-family: 'IBM Plex Mono', monospace;
   font-size: 13px;
-  word-break: break-word;
+}
+
+.gallery__sheets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 48px;
+  align-items: flex-start;
+}
+
+.sheet {
+  width: 1040px;
+  box-sizing: border-box;
+  padding: 32px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+  background: var(--gg-ground);
+  color: var(--gg-text-primary);
+  font: var(--gg-type-ui-md);
+}
+
+.sheet__head {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding-bottom: 8px;
+}
+
+.sheet__title {
+  margin: 0;
+  font: var(--gg-type-heading-lg);
+}
+
+.sheet__sub,
+.sheet__muted {
+  color: var(--gg-text-secondary);
+}
+
+.sheet__card {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border-radius: var(--gg-radius-panel);
+  background: var(--gg-panel-bg);
+}
+
+.sheet__card--wide {
+  grid-column: 1 / -1;
+}
+
+.sheet__label {
+  margin: 0;
+  font: var(--gg-type-label-caps);
+  letter-spacing: var(--gg-type-label-caps-tracking);
+  text-transform: uppercase;
+  color: var(--gg-text-secondary);
+}
+
+.sheet__note {
+  margin: 0;
+  font: var(--gg-type-ui-sm);
+  color: var(--gg-text-secondary);
+}
+
+.sheet__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.sheet__col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.sheet__col > .gg-chart-card,
+.sheet__col > .gg-progress,
+.sheet__col > .gg-chart-skeleton {
+  align-self: stretch;
+}
+
+.sheet__grid2 {
+  display: grid;
+  grid-template-columns: 84px auto;
+  gap: 10px;
+  align-items: center;
+  justify-items: start;
+  font-size: 11px;
+  color: var(--gg-text-tertiary);
+}
+
+.sheet__cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  align-items: start;
+}
+
+.sheet__tooltips {
+  position: relative;
+  height: 130px;
+  border: 1px dashed var(--gg-border);
+  border-radius: var(--gg-radius-control);
+}
+
+.sheet__history {
+  background: var(--gg-raised-bg);
+  border: 1px solid var(--gg-border-subtle);
+  border-radius: var(--gg-radius-card);
+}
+
+.sheet__focus-card {
+  width: 120px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--gg-radius-card);
+  background: var(--gg-card-bg);
+  font-size: 12px;
+  color: var(--gg-text-secondary);
+}
+
+.sheet__grid {
+  height: 240px;
+  display: flex;
+  border: 1px solid var(--gg-grid-line);
+  border-radius: var(--gg-radius-control);
+  overflow: hidden;
 }

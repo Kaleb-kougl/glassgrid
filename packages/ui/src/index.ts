@@ -49,4 +49,3 @@ export {
   type GridSelection,
 } from './components/DataGrid.js';
 export { resolvedTokens, tokensFor, type ResolvedTokens, type ThemeName } from './tokens.js';
-export { Stat, type StatProps } from './Stat.js';

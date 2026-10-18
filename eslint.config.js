@@ -33,6 +33,8 @@ export default defineConfig(
     '**/test-results/',
     '**/playwright-report/',
     '**/e2e-results/',
+    // Claude Design export (gitignored reference material).
+    'design/',
   ]),
 
   js.configs.recommended,

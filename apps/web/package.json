@@ -2,7 +2,7 @@
   "name": "@glassgrid/web",
   "version": "0.0.0",
   "private": true,
-  "description": "Glassgrid in the browser (DuckDB-WASM). Placeholder in M0.",
+  "description": "Glassgrid in the browser (DuckDB-WASM, M4). For now: the component gallery, both themes side by side.",
   "license": "MIT",
   "type": "module",
   "scripts": {

@@ -1,9 +1,11 @@
-import { basename, join } from 'node:path';
+import { stat } from 'node:fs/promises';
+import { basename, isAbsolute, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { app, BrowserWindow, dialog, ipcMain, type OpenDialogOptions } from 'electron';
-import { APP_NAME, IpcChannel, type OpenCsvResult } from '@glassgrid/core';
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, type OpenDialogOptions } from 'electron';
+import { APP_NAME, IpcChannel, isThemePreference, type OpenCsvResult } from '@glassgrid/core';
 import { applyE2EOverrides, e2eOpenPath } from './e2e';
 import { EngineHost } from './engine-host';
+import { applyTheme, installAppMenu } from './menu';
 import { createSenderGuard, installSecurityPolicies } from './security';
 
 const devServerUrl = process.env['ELECTRON_RENDERER_URL'];
@@ -18,15 +20,21 @@ const engine = new EngineHost(() => ({
 }));
 const assertTrustedSender = createSenderGuard((url) => url.startsWith(rendererOrigin));
 
+/** `--gg-ground` of each theme, so the window never flashes the wrong colour before the page paints. */
+const GROUND = { light: '#e3e6ea', dark: '#0d1013' } as const;
+
 function createMainWindow(): BrowserWindow {
+  const isMac = process.platform === 'darwin';
   const win = new BrowserWindow({
     title: APP_NAME,
-    width: 1100,
-    height: 720,
-    minWidth: 640,
-    minHeight: 420,
+    width: 1440,
+    height: 900,
+    minWidth: 960,
+    minHeight: 600,
     show: false,
-    backgroundColor: '#111317',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? GROUND.dark : GROUND.light,
+    // macOS: the traffic lights sit inset in the app's own 44px title bar.
+    ...(isMac ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 16, y: 16 } } : { autoHideMenuBar: true }),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -77,6 +85,24 @@ function registerIpcHandlers(): void {
     }
   });
 
+  ipcMain.handle(IpcChannel.openDropped, async (event, path: unknown): Promise<OpenCsvResult> => {
+    assertTrustedSender(event);
+    // Sent by the preload from webUtils.getPathForFile; still checked here.
+    if (typeof path !== 'string' || !isAbsolute(path)) return { status: 'failed', message: 'Only files on this computer can be opened' };
+    try {
+      if (!(await stat(path)).isFile()) return { status: 'failed', message: `${basename(path)} is not a file` };
+      const { handle, sizeBytes } = await engine.registerFile(path);
+      return { status: 'opened', file: { handle, displayName: basename(path), sizeBytes } };
+    } catch (error) {
+      return { status: 'failed', message: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcMain.on(IpcChannel.setTheme, (event, theme: unknown) => {
+    assertTrustedSender(event);
+    if (isThemePreference(theme)) applyTheme(theme);
+  });
+
   ipcMain.on(IpcChannel.requestEnginePort, (event) => {
     assertTrustedSender(event);
     engine.connectRenderer(event.sender);
@@ -91,6 +117,7 @@ engine.on('restarted', () => {
 
 app.whenReady().then(() => {
   installSecurityPolicies();
+  installAppMenu();
   registerIpcHandlers();
   engine.start();
   createMainWindow();

@@ -1,3 +1,7 @@
+/*
+ * Main screen layout ("Islands": panels floating on the ground colour). All
+ * values come from the design tokens; component styles live in @glassgrid/ui.
+ */
 *,
 *::before,
 *::after {
@@ -5,123 +9,338 @@
 }
 
 html,
-body {
+body,
+#root {
   margin: 0;
   height: 100%;
-  background: var(--gg-bg);
-  color: var(--gg-text);
-  font: 14px/1.5 var(--gg-font);
+  overflow: hidden;
+  background: var(--gg-ground);
+}
+
+body {
+  font: var(--gg-type-ui-md);
 }
 
 .app {
-  max-width: 760px;
-  margin: 0 auto;
-  padding: 40px 24px;
-  display: grid;
-  gap: 20px;
-}
-
-.app__header h1 {
-  margin: 0;
-  font-size: 26px;
-  letter-spacing: -0.01em;
-}
-
-.app__tagline,
-.app__muted {
-  margin: 4px 0 0;
-  color: var(--gg-muted);
-}
-
-.app__toolbar {
+  height: 100%;
   display: flex;
-  gap: 8px;
-}
-
-.app__file p {
-  margin: 0;
-}
-
-.app__file-name {
-  font-family: var(--gg-mono);
-}
-
-.app__stats {
-  margin: 0;
-  padding: 16px 20px;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 16px;
-  background: var(--gg-surface);
-  border: 1px solid var(--gg-border);
-  border-radius: var(--gg-radius);
-}
-
-.app__error {
-  margin: 0;
-  color: var(--gg-danger);
-}
-
-.app__profile {
-  width: 100%;
-  border-collapse: collapse;
+  flex-direction: column;
+  background: var(--gg-ground);
+  color: var(--gg-text-primary);
+  font: var(--gg-type-ui-md);
   font-variant-numeric: tabular-nums;
+  position: relative;
 }
 
-.app__profile th,
-.app__profile td {
-  padding: 6px 10px;
-  text-align: left;
-  border-bottom: 1px solid var(--gg-border);
+/* --- Title bar ------------------------------------------------------------ */
+.topbar {
+  height: var(--gg-titlebar-h);
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px;
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+.app[data-platform='darwin'] .topbar {
+  padding-left: 0;
+}
+
+.topbar__inset {
+  width: var(--gg-titlebar-inset);
+  flex: none;
+}
+
+.topbar button,
+.topbar [role='status'],
+.topbar__progress {
+  -webkit-app-region: no-drag;
+}
+
+.topbar__file {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.topbar__name {
+  font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 180px;
 }
 
-.app__profile th {
-  color: var(--gg-muted);
-  font-weight: 500;
+.topbar__size,
+.topbar__empty {
+  font-size: 12px;
+  color: var(--gg-text-secondary);
+  white-space: nowrap;
 }
 
-.app__section-title {
-  margin: 0 0 8px;
-  font-size: 15px;
+.topbar__empty {
+  font-size: 13px;
+}
+
+.topbar__progress {
+  margin-left: 8px;
+}
+
+.topbar__spacer {
+  flex: 1;
+}
+
+.topbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+
+.topbar__sep {
+  width: 1px;
+  height: 20px;
+  margin: 0 6px;
+  background: var(--gg-border);
+}
+
+.history-list {
+  width: 320px;
+  max-height: 420px;
+  overflow: auto;
+}
+
+/* --- Panels --------------------------------------------------------------- */
+.workspace {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: var(--gg-panel-gap);
+  padding: 0 var(--gg-panel-gap) var(--gg-panel-gap);
+}
+
+.panel {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--gg-radius-panel);
+  overflow: hidden;
+}
+
+.panel__head {
+  height: 40px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+}
+
+.panel__label {
+  margin: 0;
+  font: var(--gg-type-label-caps);
+  letter-spacing: var(--gg-type-label-caps-tracking);
+  text-transform: uppercase;
+  color: var(--gg-text-secondary);
+}
+
+.panel__count,
+.panel__hint {
+  font-size: 11px;
+  color: var(--gg-text-tertiary);
+}
+
+.panel__spacer {
+  flex: 1;
+}
+
+.columns {
+  width: var(--gg-column-list-w);
+  flex: none;
+  background: var(--gg-panel-bg);
+}
+
+.columns__list {
+  overflow: auto;
+  padding-bottom: 8px;
+}
+
+.grid-panel {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  background: var(--gg-grid-bg);
+}
+
+.grid-panel__bar {
+  height: 44px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border-bottom: var(--gg-border-width) solid var(--gg-grid-line-strong);
+}
+
+.grid-panel__filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.grid-panel__note {
+  font-size: 12px;
+  color: var(--gg-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.grid-panel__count {
+  font-size: 12.5px;
+  color: var(--gg-text-secondary);
+  white-space: nowrap;
+}
+
+.grid-panel__count strong {
+  color: var(--gg-text-primary);
   font-weight: 600;
 }
 
-.app__columns,
-.app__history {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  gap: 4px;
+.toast-slot {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  z-index: 20;
+  transform: translateX(-50%);
+  max-width: calc(100% - 32px);
 }
 
-.app__column {
+.toast-slot--window {
+  bottom: 24px;
+}
+
+.charts {
+  width: var(--gg-chart-canvas-w);
+  flex: none;
+  background: var(--gg-canvas-bg);
+}
+
+.charts[data-over='true'] {
+  outline: var(--gg-focus-width) dashed var(--gg-accent);
+  outline-offset: calc(-1 * var(--gg-focus-width));
+}
+
+.charts__list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 12px 12px;
+}
+
+.charts__drop {
+  height: 200px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 24px;
+  border: 1.5px dashed var(--gg-border-strong);
+  border-radius: var(--gg-radius-card);
+  text-align: center;
+}
+
+.charts__drop span {
+  max-width: 300px;
+  font-size: 12px;
+  color: var(--gg-text-secondary);
+}
+
+/* --- Empty state: the whole workspace is the drop zone ------------------- */
+.empty {
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  background: var(--gg-panel-bg);
+}
+
+.empty__zone {
+  width: 560px;
+  height: 300px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 32px;
+  border: 1.5px dashed var(--gg-border-strong);
+  border-radius: 12px;
+  text-align: center;
+  transition: background-color var(--gg-motion-fast) var(--gg-ease-standard);
+}
+
+.empty[data-over='true'] .empty__zone {
+  border-color: var(--gg-accent);
+  background: var(--gg-accent-subtle);
+}
+
+.empty__icon {
+  width: 40px;
+  height: 48px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 6px;
+  border: 1.5px solid var(--gg-border-strong);
+  border-radius: 4px;
+  font: 500 10px var(--gg-font-mono);
+  color: var(--gg-text-secondary);
+}
+
+.empty__text {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.empty__title {
+  margin: 0;
+  font: var(--gg-type-heading-lg);
+  letter-spacing: var(--gg-type-heading-lg-tracking);
+}
+
+.empty__hint {
+  margin: 0;
+  max-width: 380px;
+  color: var(--gg-text-secondary);
+}
+
+.empty__actions {
   display: flex;
   align-items: center;
   gap: 12px;
 }
 
-.app__column .app__file-name {
-  min-width: 160px;
-}
-
-.app__history {
-  padding-left: 20px;
-  list-style: decimal;
-}
-
-.app__history-undone {
-  color: var(--gg-muted);
-  text-decoration: line-through;
-}
-
-.app__spec {
-  margin: 8px 0;
-  font: 12px/1.4 var(--gg-mono);
-  color: var(--gg-muted);
-  white-space: pre-wrap;
+.drop-overlay {
+  position: absolute;
+  inset: var(--gg-titlebar-h) var(--gg-panel-gap) var(--gg-panel-gap);
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px dashed var(--gg-accent);
+  border-radius: var(--gg-radius-panel);
+  background: var(--gg-accent-subtle);
+  color: var(--gg-accent-text);
+  font: var(--gg-type-heading-md);
+  pointer-events: none;
 }
