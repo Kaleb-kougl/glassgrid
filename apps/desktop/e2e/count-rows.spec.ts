@@ -1,185 +1,42 @@
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { arch, cpus, platform, tmpdir, totalmem } from 'node:os';
-import { basename, join, resolve } from 'node:path';
-import AxeBuilder from '@axe-core/playwright';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { basename, join } from 'node:path';
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import {
   AGGREGATE_MEASURE,
-  COUNT_ROWS_MEASURE,
   OPEN_TO_FIRST_ROWS_MEASURE,
   PROFILE_MEASURE,
   SORT_TO_FIRST_ROWS_MEASURE,
   type AggregateMeasureDetail,
-  type CountRowsMeasureDetail,
   type OpenToFirstRowsMeasureDetail,
   type ProfileMeasureDetail,
   type SortToFirstRowsMeasureDetail,
 } from '../src/renderer/src/perf';
-import { e2eRowCount } from './config';
 import { CATEGORIES, writeFixtureCsv } from './csv-fixture';
 import { fling, scrollSweep, type FlingResult, type MemorySample } from './grid-perf';
-
-const APP_DIR = resolve(__dirname, '..');
-const RESULTS_DIR = join(APP_DIR, 'e2e-results');
-const ROWS = e2eRowCount();
-/** Optional path to a packaged app binary (e.g. release/<v>/linux-unpacked/glassgrid). */
-const PACKAGED_EXECUTABLE = process.env['GLASSGRID_E2E_EXECUTABLE'];
-
-interface CountRun {
-  label: 'cold' | 'warm';
-  /** Renderer performance.measure: click handler -> Arrow decoded. */
-  roundTripMs: number;
-  /** Engine-reported time: DuckDB query + encode (0 when served from the result cache). */
-  engineMs: number;
-  /** Served from the engine's result cache (the warm run after a cold one). */
-  cached: boolean;
-  /** Playwright-observed time from click to measure (includes polling). */
-  wallMs: number;
-}
-
-/** Chromium refuses to run as root without --no-sandbox (containers, some CI). */
-function chromiumFlags(): string[] {
-  const isRoot = process.platform === 'linux' && process.getuid?.() === 0;
-  return isRoot || process.env['GLASSGRID_E2E_NO_SANDBOX'] === '1' ? ['--no-sandbox'] : [];
-}
-
-async function duckdbPackageVersion(): Promise<string> {
-  const pkg = JSON.parse(
-    await readFile(join(APP_DIR, 'node_modules/@duckdb/node-api/package.json'), 'utf8'),
-  ) as { version: string };
-  return pkg.version;
-}
-
-async function measureCount(page: Page, name: string): Promise<number> {
-  return page.evaluate((measure) => performance.getEntriesByName(measure, 'measure').length, name);
-}
-
-/** Wait for the next performance.measure entry called `name` (or an error shown by the app). */
-async function nextMeasure(page: Page, name: string, previous: number): Promise<{ duration: number; detail: unknown }> {
-  const handle = await page.waitForFunction(
-    ({ name, previous }) => {
-      const error = document.querySelector('[data-testid="error"]');
-      if (error) return { error: error.textContent };
-      const entries = performance.getEntriesByName(name, 'measure') as PerformanceMeasure[];
-      const latest = entries.at(-1);
-      if (entries.length > previous && latest) {
-        return { duration: latest.duration, detail: latest.detail as unknown };
-      }
-      return null;
-    },
-    { name, previous },
-    { timeout: test.info().timeout, polling: 25 },
-  );
-  const outcome = (await handle.jsonValue()) as { error: string } | { duration: number; detail: unknown };
-  if ('error' in outcome) throw new Error(`App reported an error: ${outcome.error}`);
-  return outcome;
-}
-
-/** A COUNT_ROWS_MEASURE entry (the grid's "N of M rows" status count). */
-interface CountEntry {
-  duration: number;
-  detail: CountRowsMeasureDetail;
-}
-
-async function countEntries(page: Page): Promise<CountEntry[]> {
-  return page.evaluate(
-    (name) =>
-      (performance.getEntriesByName(name, 'measure') as PerformanceMeasure[]).map((entry) => ({
-        duration: entry.duration,
-        detail: entry.detail as CountRowsMeasureDetail,
-      })),
-    COUNT_ROWS_MEASURE,
-  );
-}
-
-function toRun(label: CountRun['label'], entry: CountEntry, wallMs: number): CountRun {
-  return { label, roundTripMs: entry.duration, engineMs: entry.detail.engineMs, cached: entry.detail.cached, wallMs };
-}
-
-/** Switch the window's theme the way a person does: View → Theme in the application menu. */
-async function setTheme(app: ElectronApplication, page: Page, theme: 'light' | 'dark'): Promise<void> {
-  await app.evaluate(({ Menu }, id) => {
-    const item = Menu.getApplicationMenu()?.getMenuItemById(id);
-    if (!item) throw new Error(`No menu item ${id}`);
-    (item.click as () => void).call(item);
-  }, `theme-${theme}`);
-  await expect(page.locator('html')).toHaveAttribute('data-gg-theme', theme);
-}
-
-/** Screenshot the window once fonts and pending paints have settled. */
-async function screenshot(page: Page, name: string): Promise<string> {
-  await page.evaluate(() => document.fonts.ready.then(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))));
-  await mkdir(RESULTS_DIR, { recursive: true });
-  const path = join(RESULTS_DIR, `${name}.png`);
-  await page.screenshot({ path });
-  await test.info().attach(name, { path, contentType: 'image/png' });
-  return path;
-}
-
-const digits = (text: string | null) => text?.replace(/\D/g, '') ?? '';
-
-/** axe-core on the whole window. Legacy mode runs in the page itself (an Electron context cannot open the extra page axe would use). */
-async function axe(page: Page, name: string) {
-  const results = await new AxeBuilder({ page }).setLegacyMode(true).analyze();
-  await test.info().attach(`axe-${name}`, { body: JSON.stringify(results.violations, null, 2), contentType: 'application/json' });
-  return results.violations.map((violation) => ({
-    id: violation.id,
-    impact: violation.impact,
-    nodes: violation.nodes.map((node) => `${node.target.join(' ')}: ${node.failureSummary ?? ''}`),
-  }));
-}
-
-// ---------------------------------------------------------------------------
-// The canvas grid: assertions read its ARIA mirror; pointer input goes to the canvas at computed positions.
-
-const ROW_HEIGHT = 32;
-const HEADER_HEIGHT = 32;
-
-function mirror(page: Page) {
-  return page.getByTestId('grid-mirror');
-}
-
-/** Cell texts of a mirrored data row (0 = first row on screen). */
-function mirrorRow(page: Page, index: number) {
-  return mirror(page).getByRole('row').nth(index + 1).getByRole('gridcell');
-}
-
-function mirrorHeader(page: Page, name: string) {
-  return mirror(page).getByRole('columnheader', { name: new RegExp(`^${name}(,|$)`) });
-}
-
-/** Where the grid is on screen and where its columns start and end (published on the scroll spacer). */
-async function gridGeometry(page: Page) {
-  const box = await page.getByTestId('grid').boundingBox();
-  if (!box) throw new Error('grid has no box');
-  const edges = await page.getByTestId('grid-scroller').evaluate((scroller) => {
-    const spacer = scroller.firstElementChild as HTMLElement | null;
-    return (spacer?.dataset['columnEdges'] ?? '').split(' ').map(Number);
-  });
-  return {
-    box,
-    /** Centre of display column `col`'s header. */
-    header: (col: number) => ({ x: box.x + ((edges[col] ?? 0) + (edges[col + 1] ?? 0)) / 2, y: box.y + HEADER_HEIGHT / 2 }),
-    /** Centre of the cell at on-screen row `row` (0 = first body row) and display column `col`. */
-    cell: (row: number, col: number) => ({
-      x: box.x + ((edges[col] ?? 0) + (edges[col + 1] ?? 0)) / 2,
-      y: box.y + HEADER_HEIGHT + row * ROW_HEIGHT + ROW_HEIGHT / 2,
-    }),
-  };
-}
-
-/** Every mirrored cell has its value (no page still loading). */
-async function rowsLoaded(page: Page): Promise<void> {
-  await expect
-    .poll(() =>
-      page.evaluate(() => {
-        const cells = [...document.querySelectorAll('[data-testid="grid-mirror"] [role="gridcell"]')];
-        return cells.length > 0 && cells.every((cell) => cell.textContent !== 'Loading');
-      }),
-    )
-    .toBe(true);
-}
+import {
+  APP_DIR,
+  axe,
+  chromiumFlags,
+  countEntries,
+  digits,
+  gridGeometry,
+  machineInfo,
+  measureCount,
+  mirror,
+  mirrorHeader,
+  mirrorRow,
+  nextMeasure,
+  PACKAGED_EXECUTABLE,
+  RESULTS_DIR,
+  ROWS,
+  rowsLoaded,
+  screenshot,
+  setTheme,
+  toRun,
+  writeBaseline,
+} from './support';
 
 /** What the M2 exit gate measured in this run, written by the last test. */
 const exitGate: {
@@ -188,36 +45,6 @@ const exitGate: {
   memory?: { samples: MemorySample[]; before: MemorySample; afterDown: MemorySample; afterUp: MemorySample; sweepMs: number; pagesLanded: number };
   sort?: { ms: number; firstPageEngineMs: number; cached: boolean; sort: string };
 } = {};
-
-async function machineInfo(app: ElectronApplication | undefined) {
-  if (!app) throw new Error('Electron app failed to launch');
-  const versions = await app.evaluate(() => ({
-    electron: process.versions.electron,
-    chrome: process.versions.chrome,
-    node: process.versions.node,
-  }));
-  return {
-    machine: {
-      platform: platform(),
-      arch: arch(),
-      cpuModel: cpus()[0]?.model ?? 'unknown',
-      cpuCount: cpus().length,
-      totalMemBytes: totalmem(),
-      ci: Boolean(process.env['CI']),
-    },
-    versions: { ...versions, duckdbNodeApi: await duckdbPackageVersion() },
-    packaged: Boolean(PACKAGED_EXECUTABLE),
-  };
-}
-
-async function writeBaseline(name: string, baseline: object): Promise<string> {
-  await mkdir(RESULTS_DIR, { recursive: true });
-  const variant = PACKAGED_EXECUTABLE ? '-packaged' : '';
-  const outFile = join(RESULTS_DIR, `${name}-${ROWS}-${platform()}-${arch()}${variant}.json`);
-  await writeFile(outFile, `${JSON.stringify(baseline, null, 2)}\n`);
-  await test.info().attach('benchmark', { path: outFile, contentType: 'application/json' });
-  return outFile;
-}
 
 test.describe('data path', () => {
   // The tests share one app instance: the first opens the file, the second counts it.

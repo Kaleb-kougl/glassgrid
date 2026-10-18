@@ -22,3 +22,16 @@ export function e2eOpenPath(): string | undefined {
   const path = process.env['GLASSGRID_E2E_OPEN'];
   return path && path.length > 0 ? path : undefined;
 }
+
+/**
+ * Engine settings a test may change: `GLASSGRID_E2E_AUTO_CONVERT_MIN_BYTES`
+ * sets the size from which CSVs get a background Parquet copy (a huge value
+ * keeps a 10M-row file on its raw CSV, for the raw-CSV benchmark numbers).
+ */
+export function e2eEngineOverrides(): { autoConvertMinBytes?: number } {
+  if (!isE2E) return {};
+  const raw = process.env['GLASSGRID_E2E_AUTO_CONVERT_MIN_BYTES'];
+  if (raw === undefined || raw === '') return {};
+  const bytes = Number(raw);
+  return Number.isSafeInteger(bytes) && bytes >= 0 ? { autoConvertMinBytes: bytes } : {};
+}

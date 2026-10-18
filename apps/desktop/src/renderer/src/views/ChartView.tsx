@@ -70,6 +70,8 @@ export interface ChartViewProps {
   onBrushEnd: (chartId: string, selection: BrushSelectionInput | null) => void;
   /** The chart drew `result` on its canvas. */
   onDrawn: (chartId: string, result: ChartResult) => void;
+  /** Place among the cards, for the accessible name ("Line chart, 2 of 4"). */
+  position: { index: number; count: number };
 }
 
 const AGGREGATES: readonly Aggregate[] = ['count', 'sum', 'avg', 'min', 'max'];
@@ -133,6 +135,7 @@ export function ChartView({
   onBrushStart,
   onBrushEnd,
   onDrawn,
+  position,
 }: ChartViewProps) {
   const { spec } = chart;
   const data = useChartQuery(engine, tableId, query, pixelWidth, dataVersion);
@@ -339,6 +342,7 @@ export function ChartView({
     <ChartCard
       testId={testId}
       title={title}
+      description={`${MARKS.find((option) => option.mark === mark)?.label ?? mark}, ${position.index + 1} of ${position.count}`}
       attribution={addedBy === 'ai' ? 'ai' : undefined}
       onRename={(next) => dispatch('renameChart', { chartId: chart.id, title: next })}
       selection={ownSelection === null ? undefined : { summary: ownSelection, onClear: () => dispatch('clearFilter', { viewId: chart.id }) }}

@@ -8,6 +8,17 @@ afterEach(() => {
 });
 
 describe('ChartCard', () => {
+  it('names the card by its title and description, and makes "View data" a focusable region', () => {
+    render(
+      <ChartCard title="Rows over pickup_at" description="Area chart, 2 of 3" viewData={{ on: true, onToggle: () => undefined, table: <table aria-label="t" /> }} testId="card">
+        <p>chart</p>
+      </ChartCard>,
+    );
+    expect(screen.getByRole('region', { name: 'Rows over pickup_at Area chart, 2 of 3' })).toBeDefined();
+    const data = screen.getByRole('region', { name: 'Rows over pickup_at (Area chart, 2 of 3): data' });
+    expect(data.tabIndex).toBe(0);
+  });
+
   it('shows the skeleton only after the load has taken 300 ms', () => {
     vi.useFakeTimers();
     const { rerender } = render(

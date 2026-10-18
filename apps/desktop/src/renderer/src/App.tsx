@@ -210,6 +210,8 @@ export function App({ engine, bridge, workspace }: AppProps) {
     cached: boolean;
   } | null>(null);
   const [optimizing, setOptimizing] = useState<{ table: TableId; fraction: number | null } | null>(null);
+  /** Tables whose background Parquet copy is ready (queries read it from then on). */
+  const [parquetReady, setParquetReady] = useState<ReadonlySet<TableId>>(new Set());
   const [draggingColumn, setDraggingColumn] = useState<string | null>(null);
   const [fileOver, setFileOver] = useState(false);
   const [chartsOver, setChartsOver] = useState(false);
@@ -549,6 +551,7 @@ export function App({ engine, bridge, workspace }: AppProps) {
       engine.onEvent((event) => {
         if (event.type === 'parquetProgress') setOptimizing({ table: event.table, fraction: event.fraction });
         else if (event.type === 'parquetReady' || event.type === 'parquetFailed') setOptimizing(null);
+        if (event.type === 'parquetReady') setParquetReady((ready) => new Set([...ready, event.table.id]));
       }),
     [engine],
   );
@@ -809,6 +812,7 @@ export function App({ engine, bridge, workspace }: AppProps) {
     <div
       className="app"
       data-platform={bridge.platform}
+      data-parquet={tableId === null ? undefined : optimizingNow ? 'converting' : parquetReady.has(tableId) ? 'ready' : 'none'}
       data-testid="app"
       onDragOver={onWindowDragOver}
       onDragLeave={(event) => {
@@ -1037,6 +1041,7 @@ export function App({ engine, bridge, workspace }: AppProps) {
                     onBrushStart={onBrushStart}
                     onBrushEnd={onBrushEnd}
                     onDrawn={onChartDrawn}
+                    position={{ index, count: state.charts.length }}
                     onRemove={() => {
                       dispatch('removeChart', { chartId: chart.id });
                       showToast({

@@ -3,7 +3,7 @@ import { basename, isAbsolute, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { app, BrowserWindow, clipboard, dialog, ipcMain, nativeTheme, type OpenDialogOptions } from 'electron';
 import { APP_NAME, IpcChannel, isThemePreference, MAX_CLIPBOARD_TEXT, type OpenCsvResult } from '@glassgrid/core';
-import { applyE2EOverrides, e2eOpenPath } from './e2e';
+import { applyE2EOverrides, e2eEngineOverrides, e2eOpenPath } from './e2e';
 import { EngineHost } from './engine-host';
 import { applyTheme, installAppMenu } from './menu';
 import { createSenderGuard, installSecurityPolicies } from './security';
@@ -17,6 +17,7 @@ applyE2EOverrides();
 const engine = new EngineHost(() => ({
   cacheDir: join(app.getPath('userData'), 'cache', 'parquet'),
   tempDir: join(app.getPath('userData'), 'cache', 'duckdb-tmp'),
+  ...e2eEngineOverrides(),
 }));
 const assertTrustedSender = createSenderGuard((url) => url.startsWith(rendererOrigin));
 

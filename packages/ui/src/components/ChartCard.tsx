@@ -77,6 +77,11 @@ export interface ChartCardError {
 
 export interface ChartCardProps {
   title: string;
+  /**
+   * Read after the title in the card's accessible name (visually hidden),
+   * e.g. "Line chart, 2 of 4": keeps cards with equal titles distinguishable.
+   */
+  description?: string;
   /** Called with a trimmed, non-empty title when an edit is committed. */
   onRename?: (title: string) => void;
   /** Quiet attribution next to the title, as in History. */
@@ -108,6 +113,7 @@ export interface ChartCardProps {
  */
 export function ChartCard({
   title,
+  description,
   onRename,
   attribution,
   selection,
@@ -123,6 +129,7 @@ export function ChartCard({
   testId,
 }: ChartCardProps) {
   const titleId = useId();
+  const descriptionId = useId();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(title);
   const [over, setOver] = useState(false);
@@ -192,7 +199,12 @@ export function ChartCard({
   } else if (slow) {
     body = <ChartSkeleton />;
   } else if (viewData?.on) {
-    body = <div className="gg-chart-data">{viewData.table}</div>;
+    // Scrolls when long: a focusable, named region so keyboard users can scroll it.
+    body = (
+      <div className="gg-chart-data" role="region" tabIndex={0} aria-label={`${title}${description ? ` (${description})` : ''}: data`}>
+        {viewData.table}
+      </div>
+    );
   } else {
     body = children;
   }
@@ -200,12 +212,17 @@ export function ChartCard({
   return (
     <section
       className={cx('gg-chart-card', over && 'gg-chart-card--drop-target')}
-      aria-labelledby={titleId}
+      aria-labelledby={description ? `${titleId} ${descriptionId}` : titleId}
       aria-busy={status === 'loading'}
       data-testid={testId}
       data-status={slow ? 'loading' : status}
       {...dropHandlers}
     >
+      {description && (
+        <span id={descriptionId} className="gg-visually-hidden">
+          {description}
+        </span>
+      )}
       <header className="gg-chart-card__header">
         {editing ? (
           <input
