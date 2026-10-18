@@ -1,0 +1,429 @@
+{
+  "benchmark": "engine",
+  "method": "GLASSGRID_BENCH_ROWS=<n> vitest run src/engine/bench.test.ts, UV_THREADPOOL_SIZE=8; before = commit 20e7338 (M1), after = branch m2-engine; three interleaved runs per side, medians. The machine was shared with another agent (load average ~2 on 2 vCPU), so single numbers vary by up to 2x.",
+  "results": {
+    "1000000": {
+      "before": {
+        "csvBytes": 31857926,
+        "parquetBytes": 3327624,
+        "timingsMs": {
+          "generateCsv": 684.6,
+          "csv.open": 76.1,
+          "csv.firstPage": 23.6,
+          "csv.deepPage": 215,
+          "csv.profile": 192.5,
+          "csv.count": 59,
+          "csv.sortedFirstPage": 613.1,
+          "csv.sortedSecondPage": 5,
+          "csv.sortedDeepPage": 6.2,
+          "csv.sortedMidPage": 6,
+          "csv.filteredSortedFirstPage": 366,
+          "csv.filteredSortedDeepPage": 10.2,
+          "csv.cachedPage": 0.3,
+          "auto.open": 55.2,
+          "auto.deepPage": 205.6,
+          "auto.deepPage2": 114.4,
+          "auto.sortedFirstPage": 546,
+          "auto.sortedSecondPage": 4.3,
+          "auto.sortedDeepPage": 4.1,
+          "auto.sortedMidPage": 4.1,
+          "auto.deepPageAfterFling": 200.9,
+          "parquet.convert": 292.9,
+          "parquet.open": 10.5,
+          "parquet.firstPage": 8.8,
+          "parquet.deepPage": 8.4,
+          "parquet.profile": 74.1,
+          "parquet.sortedFirstPage": 277.9,
+          "parquet.sortedSecondPage": 4.7,
+          "parquet.sortedDeepPage": 4,
+          "parquet.sortedMidPage": 5.3,
+          "parquet.filteredSortedFirstPage": 116.9
+        },
+        "flings": {
+          "csv.unsorted": {
+            "requests": 30,
+            "aborted": 27,
+            "completedBeforeAbort": 7,
+            "interruptMedianMs": 5.6,
+            "interruptMaxMs": 12,
+            "lastPagesMs": 138.6,
+            "totalMs": 1124.5
+          },
+          "csv.sorted": {
+            "requests": 30,
+            "aborted": 27,
+            "completedBeforeAbort": 27,
+            "interruptMedianMs": 0,
+            "interruptMaxMs": 0,
+            "lastPagesMs": 7.8,
+            "totalMs": 979.2
+          },
+          "csv.sortedColdIndex": {
+            "requests": 30,
+            "aborted": 27,
+            "completedBeforeAbort": 12,
+            "interruptMedianMs": 0.4,
+            "interruptMaxMs": 0.6,
+            "lastPagesMs": 5.8,
+            "totalMs": 981.1
+          },
+          "auto.unsortedRightAfterOpen": {
+            "requests": 30,
+            "aborted": 27,
+            "completedBeforeAbort": 2,
+            "interruptMedianMs": 3.3,
+            "interruptMaxMs": 16.1,
+            "lastPagesMs": 130.1,
+            "totalMs": 1111.3
+          },
+          "parquet.unsorted": {
+            "requests": 30,
+            "aborted": 27,
+            "completedBeforeAbort": 27,
+            "interruptMedianMs": 0,
+            "interruptMaxMs": 0,
+            "lastPagesMs": 8.2,
+            "totalMs": 979.3
+          },
+          "parquet.sorted": {
+            "requests": 30,
+            "aborted": 27,
+            "completedBeforeAbort": 27,
+            "interruptMedianMs": 0,
+            "interruptMaxMs": 0,
+            "lastPagesMs": 5.8,
+            "totalMs": 979.1
+          },
+          "parquet.sortedColdIndex": {
+            "requests": 30,
+            "aborted": 27,
+            "completedBeforeAbort": 22,
+            "interruptMedianMs": 0.3,
+            "interruptMaxMs": 0.5,
+            "lastPagesMs": 6.7,
+            "totalMs": 984.3
+          }
+        }
+      },
+      "after": {
+        "csvBytes": 31857926,
+        "parquetBytes": 3327624,
+        "timingsMs": {
+          "generateCsv": 816.9,
+          "csv.open": 98.3,
+          "csv.firstPage": 43.5,
+          "csv.deepPage": 229.8,
+          "csv.profile": 187.3,
+          "csv.count": 0.2,
+          "csv.sortedFirstPage": 288.5,
+          "csv.sortedSecondPage": 1.2,
+          "csv.sortedDeepPage": 574.9,
+          "csv.sortedMidPage": 5,
+          "csv.filteredSortedFirstPage": 258.6,
+          "csv.filteredSortedDeepPage": 360.9,
+          "csv.cachedPage": 0.5,
+          "auto.open": 79,
+          "auto.deepPage": 292.3,
+          "auto.deepPage2": 7.3,
+          "auto.sortedFirstPage": 50.3,
+          "auto.sortedSecondPage": 0.7,
+          "auto.sortedDeepPage": 267.9,
+          "auto.sortedMidPage": 5.4,
+          "auto.deepPageAfterFling": 7.7,
+          "parquet.convert": 269.5,
+          "parquet.open": 23,
+          "parquet.firstPage": 8.5,
+          "parquet.deepPage": 8.3,
+          "parquet.profile": 71.8,
+          "parquet.sortedFirstPage": 41.5,
+          "parquet.sortedSecondPage": 0.6,
+          "parquet.sortedDeepPage": 262.4,
+          "parquet.sortedMidPage": 5,
+          "parquet.filteredSortedFirstPage": 53.5
+        },
+        "flings": {
+          "csv.unsorted": {
+            "requests": 30,
+            "aborted": 27,
+            "completedBeforeAbort": 7,
+            "interruptMedianMs": 0.3,
+            "interruptMaxMs": 5.9,
+            "lastPagesMs": 150,
+            "totalMs": 1141.4
+          },
+          "csv.sorted": {
+            "requests": 30,
+            "aborted": 27,
+            "completedBeforeAbort": 27,
+            "interruptMedianMs": 0,
+            "interruptMaxMs": 0,
+            "lastPagesMs": 5.4,
+            "totalMs": 976.3
+          },
+          "csv.sortedColdIndex": {
+            "requests": 30,
+            "aborted": 27,
+            "completedBeforeAbort": 13,
+            "interruptMedianMs": 0.4,
+            "interruptMaxMs": 0.7,
+            "lastPagesMs": 5.3,
+            "totalMs": 980.1
+          },
+          "auto.unsortedRightAfterOpen": {
+            "requests": 30,
+            "aborted": 27,
+            "completedBeforeAbort": 20,
+            "interruptMedianMs": 0.3,
+            "interruptMaxMs": 0.3,
+            "lastPagesMs": 8.5,
+            "totalMs": 990.4
+          },
+          "parquet.unsorted": {
+            "requests": 30,
+            "aborted": 27,
+            "completedBeforeAbort": 27,
+            "interruptMedianMs": 0,
+            "interruptMaxMs": 0,
+            "lastPagesMs": 9,
+            "totalMs": 980.5
+          },
+          "parquet.sorted": {
+            "requests": 30,
+            "aborted": 27,
+            "completedBeforeAbort": 27,
+            "interruptMedianMs": 0,
+            "interruptMaxMs": 0,
+            "lastPagesMs": 5.7,
+            "totalMs": 978.6
+          },
+          "parquet.sortedColdIndex": {
+            "requests": 30,
+            "aborted": 27,
+            "completedBeforeAbort": 22,
+            "interruptMedianMs": 0.4,
+            "interruptMaxMs": 0.4,
+            "lastPagesMs": 6.1,
+            "totalMs": 983.7
+          }
+        }
+      }
+    },
+    "10000000": {
+      "before": {
+        "csvBytes": 328578927,
+        "parquetBytes": 32864404,
+        "timingsMs": {
+          "generateCsv": 6197.4,
+          "csv.open": 70.2,
+          "csv.firstPage": 37.8,
+          "csv.deepPage": 2501.4,
+          "csv.profile": 1748.7,
+          "csv.count": 532.5,
+          "csv.sortedFirstPage": 6043.1,
+          "csv.sortedSecondPage": 10.1,
+          "csv.sortedDeepPage": 7.7,
+          "csv.sortedMidPage": 7,
+          "csv.filteredSortedFirstPage": 4019.6,
+          "csv.filteredSortedDeepPage": 10.4,
+          "csv.cachedPage": 0.3,
+          "auto.open": 60.9,
+          "auto.deepPage": 3481.1,
+          "auto.deepPage2": 1157.1,
+          "auto.sortedFirstPage": 2510.4,
+          "auto.sortedSecondPage": 9.2,
+          "auto.sortedDeepPage": 8.1,
+          "auto.sortedMidPage": 5.3,
+          "auto.deepPageAfterFling": 2671.4,
+          "parquet.convert": 2251.9,
+          "parquet.open": 12.8,
+          "parquet.firstPage": 11.9,
+          "parquet.deepPage": 15.3,
+          "parquet.profile": 682.8,
+          "parquet.sortedFirstPage": 2460.8,
+          "parquet.sortedSecondPage": 5.7,
+          "parquet.sortedDeepPage": 5.4,
+          "parquet.sortedMidPage": 4.9,
+          "parquet.filteredSortedFirstPage": 1079.1
+        },
+        "flings": {
+          "csv.unsorted": {
+            "requests": 30,
+            "aborted": 27,
+            "completedBeforeAbort": 1,
+            "interruptMedianMs": 4.5,
+            "interruptMaxMs": 12.9,
+            "lastPagesMs": 1969,
+            "totalMs": 2956.2
+          },
+          "csv.sorted": {
+            "requests": 30,
+            "aborted": 27,
+            "completedBeforeAbort": 27,
+            "interruptMedianMs": 0,
+            "interruptMaxMs": 0,
+            "lastPagesMs": 5.9,
+            "totalMs": 976.9
+          },
+          "csv.sortedColdIndex": {
+            "requests": 30,
+            "aborted": 27,
+            "completedBeforeAbort": 0,
+            "interruptMedianMs": 0.4,
+            "interruptMaxMs": 0.6,
+            "lastPagesMs": 4896,
+            "totalMs": 5865.9
+          },
+          "auto.unsortedRightAfterOpen": {
+            "requests": 30,
+            "aborted": 27,
+            "completedBeforeAbort": 0,
+            "interruptMedianMs": 5.8,
+            "interruptMaxMs": 16.4,
+            "lastPagesMs": 1852.7,
+            "totalMs": 2843.1
+          },
+          "parquet.unsorted": {
+            "requests": 30,
+            "aborted": 27,
+            "completedBeforeAbort": 27,
+            "interruptMedianMs": 0,
+            "interruptMaxMs": 0,
+            "lastPagesMs": 9.6,
+            "totalMs": 984.6
+          },
+          "parquet.sorted": {
+            "requests": 30,
+            "aborted": 27,
+            "completedBeforeAbort": 27,
+            "interruptMedianMs": 0,
+            "interruptMaxMs": 0,
+            "lastPagesMs": 5.4,
+            "totalMs": 977.3
+          },
+          "parquet.sortedColdIndex": {
+            "requests": 30,
+            "aborted": 27,
+            "completedBeforeAbort": 0,
+            "interruptMedianMs": 0.3,
+            "interruptMaxMs": 0.5,
+            "lastPagesMs": 1348.4,
+            "totalMs": 2328.8
+          }
+        }
+      },
+      "after": {
+        "csvBytes": 328578927,
+        "parquetBytes": 32864404,
+        "timingsMs": {
+          "generateCsv": 6173.4,
+          "csv.open": 93.9,
+          "csv.firstPage": 41.3,
+          "csv.deepPage": 2121.6,
+          "csv.profile": 1722.3,
+          "csv.count": 0.3,
+          "csv.sortedFirstPage": 2337.4,
+          "csv.sortedSecondPage": 1,
+          "csv.sortedDeepPage": 6282.8,
+          "csv.sortedMidPage": 6.6,
+          "csv.filteredSortedFirstPage": 2605.8,
+          "csv.filteredSortedDeepPage": 3755.6,
+          "csv.cachedPage": 0.4,
+          "auto.open": 70.1,
+          "auto.deepPage": 2247,
+          "auto.deepPage2": 11.1,
+          "auto.sortedFirstPage": 240,
+          "auto.sortedSecondPage": 0.9,
+          "auto.sortedDeepPage": 2618.4,
+          "auto.sortedMidPage": 5.1,
+          "auto.deepPageAfterFling": 16,
+          "parquet.convert": 2134,
+          "parquet.open": 26.3,
+          "parquet.firstPage": 10.6,
+          "parquet.deepPage": 8.9,
+          "parquet.profile": 644.7,
+          "parquet.sortedFirstPage": 275.7,
+          "parquet.sortedSecondPage": 0.5,
+          "parquet.sortedDeepPage": 2506.5,
+          "parquet.sortedMidPage": 4.9,
+          "parquet.filteredSortedFirstPage": 238.9
+        },
+        "flings": {
+          "csv.unsorted": {
+            "requests": 30,
+            "aborted": 27,
+            "completedBeforeAbort": 1,
+            "interruptMedianMs": 0.4,
+            "interruptMaxMs": 1,
+            "lastPagesMs": 2267.6,
+            "totalMs": 3256.5
+          },
+          "csv.sorted": {
+            "requests": 30,
+            "aborted": 27,
+            "completedBeforeAbort": 27,
+            "interruptMedianMs": 0,
+            "interruptMaxMs": 0,
+            "lastPagesMs": 5.4,
+            "totalMs": 978.5
+          },
+          "csv.sortedColdIndex": {
+            "requests": 30,
+            "aborted": 27,
+            "completedBeforeAbort": 0,
+            "interruptMedianMs": 0.4,
+            "interruptMaxMs": 0.6,
+            "lastPagesMs": 4820.3,
+            "totalMs": 5791.7
+          },
+          "auto.unsortedRightAfterOpen": {
+            "requests": 30,
+            "aborted": 27,
+            "completedBeforeAbort": 0,
+            "interruptMedianMs": 0.3,
+            "interruptMaxMs": 0.6,
+            "lastPagesMs": 1225,
+            "totalMs": 2205.4
+          },
+          "parquet.unsorted": {
+            "requests": 30,
+            "aborted": 27,
+            "completedBeforeAbort": 27,
+            "interruptMedianMs": 0,
+            "interruptMaxMs": 0,
+            "lastPagesMs": 22.3,
+            "totalMs": 1007.6
+          },
+          "parquet.sorted": {
+            "requests": 30,
+            "aborted": 27,
+            "completedBeforeAbort": 27,
+            "interruptMedianMs": 0,
+            "interruptMaxMs": 0,
+            "lastPagesMs": 5.7,
+            "totalMs": 984.9
+          },
+          "parquet.sortedColdIndex": {
+            "requests": 30,
+            "aborted": 27,
+            "completedBeforeAbort": 0,
+            "interruptMedianMs": 0.4,
+            "interruptMaxMs": 1,
+            "lastPagesMs": 1336.6,
+            "totalMs": 2326.9
+          }
+        }
+      }
+    }
+  },
+  "machine": {
+    "platform": "linux",
+    "arch": "x64",
+    "cpuModel": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "cpuCount": 2,
+    "totalMemBytes": 8419655680,
+    "uvThreadpoolSize": "8"
+  },
+  "notes": [
+    "'after' csv.count (0.2 ms) was served by a row-count shortcut that was removed before commit 46773d4; unfiltered counts run as in M1 (about 60 ms at 1M and 530 ms at 10M rows on CSV)."
+  ]
+}
