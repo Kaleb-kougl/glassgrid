@@ -121,6 +121,43 @@ const api = {
     return { written, ...reread };
   },
 
+  /**
+   * Parquet through the signed extension served from this origin (the web
+   * demo's /duckdb-extensions, apps/web/public): LOAD before the lock,
+   * `read_parquet` over HTTP, and the CSV-to-Parquet cache in OPFS (COPY …
+   * (FORMAT parquet) through a sync access handle), read back by a new worker.
+   */
+  parquet: async (path: string, rows: number) => {
+    const options = { extensionRepository: `${location.origin}/duckdb-extensions` };
+    const csv = fixtureFile(rows, 'to-parquet.csv');
+    const first = await withEngine(options, async (engine, info) => {
+      const source = await engine.registerUrl(path);
+      const { table } = await engine.open(source.handle);
+      const count = await engine.count(table.id);
+      const page = await engine.pageFetcher(table.id, { sort: [{ column: 'amount', direction: 'desc' }] })(0, 3);
+      const bar = await engine.aggregate(table.id, { mark: 'bar', x: { column: 'category' } }, { viewId: 'chart:bar' });
+      const bars = [...(bar.table.getChild('y') ?? [])].map(Number);
+      const opened = await engine.open((await engine.registerFile(csv)).handle, { parquet: 'never' });
+      const converted = await engine.ensureParquetCache(opened.table.id);
+      const afterConvert = await engine.count(opened.table.id);
+      return {
+        info,
+        sample: { fileName: source.fileName, sizeBytes: source.sizeBytes, columns: table.columns, rowCount: count.rowCount, firstAmounts: [...(page.table.getChild('amount') ?? [])].map(Number), barTotal: bars.reduce((a, b) => a + b, 0) },
+        cache: { sizeBytes: converted.sizeBytes, usingParquetCache: converted.table.usingParquetCache, rowCount: afterConvert.rowCount },
+      };
+    });
+    // A new worker (as after a reload) opens the same file from the cached copy. One worker at a time:
+    // an OPFS sync access handle locks its file (two tabs on one cached copy: see docs/m4-engine-portability.md).
+    const reread = await withEngine(options, async (engine) => {
+      const again = await engine.open((await engine.registerFile(csv)).handle);
+      const counted = await engine.count(again.table.id);
+      await engine.closeTable(again.table.id);
+      await engine.clearCache('all');
+      return { usingParquetCache: again.table.usingParquetCache, rowCount: counted.rowCount };
+    });
+    return { ...first, cache: { ...first.cache, reread } };
+  },
+
   /** The M4 browser bench (see bench.ts). */
   bench: (csvPath: string, parquetPath: string | null, runs: number): Promise<BenchResult> => runBench(csvPath, parquetPath, runs),
 };

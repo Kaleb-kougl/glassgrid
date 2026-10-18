@@ -13,6 +13,9 @@ async function ready(page: Page): Promise<void> {
 }
 
 test.beforeEach(async ({ page }) => {
+  page.on('response', (response) => {
+    if (response.status() >= 400) console.error(`[http] ${response.status()} ${response.url()}`);
+  });
   page.on('console', (message) => {
     if (message.type() === 'error') console.error(`[page] ${message.text()}`);
   });
@@ -85,4 +88,17 @@ test('keeps cache files in OPFS: DuckDB writes a temp file, it is renamed, and a
   expect(result.read).toMatchObject({ ok: true, detail: { listed: ['rows.csv'], rows: [[10000, 49995000, 'row 9999']] } });
   expect(result.clean).toMatchObject({ ok: true });
   expect((result.clean.detail['listed'] as string[]).includes('selftest')).toBe(false);
+});
+
+test('loads the signed Parquet extension from this origin: read_parquet over HTTP, and the OPFS Parquet cache', async ({ page }) => {
+  const result = await page.evaluate(({ path, rows }) => globalThis.gg.parquet(path, rows), { path: '/fixture-2000.parquet', rows: 20_000 });
+  console.info(JSON.stringify(result));
+  expect(result.info.capabilities.parquet).toBe(true);
+  expect(result.info.extensionErrors).toEqual([]);
+  expect(result.sample).toMatchObject({ fileName: 'fixture-2000.parquet', rowCount: 2000, barTotal: 2000 });
+  expect(result.sample.columns.map((column: { name: string }) => column.name)).toEqual(['id', 'category', 'amount', 'created_on']);
+  expect(result.sample.firstAmounts).toHaveLength(3);
+  expect(result.sample.firstAmounts[0]).toBeGreaterThanOrEqual(result.sample.firstAmounts[1] ?? Infinity);
+  expect(result.cache).toMatchObject({ usingParquetCache: true, rowCount: 20_000, reread: { usingParquetCache: true, rowCount: 20_000 } });
+  expect(result.cache.sizeBytes).toBeGreaterThan(0);
 });

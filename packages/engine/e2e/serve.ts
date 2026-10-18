@@ -4,7 +4,8 @@ import { extname, join, normalize, resolve, sep } from 'node:path';
 
 /*
  * A static server for the engine's browser test page: e2e/.out (the Vite
- * build) and e2e/.samples (generated datasets), with HEAD, Range requests
+ * build), e2e/.samples (generated datasets) and /duckdb-extensions/ (the
+ * signed Parquet extension the web demo serves, from apps/web/public), with HEAD, Range requests
  * and Last-Modified, as DuckDB-WASM's HTTP file system and the browser
  * fingerprint need. `GLASSGRID_COI=1` adds the cross-origin isolation
  * headers (COOP/COEP) to check what changes with them.
@@ -13,6 +14,8 @@ import { extname, join, normalize, resolve, sep } from 'node:path';
  */
 const port = Number(process.argv[2] ?? process.env['PORT'] ?? 4179);
 const roots = [resolve(import.meta.dirname, '.out'), resolve(import.meta.dirname, '.samples')];
+/** The web demo's public folder, for /duckdb-extensions/ only. */
+const webPublic = resolve(import.meta.dirname, '..', '..', '..', 'apps', 'web', 'public');
 const types: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -28,7 +31,8 @@ const isolated = process.env['GLASSGRID_COI'] === '1';
 createServer((request, response) => {
   const url = new URL(request.url ?? '/', 'http://localhost');
   const relative = normalize(decodeURIComponent(url.pathname === '/' ? '/index.html' : url.pathname)).replace(/^([/\\])+/, '');
-  const file = roots.flatMap((root) => {
+  const searched = relative.startsWith(`duckdb-extensions${sep}`) ? [webPublic] : roots;
+  const file = searched.flatMap((root) => {
     const candidate = join(root, relative);
     return candidate.startsWith(root + sep) && existsSync(candidate) && statSync(candidate).isFile() ? [candidate] : [];
   })[0];
