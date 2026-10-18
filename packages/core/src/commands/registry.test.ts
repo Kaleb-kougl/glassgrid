@@ -166,7 +166,22 @@ describe('registration and listing', () => {
   it('lists every command with tier, MCP exposure and JSON Schema', () => {
     const { registry } = testWorkspace();
     const list = registry.list();
-    expect(list.map((info) => info.name)).toEqual(['openFile', 'setColumnType', 'undo', 'redo']);
+    expect(list.map((info) => info.name)).toEqual([
+      'openFile',
+      'setColumnType',
+      'sortGrid',
+      'setFilter',
+      'clearFilter',
+      'addChart',
+      'removeChart',
+      'renameChart',
+      'setShelf',
+      'undo',
+      'redo',
+    ]);
+    for (const name of ['sortGrid', 'setFilter', 'clearFilter', 'addChart', 'removeChart', 'renameChart', 'setShelf']) {
+      expect(list.find((info) => info.name === name), name).toMatchObject({ tier: 'edit', mcp: { exposed: true } });
+    }
 
     const setType = list.find((info) => info.name === 'setColumnType');
     expect(setType).toMatchObject({ tier: 'edit', mcp: { exposed: true } });

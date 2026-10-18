@@ -8,3 +8,6 @@ export * from './all.js';
 export * from './builtins/open-file.js';
 export * from './builtins/set-column-type.js';
 export * from './builtins/history.js';
+export * from './builtins/grid.js';
+export * from './builtins/filters.js';
+export * from './builtins/charts.js';

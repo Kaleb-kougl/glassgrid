@@ -25,6 +25,9 @@ export type ChartId = z.infer<typeof ChartIdSchema>;
 export const ViewIdSchema = SafeIdSchema;
 export type ViewId = z.infer<typeof ViewIdSchema>;
 
+/** The view id of the data grid's own selection. */
+export const GRID_VIEW_ID = 'grid';
+
 export const DataSourceSchema = z.strictObject({
   handleId: FileHandleSchema,
   /** Display name only; the path never reaches the renderer. */
@@ -45,9 +48,14 @@ export const ColumnStateSchema = z.strictObject({
 });
 export type ColumnState = z.infer<typeof ColumnStateSchema>;
 
+/** Longest chart title a card shows or a caller may set. */
+export const MAX_CHART_TITLE = 200;
+
 export const ChartStateSchema = z.strictObject({
   id: ChartIdSchema,
   spec: ChartSpecSchema,
+  /** The card title; absent means "derive one from the spec". */
+  title: z.string().trim().min(1).max(MAX_CHART_TITLE).optional(),
 });
 export type ChartState = z.infer<typeof ChartStateSchema>;
 
