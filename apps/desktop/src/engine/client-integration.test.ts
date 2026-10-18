@@ -151,6 +151,31 @@ describe('EngineClient pages around a type change', () => {
   });
 });
 
+describe('EngineClient cross-filtering', () => {
+  it('prepares cubes at brush start and answers hinted aggregates and counts from them', async () => {
+    await client.clearCache('results');
+    const dimension = { column: 'category', bin: { kind: 'value' as const } };
+    const spec = { mark: 'histogram' as const, x: { column: 'amount', bin: 1000 }, filters: [] };
+    const prepared = await client.prepareCrossfilter(table, { dimension, targets: [{ kind: 'aggregate', spec }, { kind: 'count', filters: [] }] });
+    expect(prepared.cubes).toEqual([
+      { status: 'ready', rows: 50 },
+      { status: 'ready', rows: 5 },
+    ]);
+    expect(requests.at(-1)).toMatchObject({ kind: 'prepareCrossfilter', viewId: 'brush' });
+
+    const brushed = [{ kind: 'in' as const, column: 'category', values: ['alpha', 'echo'] }];
+    const hint = { filter: 0, dimension };
+    const fromCube = await client.aggregate(table, { ...spec, filters: brushed }, { viewId: 'chart:x', crossfilter: hint });
+    const plain = await client.aggregate(table, { ...spec, filters: brushed }, { viewId: 'chart:y' });
+    expect(fromCube.fromCube).toBe(true);
+    expect(plain.fromCube).toBe(false);
+    expect(fromCube.table.toArray().map((row: { y: number }) => row.y)).toEqual(plain.table.toArray().map((row: { y: number }) => row.y));
+    const count = await client.count(table, { viewId: 'status', filters: brushed, crossfilter: hint });
+    expect(count).toMatchObject({ rowCount: (ROWS * 2) / 5, fromCube: true });
+    await expect(client.count(table, { filters: brushed, crossfilter: { filter: -1, dimension } })).rejects.toMatchObject({ code: 'bad_request' });
+  });
+});
+
 describe('EngineClient.closeTable', () => {
   it('frees the table and the id reopens on the next request', async () => {
     const before = h.service.debugState().tables;

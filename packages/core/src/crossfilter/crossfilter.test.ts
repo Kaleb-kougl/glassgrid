@@ -7,7 +7,8 @@ import { cubeSelection } from '../sql/align.js';
 import { compileChartQuery } from '../sql/chart.js';
 import { type WorkspaceState } from '../state/workspace.js';
 import { stateColumns } from './axes.js';
-import { binIndex, formatTemporal } from './brush.js';
+import { binIndex, brushRangeFilter, formatTemporal } from './brush.js';
+import { binStart } from '../sql/bins.js';
 import { filterChips, filterCondition, filterLabel } from './chips.js';
 import { defaultChartSpec } from './defaults.js';
 import { changedSelectionView, crossfilterPlan, effectiveFilters, engineViewId, viewQueries } from './model.js';
@@ -183,11 +184,16 @@ describe('brush', () => {
     expect(store.getState().selections[id]?.clauses[0]?.filter).toEqual({ kind: 'range', column: 'trip_distance', min: 10, minInclusive: true, maxInclusive: false });
   });
 
-  it('snaps explicit widths that are not exact in binary to the doubles the engine compares', () => {
-    expect(binIndex(1.7, 0.1)).toBe(16); // 1.7 / 0.1 is 17, but 17 * 0.1 = 1.7000000000000002 > 1.7
-    expect(binIndex(4.3, 0.1)).toBe(43); // 4.3 / 0.1 = 42.99999999999999, but 43 * 0.1 = 4.3
-    expect(binIndex(0.3, 0.1)).toBe(2); // 0.3 < 3 * 0.1 = 0.30000000000000004
+  it('snaps to bin starts that select exactly what the histogram draws, also where k * w rounds across an edge', () => {
+    expect(binIndex(1.7, 0.1)).toBe(17); // floor(1.7 / 0.1) = 17 ...
+    expect(17 * 0.1).toBe(1.7000000000000002); // ... but 1.7 < 17 * 0.1,
+    expect(binStart(17, 0.1)).toBe(1.7); // so bin 17 starts at 1.7.
+    expect(binIndex(4.3, 0.1)).toBe(42); // 4.3 / 0.1 = 42.99999999999999 ...
+    expect(binStart(43, 0.1)).toBe(4.300000000000001); // ... so bin 43 starts just above 4.3.
+    expect(binStart(3, 2)).toBe(6);
     expect(binIndex(-0.05, 0.1)).toBe(-1);
+    const filter = brushRangeFilter({ kind: 'width', column: { name: 'v', type: 'float' }, width: 0.1 }, { min: 1.72, max: 4.3 }, 'x');
+    expect(filter).toMatchObject({ min: 1.7, max: 4.300000000000001 });
   });
 
   it('snaps time brushes to buckets and writes them as DuckDB text', async () => {

@@ -1,6 +1,8 @@
 import { tableFromIPC, type Table } from 'apache-arrow';
 import {
   AggregateSpecSchema,
+  CrossfilterHintSchema,
+  CubeTargetSchema,
   ENGINE_PORT_WINDOW_MESSAGE,
   EngineResponseSchema,
   RequestFiltersSchema,
@@ -10,6 +12,10 @@ import {
   type CacheScope,
   type ColumnTypeOverride,
   type ColumnTypeResult,
+  type CrossfilterDimension,
+  type CrossfilterHint,
+  type CubeTarget,
+  type PreparedCube,
   type TableColumnProfile,
   type EngineEvent,
   type EngineReply,
@@ -73,6 +79,15 @@ export interface FilteredQueryOptions extends QueryOptions {
   filters?: readonly FilterInput[];
 }
 
+export interface CrossfilterQueryOptions {
+  /**
+   * While another view is brushed: which filter is its selection and how it
+   * bins its column (`viewQueries(state, { activeView }).…crossfilter`). The
+   * engine may then answer from a cube; the result is the same.
+   */
+  crossfilter?: CrossfilterHint | null;
+}
+
 interface Timed {
   /** Time spent inside the engine, as reported by the engine. */
   engineMs: number;
@@ -90,10 +105,20 @@ export interface AggregateResult extends Timed {
   mark: Mark;
   /** A scatter spec had too many points, so a heatmap came back instead. */
   fellBackToHeatmap: boolean;
+  /** Answered from a cross-filter cube (always set by the client; optional so test doubles may omit it). */
+  fromCube?: boolean;
 }
 
 export interface CountResult extends Timed {
   rowCount: number;
+  /** Answered from a cross-filter cube (always set by the client; optional so test doubles may omit it). */
+  fromCube?: boolean;
+}
+
+export interface PrepareCrossfilterResult {
+  /** One entry per target, in order: `ready` with its cells, or `skipped` with the reason. */
+  cubes: PreparedCube[];
+  engineMs: number;
 }
 
 export interface ProfileResult extends Timed {
@@ -213,10 +238,10 @@ export class EngineClient {
     return { table: tableFromIPC(reply.ipc), engineMs: reply.engineMs, cached: reply.cached };
   }
 
-  async count(table: TableId, options: FilteredQueryOptions = {}): Promise<CountResult> {
-    const body = { kind: 'count' as const, table, ...this.filters(options) };
+  async count(table: TableId, options: FilteredQueryOptions & CrossfilterQueryOptions = {}): Promise<CountResult> {
+    const body = { kind: 'count' as const, table, ...this.filters(options), ...this.crossfilter(options) };
     const reply = await this.call(this.viewScoped(body, options), 'count', options);
-    return { rowCount: reply.rowCount, engineMs: reply.engineMs, cached: reply.cached };
+    return { rowCount: reply.rowCount, engineMs: reply.engineMs, cached: reply.cached, fromCube: reply.fromCube === true };
   }
 
   /**
@@ -347,16 +372,37 @@ export class EngineClient {
    * `viewId: 'chart:<id>'` per chart card, so a newer request (e.g. while
    * brushing) supersedes the stale one.
    */
-  async aggregate(table: TableId, spec: AggregateSpecInput, options: QueryOptions = {}): Promise<AggregateResult> {
+  async aggregate(table: TableId, spec: AggregateSpecInput, options: QueryOptions & CrossfilterQueryOptions = {}): Promise<AggregateResult> {
     const parsed = parseOrReject(AggregateSpecSchema.safeParse(spec), 'chart spec');
-    const reply = await this.call(this.viewScoped({ kind: 'aggregate', table, spec: parsed }, options), 'aggregate', options);
+    const body = { kind: 'aggregate' as const, table, spec: parsed, ...this.crossfilter(options) };
+    const reply = await this.call(this.viewScoped(body, options), 'aggregate', options);
     return {
       table: tableFromIPC(reply.ipc),
       mark: reply.mark,
       fellBackToHeatmap: reply.fellBackToHeatmap,
+      fromCube: reply.fromCube === true,
       engineMs: reply.engineMs,
       cached: reply.cached,
     };
+  }
+
+  /**
+   * At brush start (pointer down): build the cubes the other views will need
+   * (`crossfilterPlan(state, chartId)` gives the dimension and targets), so
+   * the brush's commit is answered from them. Use one `viewId` for brushing
+   * (default `brush`): a newer prepare supersedes this one. Builds already
+   * running finish anyway and stay cached.
+   */
+  async prepareCrossfilter(
+    table: TableId,
+    plan: { dimension: CrossfilterDimension; targets: readonly CubeTarget[] },
+    options: QueryOptions = {},
+  ): Promise<PrepareCrossfilterResult> {
+    const targets = plan.targets.map((target) => parseOrReject(CubeTargetSchema.safeParse(target), 'cross-filter target'));
+    const scoped = { ...options, viewId: options.viewId ?? 'brush' };
+    const body = { kind: 'prepareCrossfilter' as const, table, dimension: plan.dimension, targets };
+    const reply = await this.call(this.viewScoped(body, scoped), 'crossfilterPrepared', scoped);
+    return { cubes: reply.cubes, engineMs: reply.engineMs };
   }
 
   async ensureParquetCache(table: TableId): Promise<ParquetCacheResult> {
@@ -427,12 +473,17 @@ export class EngineClient {
 
   // -------------------------------------------------------------------------
 
+  private crossfilter(options: CrossfilterQueryOptions) {
+    if (!options.crossfilter) return {};
+    return { crossfilter: parseOrReject(CrossfilterHintSchema.safeParse(options.crossfilter), 'cross-filter hint') };
+  }
+
   private filters(options: FilteredQueryOptions) {
     if (!options.filters || options.filters.length === 0) return {};
     return { filters: parseOrReject(RequestFiltersSchema.safeParse(options.filters), 'filters') };
   }
 
-  private viewScoped<B extends { kind: 'profile' | 'rows' | 'count' | 'aggregate' }>(body: B, options: QueryOptions) {
+  private viewScoped<B extends { kind: 'profile' | 'rows' | 'count' | 'aggregate' | 'prepareCrossfilter' }>(body: B, options: QueryOptions) {
     // Requests without a view get a private one, so they never supersede anything.
     const viewId = options.viewId ?? `once-${this.nextId + 1}`;
     const seq = (this.seqs.get(viewId) ?? 0) + 1;

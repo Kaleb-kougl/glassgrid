@@ -425,12 +425,8 @@ export class ChartCompiler {
         if (!isNumericType(column.type)) {
           this.fail('type_mismatch', `A binned dimension needs a numeric column; ${JSON.stringify(column.name)} is ${column.type}.`, 'dimension');
         }
-        // floor(v / w) can land one bin off at an edge; correct it so that bin k holds exactly
-        // k*w <= v < (k+1)*w with the products DuckDB computes, which is how brush filters compare.
-        const w = this.params.double(dimension.bin.width);
-        const v = `CAST(${ref} AS DOUBLE)`;
-        const f = `floor(${v} / ${w})`;
-        return `(${f} + CASE WHEN ${v} >= (${f} + 1) * ${w} THEN 1 WHEN ${v} < ${f} * ${w} THEN -1 ELSE 0 END)`;
+        // The histogram's own bin key; brushes snap to `binStart` bounds, which select exactly these bins.
+        return `floor(CAST(${ref} AS DOUBLE) / ${this.params.double(dimension.bin.width)})`;
       }
     }
   }

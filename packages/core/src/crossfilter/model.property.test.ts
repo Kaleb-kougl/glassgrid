@@ -6,7 +6,7 @@ import { type ChartSpec } from '../spec/chart.js';
 import { type Filter } from '../spec/filter.js';
 import { type TimeUnit } from '../spec/field.js';
 import { cubeSelection } from '../sql/align.js';
-import { parseTemporal, truncateTime, addTime } from '../sql/bins.js';
+import { addTime, binStart, parseTemporal, truncateTime } from '../sql/bins.js';
 import {
   createInitialWorkspaceState,
   GRID_VIEW_ID,
@@ -164,8 +164,9 @@ describe('cross-filter model (property)', () => {
     fc.assert(
       fc.property(
         fc.constantFrom(0.1, 0.25, 0.3, 1, 1.1, 2, 5, 0.05),
-        fc.double({ min: -500, max: 500, noNaN: true }),
-        fc.double({ min: -500, max: 500, noNaN: true }),
+        // Subnormals excluded: below 0, v / w underflows to -0 and lands in bin 0 (see binStart).
+        fc.double({ min: -500, max: 500, noNaN: true }).filter((x) => x === 0 || Math.abs(x) > 1e-300),
+        fc.double({ min: -500, max: 500, noNaN: true }).filter((x) => x === 0 || Math.abs(x) > 1e-300),
         (width, a, b) => {
           const [lo, hi] = a <= b ? [a, b] : [b, a];
           const filter = brushRangeFilter({ kind: 'width', column, width }, { min: a, max: b }, 'x');
@@ -174,16 +175,14 @@ describe('cross-filter model (property)', () => {
           // Contains the brushed values, as the engine compares them.
           expect(filter.min <= lo).toBe(true);
           expect(hi < filter.max || hi === filter.max).toBe(true);
-          // Tight: dropping the first or last bin would lose brushed values.
-          const kMin = Math.round(filter.min / width);
+          // Bounds are bin starts; tight: the first bin holds lo, the last one holds hi (or hi starts the next).
+          const kMin = Math.floor(lo / width) + 0;
           const kMax = Math.round(filter.max / width);
-          expect(kMin * width).toBe(filter.min);
-          expect(kMax * width).toBe(filter.max);
+          expect(binStart(kMin, width)).toBe(filter.min);
+          expect(binStart(kMax, width)).toBe(filter.max);
           expect(kMax > kMin).toBe(true);
-          if (kMax - kMin > 1) {
-            expect(lo < (kMin + 1) * width).toBe(true);
-            expect(hi > (kMax - 1) * width).toBe(true);
-          }
+          const kHi = Math.floor(hi / width);
+          expect(kHi === kMax - 1 || (kHi === kMax && binStart(kMax, width) === hi) || (kMax === kMin + 1 && kHi <= kMin)).toBe(true);
           expect(cubeSelection(filter, { column: 'v', bin: { kind: 'width', width } })).toEqual({ kind: 'bins', min: kMin, max: kMax });
         },
       ),

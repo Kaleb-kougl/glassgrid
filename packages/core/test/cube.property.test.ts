@@ -14,6 +14,7 @@ import {
   compileChartQuery,
   compileCountCubeAnswer,
   compileCountCubeBuild,
+  binStart,
   cubeSelection,
   FilterSchema,
   quoteIdent,
@@ -58,9 +59,9 @@ function nullTests(column: TestColumn): fc.Arbitrary<FilterInput> {
   return fc.constantFrom<FilterInput>({ kind: 'isNull', column: column.name }, { kind: 'notNull', column: column.name });
 }
 
-/** A brush on a width-binned numeric axis: bounds are k * width, min inclusive, max exclusive, either end open. */
+/** A brush on a width-binned numeric axis: bounds are bin starts, min inclusive, max exclusive, either end open. */
 function widthBrush(column: TestColumn): fc.Arbitrary<Brush> {
-  // 0.1 and 0.3 are not exact in binary, so floor(v / w) and k * w disagree at some edges.
+  // 0.1 and 0.3 are not exact in binary, so floor(v / w) and k * w disagree at some edges (binStart handles them).
   return fc.constantFrom(0.1, 0.25, 0.3, 0.5, 1, 2.5, 3).chain((width) => {
     const dimension: CrossfilterDimension = { column: column.name, bin: { kind: 'width', width } };
     const k = fc.option(fc.integer({ min: -70, max: 70 }), { nil: undefined, freq: 5 });
@@ -72,8 +73,8 @@ function widthBrush(column: TestColumn): fc.Arbitrary<Brush> {
         return {
           kind: 'range',
           column: column.name,
-          ...(a === undefined ? {} : { min: a * width }),
-          ...(b === undefined ? {} : { max: b * width }),
+          ...(a === undefined ? {} : { min: binStart(a, width) }),
+          ...(b === undefined ? {} : { max: binStart(b, width) }),
           minInclusive: true,
           maxInclusive: false,
         };
@@ -221,7 +222,7 @@ describe('cross-filter cube property tests (cube answer vs plain SQL)', () => {
     );
   }, TIMEOUT_MS);
 
-  it('bins agree with brush bounds where floor(v / w) is off by one (1.7 / 0.1 < 17 but 1.7 >= 17 * 0.1)', async () => {
+  it('bin-start bounds select exactly the histogram\'s bins where k * w rounds across an edge (17 * 0.1 > 1.7)', async () => {
     const values = [1.7, 3.4, 3.9, 4.3, 6.8, -4.2, -3.6, 0.3, 0.7, 1.6, 1.8, 16.5];
     const table: TestTable = { columns: [{ name: 'v', type: 'decimal' }], rows: values.map((v) => [v]) };
     await loadTable(connection, table);
@@ -231,16 +232,26 @@ describe('cross-filter cube property tests (cube answer vs plain SQL)', () => {
       const build = compileCountCubeBuild(TABLE, [], profile, dimension);
       await buildCube(build);
       for (const value of values) {
-        const k = Math.round(value / width);
+        const k = Math.floor(value / width);
         for (const [lo, hi] of [
           [k, k + 1],
           [k - 1, k],
           [k + 1, k + 2],
           [k - 2, k + 2],
         ] as const) {
-          const selection: FilterInput = { kind: 'range', column: 'v', min: lo * width, max: hi * width, minInclusive: true, maxInclusive: false };
+          const selection: FilterInput = {
+            kind: 'range',
+            column: 'v',
+            min: binStart(lo, width),
+            max: binStart(hi, width),
+            minInclusive: true,
+            maxInclusive: false,
+          };
           const [row] = await runQuery(connection, compileCountCubeAnswer(CUBE, profile, dimension, selection));
-          expect(row?.['row_count'], `width ${width}, bins [${lo}, ${hi})`).toBe(refCount(table, [selection]));
+          const expected = refCount(table, [selection]);
+          expect(row?.['row_count'], `width ${width}, bins [${lo}, ${hi})`).toBe(expected);
+          // ...which are the rows the histogram draws in those bins.
+          expect(expected).toBe(values.filter((v) => Math.floor(v / width) >= lo && Math.floor(v / width) < hi).length);
         }
       }
     }

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { type ChartSpec } from '../spec/chart.js';
 import { isNumericType, isTemporalType, type ColumnType } from '../spec/column.js';
 import { FilterValueSchema, MAX_FILTER_VALUES, RangeBoundSchema, type Filter, type FilterValue, type RangeBound } from '../spec/filter.js';
-import { addTime, parseTemporal, truncateTime } from '../sql/bins.js';
+import { addTime, binStart, parseTemporal, truncateTime } from '../sql/bins.js';
 import { type CubeColumn } from '../sql/cube.js';
 import { ColumnNameSchema, type Selection, type SelectionChannel, type SelectionClause } from '../state/workspace.js';
 import { resolveAxis, type ResolvedAxis } from './axes.js';
@@ -14,7 +14,9 @@ import { resolveAxis, type ResolvedAxis } from './axes.js';
  *
  * - a brush on a binned axis (histogram, heatmap, time buckets) snaps
  *   outwards to bin edges and becomes a half-open range [lo, hi), so it
- *   selects whole bins and a cross-filter cube can answer it exactly;
+ *   selects exactly the rows drawn in those bins and a cross-filter cube can
+ *   answer it exactly (numeric edges are `binStart(k, width)`, which is
+ *   `k * width` except where that product rounds across the edge);
  * - a brush on a raw axis (scatter, a line over raw numbers) is an inclusive
  *   range [min, max];
  * - a click on bars becomes an `in` filter (`notIn` of the other named bars
@@ -104,16 +106,9 @@ function numberValue(value: RangeBound, path: string, column: CubeColumn): numbe
   return value;
 }
 
-/**
- * Index of the bin `[k * width, (k + 1) * width)` holding `value`, with the
- * products computed in doubles, exactly as the engine compares brush bounds
- * (floor(value / width) alone can be one off at an edge).
- */
+/** Index of the bin holding `value`, exactly as the compiler bins (`floor(CAST(v AS DOUBLE) / width)`). */
 export function binIndex(value: number, width: number): number {
-  const k = Math.floor(value / width);
-  if (value >= (k + 1) * width) return k + 1;
-  if (value < k * width) return k - 1;
-  return k;
+  return Math.floor(value / width);
 }
 
 function ordered<T extends number>(a: T | undefined, b: T | undefined): [T | undefined, T | undefined] {
@@ -134,14 +129,16 @@ export function brushRangeFilter(axis: ResolvedAxis, range: BrushRange, path: st
     let kHi: number | undefined;
     if (hi !== undefined) {
       const k = binIndex(hi, w);
-      kHi = k * w === hi ? k : k + 1;
+      // A brush ending exactly where a bin starts does not take that bin.
+      kHi = binStart(k, w) === hi ? k : k + 1;
       if (kLo !== undefined && kHi <= kLo) kHi = kLo + 1;
     }
+    // Bounds are bin starts, so the range holds exactly the rows the chart draws in those bins.
     return {
       kind: 'range',
       column: name,
-      ...(kLo === undefined ? {} : { min: kLo * w }),
-      ...(kHi === undefined ? {} : { max: kHi * w }),
+      ...(kLo === undefined ? {} : { min: binStart(kLo, w) }),
+      ...(kHi === undefined ? {} : { max: binStart(kHi, w) }),
       minInclusive: true,
       maxInclusive: false,
     };

@@ -124,6 +124,8 @@ export function describeEntry(entry: Pick<UndoEntry, 'name' | 'input'>, state?: 
     case 'setMark':
       return `Changed ${chartName(input['chartId'])} to a ${text(input, 'mark')} chart`;
     case 'addChart': {
+      const columns = Array.isArray(input['columns']) ? (input['columns'] as unknown[]).filter((c): c is string => typeof c === 'string') : null;
+      if (columns && typeof input['title'] !== 'string') return `Added a chart of ${columns.join(' and ')}`;
       const spec = input['spec'] as ChartSpec | undefined;
       const title = typeof input['title'] === 'string' ? input['title'] : spec ? defaultChartTitle(spec) : 'chart';
       return `Added chart “${title}”`;

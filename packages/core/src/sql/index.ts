@@ -18,7 +18,9 @@ export {
 } from './chart.js';
 export {
   addTime,
+  adjacentDouble,
   autoTimeUnit,
+  binStart,
   niceBinWidth,
   numericBinCount,
   parseTemporal,

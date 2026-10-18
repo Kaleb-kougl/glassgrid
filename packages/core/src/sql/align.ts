@@ -1,6 +1,6 @@
 import { type CrossfilterDimension } from '../spec/crossfilter.js';
 import { type Filter } from '../spec/filter.js';
-import { parseTemporal, truncateTime } from './bins.js';
+import { binStart, parseTemporal, truncateTime } from './bins.js';
 
 /** How a cube answers a selection on its dimension. */
 export type CubeSelection =
@@ -17,9 +17,9 @@ export type CubeSelection =
  * - `value`: any filter on the column (gb is the value itself).
  * - `time`: a range whose bounds are bucket starts, min inclusive and max
  *   exclusive; or isNull / notNull.
- * - `width`: a range whose bounds are exact multiples of the width
- *   (`k * width` as a double, which is how brushes snap), min inclusive and
- *   max exclusive; or isNull / notNull.
+ * - `width`: a range whose bounds are bin starts (`binStart(k, width)`, how
+ *   brushes snap: the rows of bins k to m - 1 exactly as `floor(v / width)`
+ *   bins them), min inclusive and max exclusive; or isNull / notNull.
  */
 export function cubeSelection(selection: Filter, dimension: CrossfilterDimension): CubeSelection | null {
   if (selection.column !== dimension.column) return null;
@@ -40,8 +40,8 @@ export function cubeSelection(selection: Filter, dimension: CrossfilterDimension
   const index = (bound: number | string | undefined): number | null | undefined => {
     if (bound === undefined) return null;
     if (typeof bound !== 'number') return undefined;
-    const k = Math.round(bound / bin.width);
-    return k * bin.width === bound && Number.isSafeInteger(k) ? k : undefined;
+    const k = Math.round(bound / bin.width) + 0; // + 0 turns -0 into 0
+    return Number.isSafeInteger(k) && binStart(k, bin.width) === bound ? k : undefined;
   };
   const min = index(selection.min);
   const max = index(selection.max);
