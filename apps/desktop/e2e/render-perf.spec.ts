@@ -445,14 +445,19 @@ test.describe('render path', () => {
     const { page } = session;
     test.skip(!(await instrumented(page)), 'needs the render-perf build (windows come from its marks)');
 
-    let profiling = await startProfile(page);
-    const createWindows = await cachedCreates(page, PROFILED);
-    results.profiles['create-heatmap-cached'] = await stopProfile(profiling, createWindows, 'create-heatmap-cached');
+    // A failed profile is logged, not thrown: a failure restarts the worker, which would drop the run's results.
+    try {
+      let profiling = await startProfile(page);
+      const createWindows = await cachedCreates(page, PROFILED);
+      results.profiles['create-heatmap-cached'] = await stopProfile(profiling, createWindows, 'create-heatmap-cached');
 
-    const histogram = await fourCharts(page);
-    profiling = await startProfile(page);
-    const brushWindows = await brushes(page, histogram, PROFILED);
-    results.profiles['brush'] = await stopProfile(profiling, brushWindows, 'brush');
+      const histogram = await fourCharts(page);
+      profiling = await startProfile(page);
+      const brushWindows = await brushes(page, histogram, PROFILED);
+      results.profiles['brush'] = await stopProfile(profiling, brushWindows, 'brush');
+    } catch (error) {
+      console.warn(`[render-perf ${ROWS}] CPU profile failed: ${String(error)}`);
+    }
     for (const [name, summary] of Object.entries(results.profiles)) {
       console.info(`[render-perf ${ROWS}] profile ${name}: ${summary.totalMs.toFixed(1)} ms sampled per interaction; ${JSON.stringify(summary.byCategory)}`);
     }
@@ -463,10 +468,14 @@ test.describe('render path', () => {
     if (!session) throw new Error('Electron app failed to launch');
     const { app, page } = session;
     test.skip(!(await instrumented(page)), 'needs the render-perf build (windows come from its marks)');
-    results.traces['create-heatmap-cached'] = await traced(app, page, 'create-heatmap-cached', () => cachedCreates(page, PROFILED));
-    const histogram = await fourCharts(page);
-    results.traces['brush'] = await traced(app, page, 'brush', () => brushes(page, histogram, PROFILED));
-    results.traces['select'] = await traced(app, page, 'select', () => selects(page, PROFILED));
+    try {
+      results.traces['create-heatmap-cached'] = await traced(app, page, 'create-heatmap-cached', () => cachedCreates(page, PROFILED));
+      const histogram = await fourCharts(page);
+      results.traces['brush'] = await traced(app, page, 'brush', () => brushes(page, histogram, PROFILED));
+      results.traces['select'] = await traced(app, page, 'select', () => selects(page, PROFILED));
+    } catch (error) {
+      console.warn(`[render-perf ${ROWS}] trace failed: ${String(error)}`);
+    }
     for (const [name, summary] of Object.entries(results.traces)) {
       console.info(`[render-perf ${ROWS}] trace ${name}: main thread busy ${summary.busyMs.toFixed(1)} ms per interaction; ${JSON.stringify(summary.byCategory)}`);
     }
@@ -498,6 +507,28 @@ function summarizeCreates(samples: readonly CreateSample[]) {
         }
       : {}),
   };
+}
+
+/** Numbers to 0.01 (ms): the timer resolution is coarser, and the file stays readable. */
+function rounded<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value, (_key, inner: unknown) => (typeof inner === 'number' && !Number.isInteger(inner) ? Math.round(inner * 100) / 100 : inner))) as T;
+}
+
+/** A sample for the baseline file: commit summaries without their component and region maps; the timeline only when asked. */
+function slim(analysis: CreateAnalysis | InteractionAnalysis, timeline: boolean): Record<string, unknown> {
+  const totals = (summary: CommitSummary) => ({
+    count: summary.count,
+    renderMs: summary.renderMs,
+    commitMs: summary.commitMs,
+    layoutEffectsMs: summary.layoutEffectsMs,
+    inspectMs: summary.inspectMs,
+    renders: summary.renders,
+    wasted: summary.wasted,
+  });
+  const out: Record<string, unknown> = { ...analysis, commits: totals(analysis.commits), after: totals(analysis.after) };
+  if ('drag' in analysis) out['drag'] = totals(analysis.drag);
+  if (!timeline) delete out['timeline'];
+  return out;
 }
 
 function commitStats(summaries: readonly CommitSummary[]) {
@@ -540,7 +571,7 @@ function summarizeInteractions(samples: readonly InteractionSample[]) {
 test('records the render benchmark', async () => {
   test.skip(Object.keys(results.create).length === 0, 'no measurements');
   const name = results.instrumented ? 'render-perf' : 'render-perf-plain';
-  const outFile = await writeBaseline(name, {
+  const outFile = await writeBaseline(name, rounded({
     benchmark: name,
     description:
       'Chart create (drop -> new chart drawn -> next frame) per phase, cached (engine result cache) and fresh (new filter each); cross-filter brush with 4 charts; one grid key press. React commits and component renders per interaction (wasted = re-rendered with props equal by value and no state/context change).',
@@ -557,11 +588,12 @@ test('records the render benchmark', async () => {
       profiles: results.profiles,
       traces: results.traces,
     },
+    // Per sample: milestones, segments, work and commit totals (component tallies are in the summary; timelines for the first 3).
     samples: {
-      create: results.create,
-      brush: results.brush,
-      select: results.select,
+      create: Object.fromEntries(Object.entries(results.create).map(([key, samples]) => [key, samples.map((sample, i) => ({ ...sample, ...(sample.analysis ? { analysis: slim(sample.analysis, i < 3) } : {}) }))])),
+      brush: results.brush.map((sample, i) => ({ ...sample, ...(sample.analysis ? { analysis: slim(sample.analysis, i < 3) } : {}) })),
+      select: results.select.map((sample, i) => ({ ...sample, ...(sample.analysis ? { analysis: slim(sample.analysis, i < 3) } : {}) })),
     },
-  });
+  }));
   console.info(`render-perf ${ROWS} rows -> ${outFile}`);
 });

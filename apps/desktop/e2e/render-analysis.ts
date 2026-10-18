@@ -75,20 +75,77 @@ export function summarizeCommits(commits: readonly RenderPerfCommit[], from: num
   return summary;
 }
 
+export interface CommitLine {
+  /** Commit start, ms after the input event. */
+  at: number;
+  renderMs: number;
+  commitMs: number;
+  renders: number;
+  wasted: number;
+  /** Rendered components by own render time, most expensive first (at most 8), `name×count`. */
+  top: string[];
+}
+
+/** One line per commit in [from, to]: when, how long, what rendered. */
+export function commitTimeline(commits: readonly RenderPerfCommit[], origin: number, from: number, to: number): CommitLine[] {
+  return commits
+    .filter((commit) => commit.end >= from && commit.end <= to)
+    .map((commit) => {
+      const byName = new Map<string, { count: number; ms: number }>();
+      for (const render of commit.components) {
+        const entry = byName.get(render.name) ?? { count: 0, ms: 0 };
+        entry.count += 1;
+        entry.ms += render.selfMs;
+        byName.set(render.name, entry);
+      }
+      return {
+        at: commit.start - origin,
+        renderMs: commit.renderMs,
+        commitMs: commit.end - commit.start,
+        renders: commit.components.length,
+        wasted: commit.components.filter((render) => render.wasted).length,
+        top: [...byName]
+          .sort((a, b) => b[1].ms - a[1].ms)
+          .slice(0, 8)
+          .map(([name, entry]) => `${name}×${entry.count}`),
+      };
+    });
+}
+
 const first = (events: readonly RenderPerfEvent[], test: (event: RenderPerfEvent) => boolean, after = -Infinity) =>
   events.find((event) => event.t >= after && test(event));
 const last = (events: readonly RenderPerfEvent[], test: (event: RenderPerfEvent) => boolean) => events.filter(test).at(-1);
 const sumMs = (events: readonly RenderPerfEvent[], test: (event: RenderPerfEvent) => boolean) =>
   events.filter(test).reduce((sum, event) => sum + (event.ms ?? 0), 0);
 
-/** Consecutive milestones in time order: `a→b` durations. */
-function segmentsOf(milestones: Record<string, number>): Record<string, number> {
-  const ordered = Object.entries(milestones).sort((a, b) => a[1] - b[1]);
+/**
+ * The order of a create's milestones (the draw sits inside the commit that
+ * drew it, or after the data commit when a chart draws in a passive effect).
+ * Shared with render-perf-medians.ts, which re-derives segments from saved milestones.
+ */
+export function createChain(milestones: Record<string, number>): string[] {
+  const head = ['input', 'dispatch', 'notify', 'render', 'shell-commit-start', 'shell-commit-end', 'query', 'request', 'reply', 'validated', 'decoded', 'resolved', 'data-render', 'data-commit-start'];
+  const drawnInData = milestones['draw-commit-start'] === undefined && (milestones['drawn'] ?? 0) <= (milestones['data-commit-end'] ?? -Infinity);
+  const tail =
+    milestones['draw-commit-start'] !== undefined
+      ? ['data-commit-end', 'draw-commit-start', 'drawn', 'draw-commit-end']
+      : drawnInData
+        ? ['drawn', 'data-commit-end']
+        : ['data-commit-end', 'drawn'];
+  return [...head, ...tail, 'raf', 'presented'];
+}
+
+/** A brush or key press: the chain from the input to the frame after the last draw (`last-reply` is reported, not chained). */
+export const INTERACTION_CHAIN = ['input', 'dispatch', 'notify', 'render', 'first-commit-start', 'first-commit-end', 'first-request', 'last-drawn', 'raf', 'presented'];
+
+/** `a→b` durations between consecutive milestones of `chain` that are present. */
+export function segmentsOf(milestones: Record<string, number>, chain: readonly string[]): Record<string, number> {
+  const present = chain.filter((name) => milestones[name] !== undefined);
   const segments: Record<string, number> = {};
-  for (let i = 1; i < ordered.length; i += 1) {
-    const [a, ta] = ordered[i - 1] as [string, number];
-    const [b, tb] = ordered[i] as [string, number];
-    segments[`${a}→${b}`] = tb - ta;
+  for (let i = 1; i < present.length; i += 1) {
+    const a = present[i - 1] ?? '';
+    const b = present[i] ?? '';
+    segments[`${a}→${b}`] = (milestones[b] ?? 0) - (milestones[a] ?? 0);
   }
   return segments;
 }
@@ -143,6 +200,8 @@ export interface CreateAnalysis {
   after: CommitSummary;
   /** Commits while the column was dragged, before the drop (drag start, drag over the panel). */
   drag: CommitSummary;
+  /** Every commit from the drop to the end of the recording. */
+  timeline: CommitLine[];
 }
 
 /** One chart create (drop -> new chart drawn -> next frame). */
@@ -199,7 +258,7 @@ export function analyzeCreate(recording: RenderPerfRecording, chartId: string): 
     cached: reply.cached === true,
     bytes: reply.bytes ?? 0,
     milestones,
-    segments: segmentsOf(milestones),
+    segments: segmentsOf(milestones, createChain(milestones)),
     work: {
       shellRenderMs: shell?.renderMs ?? 0,
       shellCommitMs: shell ? shell.end - shell.start : 0,
@@ -223,6 +282,7 @@ export function analyzeCreate(recording: RenderPerfRecording, chartId: string): 
     commits: summarizeCommits(commits, input, presented),
     after: summarizeCommits(commits, presented + 1e-6, Infinity),
     drag: summarizeCommits(commits, -Infinity, input - 1e-6),
+    timeline: commitTimeline(commits, input, input, Infinity),
   };
 }
 
@@ -245,6 +305,8 @@ export interface InteractionAnalysis {
   totals: { toFirstCommit: number; toPresented: number };
   commits: CommitSummary;
   after: CommitSummary;
+  /** Every commit from the input to the end of the recording. */
+  timeline: CommitLine[];
 }
 
 /**
@@ -300,7 +362,7 @@ export function analyzeInteraction(recording: RenderPerfRecording): InteractionA
   const presented = frame.presented ?? settled;
   return {
     milestones,
-    segments: segmentsOf(milestones),
+    segments: segmentsOf(milestones, INTERACTION_CHAIN),
     work: {
       validateMs,
       decodeMs: sumMs(events, (event) => event.type === 'decoded'),
@@ -315,6 +377,7 @@ export function analyzeInteraction(recording: RenderPerfRecording): InteractionA
     totals: { toFirstCommit: (firstCommit?.end ?? input) - input, toPresented: presented - input },
     commits: summarizeCommits(commits, input, presented),
     after: summarizeCommits(commits, presented + 1e-6, Infinity),
+    timeline: commitTimeline(commits, input, input, Infinity),
   };
 }
 
@@ -512,9 +575,15 @@ export function summarizeProfile(profile: CpuProfile, windows: readonly (readonl
   };
 }
 
-/** Time of the first sample inside a function called `name` (profile clock, µs). */
+/** Time of the first sample inside a function called `name`, or in anything it calls (profile clock, µs). */
 export function firstSampleIn(profile: CpuProfile, name: string): number | null {
-  const ids = new Set(profile.nodes.filter((node) => node.callFrame.functionName === name).map((node) => node.id));
+  const ids = new Set<number>();
+  const byId = new Map(profile.nodes.map((node) => [node.id, node]));
+  const mark = (id: number) => {
+    ids.add(id);
+    for (const child of byId.get(id)?.children ?? []) mark(child);
+  };
+  for (const node of profile.nodes) if (node.callFrame.functionName === name) mark(node.id);
   let t = profile.startTime;
   for (let i = 0; i < profile.samples.length; i += 1) {
     t += profile.timeDeltas[i] ?? 0;
@@ -544,6 +613,12 @@ export interface TraceSummary {
   byCategory: Record<string, number>;
   /** Main-thread busy time per interaction (top-level tasks clipped to the windows). */
   busyMs: number;
+  /**
+   * Style and layout forced by script (an UpdateLayoutTree / Layout inside a
+   * FunctionCall, timer, rAF callback, microtask or event: a read of layout
+   * after a write), per interaction; the rest ran in the frame.
+   */
+  forced: { styleMs: number; layoutMs: number; count: number };
 }
 
 const TRACE_CATEGORIES: [RegExp, string][] = [
@@ -555,6 +630,9 @@ const TRACE_CATEGORIES: [RegExp, string][] = [
   [/^(FunctionCall|EvaluateScript|v8\.|V8\.|TimerFire|FireAnimationFrame|RunMicrotasks|FireIdleCallback|XHR|ScheduleStyleInvalidation|v8)/, 'script'],
   [/^(RunTask|ThreadControllerImpl::RunTask|TaskQueueManager|SequenceManager)/, 'task overhead'],
 ];
+
+/** Trace events that run script: style or layout inside one was forced by a read. */
+const SCRIPT_EVENT = /^(FunctionCall|EvaluateScript|v8\.callFunction|V8\.Execute|EventDispatch|TimerFire|FireAnimationFrame|RunMicrotasks|FireIdleCallback)/;
 
 function traceCategory(name: string): string {
   for (const [pattern, category] of TRACE_CATEGORIES) if (pattern.test(name)) return category;
@@ -579,10 +657,14 @@ export function summarizeTrace(events: readonly TraceEvent[], thread: { pid: num
   const inWindow = (ts: number) => windows.some(([from, to]) => ts >= from && ts < to);
   const clipped = (from: number, to: number) => windows.reduce((sum, [a, b]) => sum + Math.max(0, Math.min(to, b) - Math.max(from, a)), 0);
   // Nesting: a stack of open spans; each span's self time is its duration minus its direct children's.
-  const stack: { event: TraceEvent; end: number; children: number }[] = [];
-  const close = (item: { event: TraceEvent; end: number; children: number }) => {
+  const stack: { event: TraceEvent; end: number; children: number; forced: boolean }[] = [];
+  const forced = { styleUs: 0, layoutUs: 0, count: 0 };
+  const close = (item: { event: TraceEvent; end: number; children: number; forced: boolean }) => {
     const selfUs = (item.event.dur ?? 0) - item.children;
-    if (inWindow(item.event.ts)) self.set(item.event.name, (self.get(item.event.name) ?? 0) + selfUs);
+    if (!inWindow(item.event.ts)) return;
+    self.set(item.event.name, (self.get(item.event.name) ?? 0) + selfUs);
+    if (item.forced && item.event.name === 'Layout') forced.layoutUs += selfUs;
+    if (item.forced && item.event.name === 'UpdateLayoutTree') forced.styleUs += selfUs;
   };
   for (const event of spans) {
     const end = event.ts + (event.dur ?? 0);
@@ -593,7 +675,9 @@ export function summarizeTrace(events: readonly TraceEvent[], thread: { pid: num
     const parent = stack.at(-1);
     if (parent) parent.children += event.dur ?? 0;
     else busy += clipped(event.ts, end);
-    stack.push({ event, end, children: 0 });
+    const isForced = (event.name === 'Layout' || event.name === 'UpdateLayoutTree') && stack.some((item) => SCRIPT_EVENT.test(item.event.name));
+    if (isForced && event.name === 'Layout' && inWindow(event.ts)) forced.count += 1;
+    stack.push({ event, end, children: 0, forced: isForced });
   }
   while (stack.length > 0) {
     const done = stack.pop();
@@ -608,5 +692,6 @@ export function summarizeTrace(events: readonly TraceEvent[], thread: { pid: num
     byEvent: byEvent.slice(0, 30),
     byCategory: Object.fromEntries(Object.entries(byCategory).sort((a, b) => b[1] - a[1])),
     busyMs: busy / 1000 / n,
+    forced: { styleMs: forced.styleUs / 1000 / n, layoutMs: forced.layoutUs / 1000 / n, count: forced.count / n },
   };
 }
