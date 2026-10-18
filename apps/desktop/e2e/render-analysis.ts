@@ -523,7 +523,7 @@ function categoryOf(module: string, functionName: string): string {
   if (module.includes('packages/ui')) return 'ui components';
   if (module.includes('packages/core')) return 'core (state, commands, queries)';
   if (module.includes('render-perf')) return 'instrumentation';
-  if (module.includes('src/renderer')) return 'app (renderer)';
+  if (module.includes('packages/app/src') || module.includes('src/renderer')) return 'app (renderer)';
   if (module === '(native)' || module === '') return 'native/builtins';
   return 'other';
 }

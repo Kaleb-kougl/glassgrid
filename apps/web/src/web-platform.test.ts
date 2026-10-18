@@ -90,6 +90,19 @@ describe('web platform', () => {
     expect(document.querySelector('input[type="file"]')).toBeNull();
     click.mockRestore();
   });
+
+  it('counts the page regaining focus without a file as a cancel (browsers without the cancel event)', async () => {
+    vi.useFakeTimers();
+    const click = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => undefined);
+    const chosen = pickFile(document);
+    vi.advanceTimersByTime(0);
+    window.dispatchEvent(new Event('focus'));
+    vi.advanceTimersByTime(1_000);
+    expect(await chosen).toBeNull();
+    expect(document.querySelector('input[type="file"]')).toBeNull();
+    click.mockRestore();
+    vi.useRealTimers();
+  });
 });
 
 describe('routes', () => {

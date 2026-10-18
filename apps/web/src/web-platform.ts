@@ -24,24 +24,38 @@ export interface WebEngine {
 /** Files the picker offers (CSV and its usual MIME types; Parquet once the WASM engine lands). */
 const ACCEPT = '.csv,.tsv,.txt,text/csv,text/tab-separated-values,text/plain';
 
+/** How long after the page regains focus a picker without `change` counts as cancelled (browsers without `cancel`). */
+const FOCUS_CANCEL_MS = 1_000;
+
 /**
  * A hidden `<input type=file>`: resolves with the chosen file, or null when
- * the person closes the picker (`cancel`, Chrome 113+, Firefox 91+, Safari 16.4+).
+ * the person closes the picker (`cancel`: Chrome 113+, Firefox 91+, Safari
+ * 16.4+; elsewhere, the page regaining focus without a `change`).
  */
 export function pickFile(doc: Document = document, accept = ACCEPT): Promise<File | null> {
   return new Promise((resolve) => {
+    const view = doc.defaultView;
     const input = doc.createElement('input');
     input.type = 'file';
     input.accept = accept;
     input.style.display = 'none';
+    let settled = false;
     const done = (file: File | null) => {
+      if (settled) return;
+      settled = true;
+      view?.removeEventListener('focus', onFocus);
       input.remove();
       resolve(file);
     };
+    const onFocus = () => view?.setTimeout(() => done(input.files?.[0] ?? null), FOCUS_CANCEL_MS);
     input.addEventListener('change', () => done(input.files?.[0] ?? null), { once: true });
     input.addEventListener('cancel', () => done(null), { once: true });
     doc.body.append(input);
     input.click();
+    // Registered after click(): the picker takes focus from the page, which gets it back when it closes.
+    view?.setTimeout(() => {
+      if (!settled) view.addEventListener('focus', onFocus);
+    }, 0);
   });
 }
 
