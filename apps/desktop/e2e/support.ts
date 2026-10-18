@@ -227,6 +227,8 @@ export async function launchApp(csvPath: string, userData: string, env: Record<s
   app.process().stdout?.on('data', (chunk: Buffer) => logs.push(`[stdout] ${chunk.toString()}`));
   app.process().stderr?.on('data', (chunk: Buffer) => logs.push(`[stderr] ${chunk.toString()}`));
   const page = await app.firstWindow();
+  // "Save changes?" on close: Don't Save unless a test says otherwise (a native box would block the run).
+  await answerClosePrompt(app, 'dontSave');
   page.on('console', (message) => {
     logs.push(`[renderer:${message.type()}] ${message.text()}\n`);
     if (message.type() === 'error') rendererErrors.push(message.text());
@@ -258,4 +260,56 @@ export function stats(values: readonly number[]): { n: number; min: number; p50:
     max: sorted.at(-1) ?? Number.NaN,
     mean: sorted.reduce((sum, value) => sum + value, 0) / Math.max(1, sorted.length),
   };
+}
+
+/** Answer main's native Save / Open dialogs with these paths instead of showing them. */
+export async function stubDialogs(app: ElectronApplication, paths: { save?: string; open?: string }): Promise<void> {
+  await app.evaluate(({ dialog }, { save, open }) => {
+    if (save !== undefined) dialog.showSaveDialog = () => Promise.resolve({ canceled: false, filePath: save });
+    if (open !== undefined) dialog.showOpenDialog = () => Promise.resolve({ canceled: false, filePaths: [open] });
+  }, paths);
+}
+
+const CLOSE_BUTTONS = { save: 0, dontSave: 1, cancel: 2 } as const;
+
+/**
+ * Answer main's "Do you want to save the changes…?" box (close-guard.ts)
+ * with a button, without showing it; every message it would have shown is
+ * recorded for `closePrompts`.
+ */
+export async function answerClosePrompt(app: ElectronApplication, button: keyof typeof CLOSE_BUTTONS): Promise<void> {
+  await app.evaluate(({ dialog }, response) => {
+    const record = globalThis as { ggClosePrompts?: string[] };
+    record.ggClosePrompts ??= [];
+    const prompts = record.ggClosePrompts;
+    dialog.showMessageBox = ((...args: unknown[]) => {
+      const options = args.at(-1) as { message?: string };
+      prompts.push(options.message ?? '');
+      return Promise.resolve({ response, checkboxChecked: false });
+    });
+  }, CLOSE_BUTTONS[button]);
+}
+
+/** The close prompts main has shown so far (see `answerClosePrompt`). */
+export async function closePrompts(app: ElectronApplication): Promise<string[]> {
+  return app.evaluate(() => [...((globalThis as { ggClosePrompts?: string[] }).ggClosePrompts ?? [])]);
+}
+
+/**
+ * Click an application-menu item by id, as a person would from the menu or
+ * its accelerator (Playwright's synthetic keys reach the page, not Electron's
+ * menu accelerators). Resolves with the item's accelerator.
+ */
+export async function clickMenuItem(app: ElectronApplication, id: string): Promise<string | undefined> {
+  return app.evaluate(({ Menu }, itemId) => {
+    const item = Menu.getApplicationMenu()?.getMenuItemById(itemId);
+    if (!item) throw new Error(`No menu item ${itemId}`);
+    (item.click as () => void).call(item);
+    return item.accelerator ?? undefined;
+  }, id);
+}
+
+/** Labels of the File → Open Recent submenu. */
+export async function recentMenuLabels(app: ElectronApplication): Promise<string[]> {
+  return app.evaluate(({ Menu }) => Menu.getApplicationMenu()?.getMenuItemById('open-recent')?.submenu?.items.map((item) => item.label) ?? []);
 }

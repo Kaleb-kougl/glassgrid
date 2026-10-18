@@ -6,22 +6,15 @@ import { parseWorkspace, type GlassgridBridge, type WorkspaceSnapshot } from '@g
 import { fingerprintFile } from '@glassgrid/engine';
 import { nodeFiles } from '@glassgrid/engine/native';
 import { writeFixtureCsv } from './csv-fixture';
-import { launchApp } from './support';
+import { launchApp, stubDialogs } from './support';
 
 /*
  * Workspace files through the real main process and preload: Save As, the
  * recent list, reopening a moved project (relative relink), autosave to the
- * recovery folder and finding that snapshot again after the app closed
- * without saving. The renderer UI is wired at integration, so this drives
- * `window.glassgrid.workspace` directly; native dialogs are stubbed in main.
+ * recovery folder and finding that snapshot again after the app was
+ * killed. This drives `window.glassgrid.workspace` directly (the UI on top
+ * is workspace-ui.spec.ts); native dialogs are stubbed in main.
  */
-
-async function stubDialogs(app: ElectronApplication, paths: { save?: string; open?: string }): Promise<void> {
-  await app.evaluate(({ dialog }, { save, open }) => {
-    if (save !== undefined) dialog.showSaveDialog = () => Promise.resolve({ canceled: false, filePath: save });
-    if (open !== undefined) dialog.showOpenDialog = () => Promise.resolve({ canceled: false, filePaths: [open] });
-  }, paths);
-}
 
 test.describe('workspace files', () => {
   let work: string;
@@ -101,9 +94,12 @@ test.describe('workspace files', () => {
     await expect.poll(async () => (await readdir(recoveryDir).catch(() => [])).filter((name) => name.endsWith('.glassgrid')).length, { timeout: 15_000 }).toBe(1);
     expect(parseWorkspace(await readFile(join(moved, 'analysis.glassgrid'), 'utf8')).workspace.selections).toEqual(snapshot.workspace.selections);
 
-    // Close without a renderer close handler: the window closes and the snapshot stays.
-    await app.close();
+    // The app dies without closing its window (a crash): the snapshot stays.
+    const killed = app;
     app = undefined;
+    const exited = new Promise((resolve) => killed.process().once('exit', resolve));
+    killed.process().kill('SIGKILL');
+    await exited;
     expect((await readdir(recoveryDir)).filter((name) => name.endsWith('.glassgrid'))).toHaveLength(1);
 
     const relaunched = await launchApp(csvPath, userData);

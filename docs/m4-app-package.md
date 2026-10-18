@@ -37,7 +37,7 @@ Package entry points (`packages/app/package.json` `exports`):
 
 | Import | What |
 | --- | --- |
-| `@glassgrid/app` | `App`, `Platform` and its parts, `workspaceFilesOf`, `createAppWorkspace`, `appPolicy`, `applyInitialTheme`, theme helpers, `installRenderPerf`, `perfRegion`, `EngineClientLike` and result types, `EngineError`, `isAbandoned`, `AUTOSAVE_DELAY_MS` |
+| `@glassgrid/app` | `App`, `Platform` and its parts, `workspaceFilesOf`, `createAppWorkspace`, `appPolicy`, `applyInitialTheme`, theme helpers, `installRenderPerf`, `perfRegion`, `EngineClientLike` and result types, `EngineError`, `isAbandoned`, workspace-file helpers (`describeMismatch`, `documentTitle`, `isWorkspaceFileName`) |
 | `@glassgrid/app/perf` | performance-timeline names and detail types (the E2E suites read these) |
 | `@glassgrid/app/render-perf-core` | the render-perf recorder; import it first in a shell, and from engine transports (`renderPerf.request/reply/…`) |
 | `@glassgrid/app/app.css` | the main-screen layout |
@@ -91,10 +91,16 @@ export interface PlatformWindow {
   readonly shortcuts: 'mac' | 'pc';
   /** Tell the native shell the theme preference (native frame, View menu ticks). */
   syncTheme?(preference: ThemePreference): void;
-  /** Native application-menu commands. Returns an unsubscribe function. */
-  onMenuCommand?(listener: (command: MenuCommand) => void): () => void;
+  /** A native menu owns ⌘O, ⇧⌘O, ⌘S, ⇧⌘S (the page leaves them alone). */
+  readonly menuShortcuts?: boolean;
+  /** Native application-menu commands (MenuCommand | WorkspaceMenuCommand). Returns an unsubscribe function. */
+  onMenuCommand?(listener: (command: AppMenuCommand) => void): () => void;
   /** The window/page is going away (pagehide today). Returns an unsubscribe function. */
   onBeforeClose(listener: () => void): () => void;
+  /** Veto for closing with unsaved work: answer with core's closeAnswer. */
+  onCloseRequest?(handler: () => CloseAnswer | Promise<CloseAnswer>): () => void;
+  /** Title and edited state for native chrome (window title, macOS represented file and edited dot). */
+  setDocumentChrome?(chrome: DocumentChrome): void;
 }
 
 export interface PlatformCapabilities {
@@ -106,33 +112,9 @@ export interface PlatformCapabilities {
   readonly maxFileBytes: number | null;
 }
 
-export type WorkspaceFileOutcome =
-  | { readonly status: 'done'; readonly displayName: string }
-  | { readonly status: 'cancelled' }
-  | { readonly status: 'failed'; readonly message: string };
-
-export interface WorkspaceFileContext {
-  readonly workspace: AppWorkspace; // store + command registry
-  readonly engine: EngineClientLike;
-}
-
-export interface RecoveryOffer {
-  readonly id: string;
-  readonly displayName: string;
-  readonly savedAt: number; // epoch ms
-}
-
-/** Provisional: implemented by the persistence work. Absent → the UI below stays hidden. */
-export interface WorkspaceFilesApi {
-  save(context: WorkspaceFileContext, options: { saveAs: boolean }): Promise<WorkspaceFileOutcome>;
-  open(context: WorkspaceFileContext): Promise<WorkspaceFileOutcome>;
-  autosave?(state: WorkspaceState): void;
-  readonly recovery?: {
-    check(): Promise<RecoveryOffer | null>;
-    restore(offer: RecoveryOffer, context: WorkspaceFileContext): Promise<WorkspaceFileOutcome>;
-  };
-  onOpenRequest?(listener: () => void): () => void;
-}
+/** core's WorkspaceBridge without the window events (desktop: window.glassgrid.workspace). See m4-persistence.md → UI. */
+export type WorkspaceFilesApi = Pick<WorkspaceBridge, 'save' | 'saveAs' | 'open' | 'openDropped' | 'locateData' | 'cancelOpen'
+  | 'listRecent' | 'listRecovery' | 'restoreRecovery' | 'discardRecovery' | 'updateRecovery' | 'onOpenRequest'>;
 
 export interface Platform {
   readonly name: PlatformName;
@@ -174,8 +156,8 @@ declared once, in `render-perf-core.ts`.
 | `window.syncTheme` | `bridge.setTheme` | absent: the theme follows `prefers-color-scheme` (and a stored override) |
 | `window.onMenuCommand` | `bridge.onMenuCommand` (File → Open, View → Theme) | absent |
 | `window.onBeforeClose` | `pagehide` | `pagehide` |
-| `capabilities` | save: false (until persistence), open from path: true, no size limit | save: false, open from path: false, `maxFileBytes` 2 GiB |
-| `workspaceFiles` | absent (persistence adds it) | absent |
+| `capabilities` | save: true, open from path: true, no size limit | save: false, open from path: false, `maxFileBytes` 2 GiB |
+| `workspaceFiles` | the preload's `window.glassgrid.workspace` | absent |
 
 The app root carries `data-platform` (`mac`/`win`/`linux`/`web`; it used to
 be `darwin`/`linux`/`win32`) and `data-titlebar-inset`; `app.css` keys the
@@ -294,43 +276,13 @@ CPU-profile attribution now counts `packages/app/src` as "app (renderer)".
 
 ### Persistence UI (`m4-persist`)
 
-The app owns the UI; the persistence work provides `Platform.workspaceFiles`
-and flips `capabilities.canSaveWorkspace` in `desktop-platform.ts` (and later
-the web platform). Where things plug in, all in `packages/app/src/App.tsx`
-("Workspace files" section) and `views/TopBar.tsx`:
-
-- **Save / Save As / Open workspace…** — TopBar buttons (`save-workspace`,
-  `open-workspace`) and Cmd/Ctrl+S, Shift+Cmd/Ctrl+S call
-  `workspaceFiles.save({ workspace, engine }, { saveAs })` /
-  `.open({ workspace, engine })`. The implementation serialises with core's
-  workspace format, writes atomically, and on open reopens the data source
-  (relative → absolute → locate on desktop, a picker on the web), runs the
-  engine open and replaces the state through a command. The outcome's
-  `displayName` is toasted ("Saved trips.glassgrid"); `failed` shows its
-  message.
-- **Edited indicator** — the dot after the file size (`workspace-edited`):
-  the latest history entry differs from the one recorded at the last
-  successful save or open. Undo past the save point shows it again. If the
-  persistence work resets history on open, this still holds.
-- **Autosave** — `workspaceFiles.autosave(state)` runs `AUTOSAVE_DELAY_MS`
-  (2 s) after the last state change while a file is open; the
-  implementation decides where it goes (and should be cheap: it is called
-  on the main thread).
-- **Recovery** — `recovery.check()` once at start; an offer shows a toast
-  with Restore → `recovery.restore(offer, context)`.
-- **Shell-initiated opens** — `workspaceFiles.onOpenRequest` (a
-  double-clicked `.glassgrid`, a menu item).
-- **Menus** — `MenuCommand` (core `protocol/ipc.ts`) only has `open` and
-  `theme`; Save/Open Workspace menu items need new kinds there, handled in
-  App's menu effect next to `open`.
-- **Unsaved changes on close** — `onBeforeClose` is a notification today
-  (pagehide). A "save before closing?" prompt needs a veto: on desktop,
-  main's `close` event plus an IPC round trip; on the web, `beforeunload`.
-  Extend `PlatformWindow` with something like
-  `onCloseRequest(listener: () => boolean | Promise<boolean>)` when that
-  lands; `edited` is the input.
-- `canOpenFromPath` is there for the open flow's fallbacks (false on the
-  web: always ask for the file).
+Done on branch `m4-desktop-ui`; see [m4-persistence.md → UI](m4-persistence.md#ui).
+The provisional `WorkspaceFilesApi` (save/open/autosave/recovery callbacks)
+and `AUTOSAVE_DELAY_MS` were replaced: `WorkspaceFilesApi` is now core's
+`WorkspaceBridge` minus the window events, the app wires it with core's glue
+(`useWorkspaceFiles`), and `PlatformWindow` gained `menuShortcuts`,
+`onCloseRequest` (the close veto) and `setDocumentChrome`; `onMenuCommand`
+carries `AppMenuCommand` (`MenuCommand | WorkspaceMenuCommand`).
 
 ### DuckDB-WASM engine (`m4-engine`)
 

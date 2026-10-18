@@ -327,10 +327,13 @@ renderer decides when to open (after asking about its own unsaved work) with
 
 ### Menu
 
-File → Open Workspace… (Cmd/Ctrl+Shift+O), Save Workspace (Cmd/Ctrl+S), Save
-Workspace As… (Cmd/Ctrl+Shift+S), sent on their own channel
-(`workspace-menu-command`, `{ kind: 'openWorkspace' | 'saveWorkspace' |
-'saveWorkspaceAs' }`) so the existing `MenuCommand` union is unchanged.
+File → Open Workspace… (Cmd/Ctrl+Shift+O), Open Recent (one item per recent
+workspace), Save Workspace (Cmd/Ctrl+S), Save Workspace As…
+(Cmd/Ctrl+Shift+S), sent on their own channel (`workspace-menu-command`,
+`{ kind: 'openWorkspace' | 'openRecentWorkspace' (with the entry's id) |
+'saveWorkspace' | 'saveWorkspaceAs' }`) so the existing `MenuCommand` union
+is unchanged. The menu is rebuilt when the recent list changes
+(`onRecentChanged`).
 
 ## Security notes
 
@@ -412,14 +415,91 @@ after `openFile`.
 | `desktop/src/main/persistence/*.test.ts` (70) | Atomic write (replace, modes, symlink, hook failures, SIGKILL mid-write, temp sweep); relink order, name check, mismatch details and tolerance, names; recent list (order, cap, prune, corrupt file, concurrency); recovery listing/cleanup and the autosaver; the service end to end on temp folders with fake dialogs (Save As defaults, relative/absolute/locate, mismatch, recent, OS tokens, recovery after a crash, stale snapshots); IPC sender checks on every channel, schema validation, drop checks; close guard (every button, timeout, foreign replies); argv and the open-request queue |
 | `desktop/e2e/workspace-file.spec.ts` (1) | The real app: Save As, recent, reopening a copied project by relative path, autosave to the recovery folder, close without saving, restore after relaunch |
 
+## UI
+
+Built on branch `m4-desktop-ui`. The app (`packages/app`) owns the UI and
+wires core's glue in `src/workspace-files.ts` (`useWorkspaceFiles`); the
+desktop shell passes the preload bridge as `Platform.workspaceFiles`
+(`WorkspaceFilesApi` = `WorkspaceBridge` minus the window events) with
+`capabilities.canSaveWorkspace: true`. Without both, none of this shows.
+
+- **One dirty model.** The edited dot, the window title and the close
+  prompt read core's `isWorkspaceDirty` (digest of the persisted subset), so
+  undoing back to the saved state is clean again and profiles or the grid
+  selection never count. The app's history-based indicator and its 2 s
+  `autosave` timer are gone: the only autosave path is `reportUnsavedWork`
+  → `updateRecovery` → main's 5 s `Autosaver`.
+- **Commands only.** Save, Save As, Open Workspace…, Open Recent and OS
+  hand-offs all dispatch `saveWorkspace`, `saveWorkspaceAs` and
+  `openWorkspace` (implemented by `provideWorkspacePersistence`), whether
+  they come from the title bar, the start screen, a shortcut or the menu.
+  Drops, the locate prompt and recovery finish through
+  `completeWorkspaceOpen` / `locateWorkspaceData`, whose state change is
+  `loadWorkspace`. The start screen reads `listRecent` directly (it shows the
+  folder, which `listRecentWorkspaces` withholds from agents).
+- **Menus and shortcuts.** `PlatformWindow.onMenuCommand` now carries
+  `MenuCommand | WorkspaceMenuCommand` (the desktop merges both channels).
+  File has Open CSV… (⌘O), Open Workspace… (⇧⌘O), **Open Recent** (rebuilt
+  when the recent list changes; items send `openRecentWorkspace { id }`),
+  Save Workspace (⌘S) and Save Workspace As… (⇧⌘S). These are menu
+  accelerators, so the desktop sets `PlatformWindow.menuShortcuts` and the
+  page leaves those keys alone (each fires once); without a native menu
+  (browsers) the page handles them. Undo/redo stay in the page.
+- **Title.** The title bar names a saved workspace by its file
+  (`workspace-name`), followed by the data file and size; untitled work is
+  named by its data file. The dot after the size is the edited state. The
+  window title is `trips.glassgrid — Glassgrid` with a leading `●` when
+  edited on Windows/Linux; on macOS main sets `setRepresentedFilename` and
+  `setDocumentEdited` (`PlatformWindow.setDocumentChrome` →
+  `WorkspaceBridge.setDocumentState`, a fire-and-forget channel that sends
+  the document id; main resolves the path itself).
+- **Close prompt.** `PlatformWindow.onCloseRequest` is the veto hook; the
+  desktop maps it to `ws.onCloseRequest(() => closeAnswer(state))` and main
+  shows the native Save / Don't Save / Cancel box.
+- **Opening.** `needsData` opens a modal "Where is trips.csv?" dialog
+  (`role="alertdialog"`, focus moved to "Locate trips.csv…", Tab kept inside,
+  Escape = Cancel, the rest of the window `inert`): Locate… runs
+  `locateData` (a cancelled picker keeps the dialog; a failure is shown in
+  it), Cancel runs `cancelOpen`. A fingerprint mismatch opens the workspace
+  and shows a non-blocking banner (`role="alert"`): "trips.csv has changed
+  since this workspace was saved (1.20 MB → 1.31 MB, contents differ).
+  Charts and counts may differ…" with **Locate another file…** and
+  **Continue**. For that, main now keeps the open's context under a
+  `relinkToken` (new optional field of the `opened` result) that
+  `locateData` accepts; Continue (or showing other data) forgets it with
+  `cancelOpen`. Restore warnings (dropped charts, migration) are toasted.
+- **Column types after open.** The engine opens the data with inferred
+  types; the app's override effect sees a new table and sends the restored
+  overrides with `setColumnTypes` before the profile, as after an engine
+  restart. Values that fail to cast are reported without an Undo action
+  (undo would undo the whole open).
+- **Start screen.** "Open workspace…" next to "Open CSV…"; unsaved work from
+  earlier sessions (`listRecovery`) as a `role="status"` banner with Restore
+  and Discard per entry (restored work opens dirty, so Save returns to its
+  file); and up to five recent workspaces (file name and folder). A dropped
+  `.glassgrid` goes to `openDropped`; anything else is opened as data.
+
+Tests: `packages/app/src/App.workspace-files.test.tsx` (17: digest dot and
+undo, save/Save As and the title, failures, autosave reports and the close
+answer, shortcuts with and without a native menu, menu items, open with
+override re-send, warnings, the locate dialog's focus trap and outcomes, the
+mismatch banner, OS hand-offs and drops, recent list, recovery
+restore/discard); `desktop-platform.test.ts` (a full fake `WorkspaceBridge`);
+`workspace-service.test.ts` and `ipc.test.ts` (relink token, recent-list
+hook, document state); `e2e/workspace-ui.spec.ts` (4, the real app: save
+from the File menu, dirty dot incl. undo back to clean, reopen from the
+start screen with the override applied by the engine, File → Open Recent,
+the close veto (Cancel, then Save), the locate prompt for a moved and changed
+data file with the banner, restore after SIGKILL; axe on the start screen
+and the dialog). Playwright's synthetic keys reach the page, not Electron's
+menu accelerators, so the E2E clicks the menu items (and checks their
+accelerators).
+
 ## Left for integration
 
-- Renderer UI: wire the sketch above (save/open commands, title with dirty
-  dot, "Save changes?" via `onCloseRequest`, `.glassgrid` drop routing,
-  locate prompt, fingerprint-mismatch and restore warnings, recovery offer at
-  launch, recent list), and re-send type overrides after `loadWorkspace`.
-- Ask before replacing a dirty workspace when opening another one (the
-  `openWorkspace` command itself does not; undo restores the previous one).
+- Ask before replacing a dirty workspace when opening another one or a CSV
+  (the commands do not; undo restores the previous one, and the recovery
+  snapshot follows the new, clean workspace).
 - The AI confirmation UI for `write` tier (M6) before agents can save.
-- Web demo: the same format saved to OPFS or downloaded; the bridge interface
-  is host-neutral, `provideWorkspacePersistence` works with any implementation.
+- Web demo: the same format saved to OPFS or downloaded; implement
+  `WorkspaceFilesApi` in `web-platform.ts` (the app UI is host-neutral).
