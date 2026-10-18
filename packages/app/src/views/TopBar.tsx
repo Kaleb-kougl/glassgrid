@@ -10,6 +10,7 @@ export interface WorkspaceFileControls {
   /** A save or open is running. */
   busy: boolean;
   onSave: () => void;
+  onSaveAs: () => void;
   onOpen: () => void;
 }
 
@@ -30,6 +31,8 @@ export interface TopBarProps {
   onStepTo: (entryId: string) => void;
   /** Save/open workspace controls; absent hides them. */
   workspaceFile?: WorkspaceFileControls | undefined;
+  /** A modal dialog is open: the bar is out of reach (`inert`). */
+  inert?: boolean;
 }
 
 const time = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' });
@@ -40,22 +43,35 @@ const time = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-di
  * platform has workspace files), Undo/Redo, History and the agent indicator
  * (a v1 placeholder).
  */
-export function TopBar({ shortcuts, titleBarInset, state, history, opening, optimizing, onOpen, onUndo, onRedo, onStepTo, workspaceFile }: TopBarProps) {
+export function TopBar({ shortcuts, titleBarInset, state, history, opening, optimizing, onOpen, onUndo, onRedo, onStepTo, workspaceFile, inert = false }: TopBarProps) {
   const mac = shortcuts === 'mac';
   const mod = mac ? '⌘' : 'Ctrl+';
   const historyRef = useRef<HTMLButtonElement>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const count = history.past.length + history.future.length;
+  const workspaceName = state.document?.fileName ?? null;
   const current = history.past.at(-1);
 
   return (
-    <header className="topbar" data-testid="topbar">
+    <header className="topbar" data-testid="topbar" inert={inert}>
       {titleBarInset && <div className="topbar__inset" aria-hidden="true" />}
       {state.dataSource ? (
         <div className="topbar__file">
-          <h1 className="topbar__name" data-testid="file-name">
-            {state.dataSource.fileName}
-          </h1>
+          {/* A saved workspace is named by its file; the data file follows. Untitled work is named by its data. */}
+          {workspaceFile && workspaceName !== null ? (
+            <>
+              <h1 className="topbar__name" data-testid="workspace-name">
+                {workspaceName}
+              </h1>
+              <span className="topbar__data" data-testid="file-name">
+                {state.dataSource.fileName}
+              </span>
+            </>
+          ) : (
+            <h1 className="topbar__name" data-testid="file-name">
+              {state.dataSource.fileName}
+            </h1>
+          )}
           <span className="topbar__size">{formatBytes(state.dataSource.fingerprint.sizeBytes)}</span>
           {workspaceFile?.edited && (
             <span className="topbar__edited" title="Edited, not saved" data-testid="workspace-edited">
@@ -82,7 +98,7 @@ export function TopBar({ shortcuts, titleBarInset, state, history, opening, opti
         </Button>
         {workspaceFile && (
           <>
-            <Button variant="ghost" onClick={workspaceFile.onOpen} disabled={workspaceFile.busy} data-testid="open-workspace" title="Open a saved workspace">
+            <Button variant="ghost" onClick={workspaceFile.onOpen} disabled={workspaceFile.busy} data-testid="open-workspace" title={`Open a saved workspace ${mac ? '⇧⌘O' : 'Ctrl+Shift+O'}`}>
               Open workspace…
             </Button>
             <Button
@@ -93,6 +109,15 @@ export function TopBar({ shortcuts, titleBarInset, state, history, opening, opti
               title={`Save the workspace ${mod}S`}
             >
               Save
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={workspaceFile.onSaveAs}
+              disabled={workspaceFile.busy || state.dataSource === null}
+              data-testid="save-workspace-as"
+              title={`Save the workspace to a new file ${mac ? '⇧⌘S' : 'Ctrl+Shift+S'}`}
+            >
+              Save as…
             </Button>
           </>
         )}

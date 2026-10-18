@@ -67,8 +67,10 @@ import {
   toIndexSelection,
 } from './views/grid-source';
 import { TopBar } from './views/TopBar';
-import { workspaceFilesOf, type Platform, type WorkspaceFileOutcome, type WorkspaceFilesApi } from './platform';
+import { LocateDataDialog, MismatchBanner, RecentWorkspaces, RecoveryOffers } from './views/WorkspaceFileViews';
+import { workspaceFilesOf, type Platform } from './platform';
 import { createAppWorkspace, type AppWorkspace } from './workspace';
+import { isWorkspaceFileName, useWorkspaceFiles } from './workspace-files';
 
 export { describeEntry };
 
@@ -114,9 +116,6 @@ interface ToastState {
   by?: string;
   action?: ToastAction;
 }
-
-/** Quiet time after the last change before `workspaceFiles.autosave` runs. */
-export const AUTOSAVE_DELAY_MS = 2_000;
 
 const numberFormat = new Intl.NumberFormat('en-US');
 const compact = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 2 });
@@ -402,6 +401,8 @@ export function App({ platform, workspace: givenWorkspace }: AppProps) {
     if (applied === overridesKey) return;
     const before = new Map((JSON.parse(applied) as { column: string; type: string }[]).map((entry) => [entry.column, entry.type]));
     const changed = overrides.filter((entry) => before.get(entry.column) !== entry.type);
+    // The table's first set (a workspace just loaded, or the engine restarted) restores saved types: nothing to undo.
+    const initial = !engineOverrides.current.has(tableId);
     const run = { live: true };
     engineOverrides.current.set(tableId, overridesKey);
     setRetyping({
@@ -422,7 +423,7 @@ export function App({ platform, workspace: givenWorkspace }: AppProps) {
           showToast({
             tone: 'info',
             message: `${numberFormat.format(first.failedCasts)} ${first.failedCasts === 1 ? 'value' : 'values'} in ${first.column} couldn’t be read as ${first.type} and show as null${more}`,
-            action: { label: 'Undo', shortcut: mod('Z'), onClick: () => dispatch('undo') },
+            ...(initial ? {} : { action: { label: 'Undo', shortcut: mod('Z'), onClick: () => dispatch('undo') } }),
           });
         }
       },
@@ -736,79 +737,31 @@ export function App({ platform, workspace: givenWorkspace }: AppProps) {
   // ---------------------------------------------------------------------------
   // Workspace files (.glassgrid): only when the platform provides them
 
-  const workspaceFiles = workspaceFilesOf(platform);
-  /** The latest history entry when the workspace was last saved or opened (null: none, a new workspace). */
-  const [savedEntry, setSavedEntry] = useState<string | null>(() => store.getHistory().past.at(-1)?.id ?? null);
-  const [workspaceFileBusy, setWorkspaceFileBusy] = useState(false);
-  const edited = state.dataSource !== null && (history.past.at(-1)?.id ?? null) !== savedEntry;
+  const workspaceFiles = useWorkspaceFiles({ api: workspaceFilesOf(platform), workspace, engine, shell, state, toast: showToast });
+  const modal = workspaceFiles.locate !== null;
+  /** The latest of both, for the key and menu handlers (subscribed once, not on every render). */
+  const latestFiles = useRef({ workspaceFiles, modal });
+  useLayoutEffect(() => {
+    latestFiles.current = { workspaceFiles, modal };
+  });
 
-  const runWorkspaceFile = useCallback(
-    async (run: (api: WorkspaceFilesApi) => Promise<WorkspaceFileOutcome>, done: string) => {
-      if (!workspaceFiles) return;
-      setWorkspaceFileBusy(true);
-      try {
-        const outcome = await run(workspaceFiles);
-        if (outcome.status === 'done') {
-          setSavedEntry(store.getHistory().past.at(-1)?.id ?? null);
-          showToast({ tone: 'info', message: `${done} ${outcome.displayName}` });
-        } else if (outcome.status === 'failed') {
-          showToast({ tone: 'error', message: outcome.message });
-        }
-      } catch (cause) {
-        showToast({ tone: 'error', message: messageOf(cause) });
-      } finally {
-        setWorkspaceFileBusy(false);
-      }
-    },
-    [workspaceFiles, store, showToast],
-  );
-  const saveWorkspace = useCallback(
-    (saveAs: boolean) => runWorkspaceFile((api) => api.save({ workspace, engine }, { saveAs }), 'Saved'),
-    [runWorkspaceFile, workspace, engine],
-  );
-  const openWorkspace = useCallback(() => runWorkspaceFile((api) => api.open({ workspace, engine }), 'Opened'), [runWorkspaceFile, workspace, engine]);
-
-  // Opens the shell starts (File → Open Workspace…, a double-clicked file).
-  useEffect(() => workspaceFiles?.onOpenRequest?.(() => void openWorkspace()), [workspaceFiles, openWorkspace]);
-
-  // Crash recovery: one offer at start.
-  useEffect(() => {
-    const recovery = workspaceFiles?.recovery;
-    if (!recovery) return;
-    const run = { live: true };
-    recovery.check().then(
-      (offer) => {
-        if (!run.live || !offer) return;
-        showToast({
-          tone: 'info',
-          message: `Unsaved changes to ${offer.displayName} from ${new Date(offer.savedAt).toLocaleString()} can be restored`,
-          action: { label: 'Restore', onClick: () => void runWorkspaceFile(() => recovery.restore(offer, { workspace, engine }), 'Restored') },
-        });
-      },
-      () => undefined,
-    );
-    return () => {
-      run.live = false;
-    };
-    // Checked once per platform implementation.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceFiles]);
-
-  // Autosave for crash recovery, after a quiet moment.
-  useEffect(() => {
-    if (!workspaceFiles?.autosave || state.dataSource === null) return;
-    const timer = setTimeout(() => workspaceFiles.autosave?.(store.getState()), AUTOSAVE_DELAY_MS);
-    return () => clearTimeout(timer);
-  }, [workspaceFiles, state, store]);
-
-  // Cmd/Ctrl+Z undoes, Shift+Cmd/Ctrl+Z redoes, Cmd/Ctrl+S saves (with workspace files); menu commands (File → Open, View → Theme).
+  // Shortcuts: Cmd/Ctrl+Z undoes, Shift+Cmd/Ctrl+Z redoes. Without a native menu (browsers) the page also owns
+  // Cmd/Ctrl+O (open a CSV), Shift+Cmd/Ctrl+O (open a workspace), Cmd/Ctrl+S (save) and Shift+Cmd/Ctrl+S (save as);
+  // with one (desktop) those are menu accelerators and arrive as menu commands, so each fires once.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey) || event.altKey) return;
+      const { workspaceFiles: files, modal: blocked } = latestFiles.current;
+      if (!(event.metaKey || event.ctrlKey) || event.altKey || blocked) return;
       const key = event.key.toLowerCase();
-      if (key === 's' && workspaceFiles) {
-        event.preventDefault();
-        void saveWorkspace(event.shiftKey);
+      if (!shell.menuShortcuts && (key === 's' || key === 'o')) {
+        if (key === 'o' && !event.shiftKey) {
+          event.preventDefault();
+          void open();
+        } else if (files.enabled) {
+          event.preventDefault();
+          if (key === 'o') files.open({ source: 'dialog' });
+          else files.save(event.shiftKey);
+        }
         return;
       }
       if (key !== 'z' || isEditableTarget(event.target)) return;
@@ -816,15 +769,18 @@ export function App({ platform, workspace: givenWorkspace }: AppProps) {
       dispatch(event.shiftKey ? 'redo' : 'undo');
     };
     window.addEventListener('keydown', onKeyDown);
+    // Native menus: File → Open CSV…, the workspace items (each a command), View → Theme.
     const offMenu = shell.onMenuCommand?.((command) => {
-      if (command.kind === 'open') void open();
-      else setPreference(command.theme);
+      if (command.kind === 'theme') setPreference(command.theme);
+      else if (latestFiles.current.modal) return;
+      else if (command.kind === 'open') void open();
+      else latestFiles.current.workspaceFiles.runMenuCommand(command);
     });
     return () => {
       window.removeEventListener('keydown', onKeyDown);
       offMenu?.();
     };
-  }, [dispatch, shell, open, setPreference, workspaceFiles, saveWorkspace]);
+  }, [dispatch, shell, open, setPreference]);
 
   // ---------------------------------------------------------------------------
   // Drag and drop: a CSV anywhere on the window opens it; columns go to the charts.
@@ -840,7 +796,10 @@ export function App({ platform, workspace: givenWorkspace }: AppProps) {
     if (!event.dataTransfer.types.includes('Files')) return;
     event.preventDefault();
     const file = files.fileFromDrop(event.dataTransfer);
-    if (file) void open(() => files.openDropped(file));
+    if (!file) return;
+    // A .glassgrid workspace opens as one; anything else is a data file.
+    if (workspaceFiles.enabled && isWorkspaceFileName(file.name)) workspaceFiles.openDropped(file);
+    else void open(() => files.openDropped(file));
   };
 
   // ---------------------------------------------------------------------------
@@ -913,14 +872,21 @@ export function App({ platform, workspace: givenWorkspace }: AppProps) {
         onUndo={() => dispatch('undo')}
         onRedo={() => dispatch('redo')}
         onStepTo={stepTo}
+        inert={modal}
         workspaceFile={
-          workspaceFiles
-            ? { edited, busy: workspaceFileBusy, onSave: () => void saveWorkspace(false), onOpen: () => void openWorkspace() }
+          workspaceFiles.enabled
+            ? {
+                edited: workspaceFiles.edited,
+                busy: workspaceFiles.busy,
+                onSave: () => workspaceFiles.save(false),
+                onSaveAs: () => workspaceFiles.save(true),
+                onOpen: () => workspaceFiles.open({ source: 'dialog' }),
+              }
             : undefined
         }
       />)}
 
-      <main className="workspace">
+      <main className="workspace" inert={modal}>
         {state.dataSource === null ? (
           <section className="panel empty" aria-label="Open a file" data-testid="empty-state" data-over={fileOver}>
             <div className="empty__zone">
@@ -936,6 +902,11 @@ export function App({ platform, workspace: givenWorkspace }: AppProps) {
                   {opening ? 'Opening…' : 'Open CSV…'}
                 </Button>
                 <kbd className="gg-kbd">{mod('O')}</kbd>
+                {workspaceFiles.enabled && (
+                  <Button variant="secondary" size="lg" onClick={() => workspaceFiles.open({ source: 'dialog' })} disabled={workspaceFiles.busy} data-testid="open-workspace-empty">
+                    Open workspace…
+                  </Button>
+                )}
               </div>
               {files.samples !== undefined && files.samples.length > 0 && (
                 <>
@@ -960,6 +931,17 @@ export function App({ platform, workspace: givenWorkspace }: AppProps) {
                 </>
               )}
             </div>
+            {workspaceFiles.enabled && (workspaceFiles.recovery.length > 0 || workspaceFiles.recent.length > 0) && (
+              <div className="empty__workspaces">
+                <RecoveryOffers
+                  entries={workspaceFiles.recovery}
+                  busy={workspaceFiles.busy}
+                  onRestore={workspaceFiles.restoreRecovery}
+                  onDiscard={workspaceFiles.discardRecovery}
+                />
+                <RecentWorkspaces entries={workspaceFiles.recent} busy={workspaceFiles.busy} onOpen={(id) => workspaceFiles.open({ source: 'recent', id })} />
+              </div>
+            )}
           </section>
         ) : (
           <>
@@ -1178,6 +1160,22 @@ export function App({ platform, workspace: givenWorkspace }: AppProps) {
         <div className="drop-overlay" aria-hidden="true">
           Drop to open
         </div>
+      )}
+      {workspaceFiles.mismatch && (
+        <MismatchBanner
+          notice={workspaceFiles.mismatch}
+          busy={workspaceFiles.busy}
+          onLocate={workspaceFiles.relinkData}
+          onDismiss={workspaceFiles.dismissMismatch}
+        />
+      )}
+      {workspaceFiles.locate && (
+        <LocateDataDialog
+          prompt={workspaceFiles.locate}
+          busy={workspaceFiles.busy}
+          onLocate={workspaceFiles.locateData}
+          onCancel={workspaceFiles.cancelLocate}
+        />
       )}
     </div>
   );
