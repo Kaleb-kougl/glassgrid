@@ -174,3 +174,10 @@ body {
 .sheet__grid--tall {
   height: 420px;
 }
+
+.sheet__charts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  align-items: start;
+}

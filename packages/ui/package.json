@@ -20,7 +20,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.lib.json && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.bench.json",
     "test": "vitest run",
     "tokens": "node tokens/generate.js",
-    "bench:grid": "node bench/run-grid-bench.ts"
+    "bench:grid": "node bench/run-grid-bench.ts",
+    "bench:charts": "node bench/run-charts-bench.ts"
   },
   "peerDependencies": {
     "react": "^19.0.0"
@@ -30,6 +31,9 @@
     "@testing-library/react": "16.3.3",
     "@testing-library/user-event": "14.6.7",
     "@types/d3-scale": "4.0.9",
+    "@types/d3-shape": "3.2.0",
+    "@types/d3-time": "3.0.4",
+    "@types/d3-time-format": "4.0.3",
     "@types/node": "24.19.2",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
@@ -47,6 +51,9 @@
     "@fontsource/ibm-plex-sans": "5.3.0",
     "@glassgrid/core": "workspace:*",
     "apache-arrow": "21.2.0",
-    "d3-scale": "4.0.2"
+    "d3-scale": "4.0.2",
+    "d3-shape": "3.2.0",
+    "d3-time": "3.1.0",
+    "d3-time-format": "4.1.0"
   }
 }

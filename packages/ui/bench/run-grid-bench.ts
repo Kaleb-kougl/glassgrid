@@ -17,12 +17,13 @@
  * newest chromium-* under PLAYWRIGHT_BROWSERS_PATH. Never downloads one.
  * Extra flags (e.g. --disable-gpu) go in GLASSGRID_CHROMIUM_ARGS.
  */
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { cpus, totalmem } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, type CDPSession, type Page } from 'playwright-core';
 import { build, preview } from 'vite';
+import { findChromium, percentile } from './chromium.ts';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const args = process.argv.slice(2);
@@ -38,35 +39,6 @@ const COLS = option('cols', 12);
 const LATENCY = option('latency', 30);
 const VIEWPORT = { width: 1440, height: 900 };
 const BUDGET_MS = 16.7;
-
-function findChromium(): string {
-  const fromEnv = process.env['GLASSGRID_CHROMIUM'];
-  if (fromEnv && existsSync(fromEnv)) return fromEnv;
-  try {
-    const own = chromium.executablePath();
-    if (existsSync(own)) return own;
-  } catch {
-    // Not installed for this Playwright version.
-  }
-  const root = process.env['PLAYWRIGHT_BROWSERS_PATH'] ?? '/opt/pw-browsers';
-  if (existsSync(join(root, 'chromium'))) return join(root, 'chromium');
-  const builds = existsSync(root) ? readdirSync(root).filter((name) => /^chromium-\d+$/.test(name)) : [];
-  builds.sort((a, b) => Number(b.split('-')[1]) - Number(a.split('-')[1]));
-  for (const name of builds) {
-    for (const candidate of ['chrome-linux/chrome', 'chrome-linux64/chrome', 'chrome-mac/Chromium.app/Contents/MacOS/Chromium', 'chrome-win/chrome.exe']) {
-      const path = join(root, name, candidate);
-      if (existsSync(path)) return path;
-    }
-  }
-  throw new Error('No Chromium found: set GLASSGRID_CHROMIUM or PLAYWRIGHT_BROWSERS_PATH (this script never downloads browsers).');
-}
-
-function percentile(values: readonly number[], p: number): number {
-  if (values.length === 0) return Number.NaN;
-  const sorted = [...values].sort((a, b) => a - b);
-  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil((p / 100) * sorted.length) - 1));
-  return sorted[index] ?? Number.NaN;
-}
 
 interface Stats {
   count: number;
