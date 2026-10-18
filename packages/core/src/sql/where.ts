@@ -66,7 +66,7 @@ function setValue(column: CompileColumn, value: Exclude<FilterValue, null>, para
   }
 }
 
-function compileFilter(filter: Filter, columns: ColumnIndex, params: Params, path: string): string {
+export function compileFilter(filter: Filter, columns: ColumnIndex, params: Params, path: string): string {
   const column = columns.get(filter.column, `${path}.column`);
   const ref = quoteIdent(column.name);
   switch (filter.kind) {
@@ -91,17 +91,24 @@ function compileFilter(filter: Filter, columns: ColumnIndex, params: Params, pat
       }
       return parts.length === 1 ? (parts[0] ?? 'TRUE') : `(${parts.join(' AND ')})`;
     }
-    case 'in': {
+    case 'in':
+    case 'notIn': {
       const placeholders: string[] = [];
-      let matchNull = false;
+      let listsNull = false;
       for (const [i, value] of filter.values.entries()) {
-        if (value === null) matchNull = true;
+        if (value === null) listsNull = true;
         else placeholders.push(setValue(column, value, params, `${path}.values[${i}]`));
       }
-      const inList = placeholders.length > 0 ? `${ref} IN (${placeholders.join(', ')})` : null;
-      if (inList && matchNull) return `(${inList} OR ${ref} IS NULL)`;
-      if (inList) return inList;
-      return matchNull ? `${ref} IS NULL` : 'FALSE';
+      const list = placeholders.join(', ');
+      if (filter.kind === 'in') {
+        const inList = placeholders.length > 0 ? `${ref} IN (${list})` : null;
+        if (inList && listsNull) return `(${inList} OR ${ref} IS NULL)`;
+        if (inList) return inList;
+        return listsNull ? `${ref} IS NULL` : 'FALSE';
+      }
+      // NOT IN over a non-NULL value list is NULL (no match) for NULL cells, which is right when null is listed.
+      if (placeholders.length === 0) return listsNull ? `${ref} IS NOT NULL` : 'TRUE';
+      return listsNull ? `${ref} NOT IN (${list})` : `(${ref} NOT IN (${list}) OR ${ref} IS NULL)`;
     }
   }
 }

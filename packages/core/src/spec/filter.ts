@@ -38,6 +38,17 @@ export const InFilterSchema = z.strictObject({
   values: z.array(FilterValueSchema).max(MAX_FILTER_VALUES),
 });
 
+/**
+ * The complement of `in`: rows whose value is not listed. NULL cells match
+ * unless `null` is listed, so `notIn` of the named bars of a top-N chart
+ * selects exactly its "Other" bar. An empty list matches every row.
+ */
+export const NotInFilterSchema = z.strictObject({
+  kind: z.literal('notIn'),
+  column: z.string().min(1),
+  values: z.array(FilterValueSchema).max(MAX_FILTER_VALUES),
+});
+
 export const IsNullFilterSchema = z.strictObject({
   kind: z.literal('isNull'),
   column: z.string().min(1),
@@ -55,6 +66,7 @@ export const NotNullFilterSchema = z.strictObject({
 export const FilterSchema = z.discriminatedUnion('kind', [
   RangeFilterSchema,
   InFilterSchema,
+  NotInFilterSchema,
   IsNullFilterSchema,
   NotNullFilterSchema,
 ]);
@@ -62,3 +74,4 @@ export type Filter = z.infer<typeof FilterSchema>;
 export type FilterInput = z.input<typeof FilterSchema>;
 export type RangeFilter = z.infer<typeof RangeFilterSchema>;
 export type InFilter = z.infer<typeof InFilterSchema>;
+export type NotInFilter = z.infer<typeof NotInFilterSchema>;

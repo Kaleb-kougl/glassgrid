@@ -16,4 +16,23 @@ export {
   MAX_PIXEL_WIDTH,
   type ChartCompileOptions,
 } from './chart.js';
-export { autoTimeUnit, niceBinWidth, numericBinCount, parseTemporal, timeBucketCount, type TimeUnitStrategy } from './bins.js';
+export {
+  addTime,
+  autoTimeUnit,
+  niceBinWidth,
+  numericBinCount,
+  parseTemporal,
+  timeBucketCount,
+  truncateTime,
+  type TimeUnitStrategy,
+} from './bins.js';
+export { cubeSelection, type CubeSelection } from './align.js';
+export {
+  compileChartCubeAnswer,
+  compileChartCubeBuild,
+  compileCountCubeAnswer,
+  compileCountCubeBuild,
+  dimensionCardinality,
+  estimateCubeCells,
+  type CubeColumn,
+} from './cube.js';

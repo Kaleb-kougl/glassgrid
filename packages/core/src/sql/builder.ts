@@ -61,3 +61,8 @@ export class Params {
     return `epoch_ms(${this.bigint(value)})`;
   }
 }
+
+/** Code-unit string order, for deterministic sorting independent of locale. */
+export function compareText(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}

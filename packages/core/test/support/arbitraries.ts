@@ -168,8 +168,8 @@ export function filterArb(table: TestTable): fc.Arbitrary<FilterInput> {
       { kind: 'notNull', column: column.name },
     );
     const inFilter = fc
-      .array(setValueArb(table, column), { maxLength: 4 })
-      .map((values): FilterInput => ({ kind: 'in', column: column.name, values }));
+      .tuple(fc.constantFrom('in' as const, 'in' as const, 'notIn' as const), fc.array(setValueArb(table, column), { maxLength: 4 }))
+      .map(([kind, values]): FilterInput => ({ kind, column: column.name, values }));
     if (!isPositional(column.type)) return fc.oneof({ arbitrary: inFilter, weight: 3 }, { arbitrary: nullFilters, weight: 1 });
     const bound = fc.option(boundArb(table, column), { nil: undefined, freq: 3 });
     const inclusive = fc.option(fc.boolean(), { nil: undefined, freq: 3 });
@@ -270,6 +270,7 @@ export function barSpecArb(table: TestTable): fc.Arbitrary<ChartSpecInput> {
       color: colorArb(table),
       filters: filtersArb(table),
       limit: fc.option(fc.integer({ min: 1, max: 12 }), { nil: undefined }),
+      other: fc.option(fc.boolean(), { nil: undefined }),
     })
     .map((spec) => clean({ mark: 'bar' as const, ...spec, x: clean(spec.x) }));
 }

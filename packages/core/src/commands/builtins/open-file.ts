@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { FileHandleSchema } from '../../ids.js';
-import { ColumnTypeSchema } from '../../spec/column.js';
+import { ColumnTypeSchema, ProfileValueSchema } from '../../spec/column.js';
 import { FingerprintSchema } from '../../protocol/engine.js';
 import { ColumnNameSchema, createInitialGridState } from '../../state/workspace.js';
 import { defineCommand } from '../define.js';
@@ -43,8 +43,50 @@ export const openFile = defineCommand({
       typeOverride: null,
     }));
     draft.charts = [];
-    draft.filters = {};
+    draft.selections = {};
+    draft.userFilters = [];
     draft.grid = createInitialGridState();
     draft.layout = { cards: [] };
+  },
+});
+
+export const SetColumnProfilesInputSchema = z.strictObject({
+  /** Profiles as the engine reported them, for some or all columns. */
+  columns: z
+    .array(
+      z.strictObject({
+        name: ColumnNameSchema,
+        type: ColumnTypeSchema,
+        distinctCount: z.number().int().nonnegative(),
+        nullFraction: z.number().min(0).max(1),
+        min: ProfileValueSchema,
+        max: ProfileValueSchema,
+      }),
+    )
+    .max(10_000),
+});
+export type SetColumnProfilesInput = z.input<typeof SetColumnProfilesInputSchema>;
+
+/**
+ * Records the engine's column profile (type, distinct count, null share,
+ * min and max) so the default chart rules and brush snapping can read it from
+ * state. The async half of the open action dispatches it whenever a profile
+ * arrives (after open, after a type change, after undoing back to a file).
+ * Not an undo entry: it records what the data is, not a change to the work.
+ */
+export const setColumnProfiles = defineCommand({
+  name: 'setColumnProfiles',
+  description: "Records the engine's profile of the open file's columns (type, distinct count, null share, min, max).",
+  input: SetColumnProfilesInputSchema,
+  tier: 'edit',
+  mcp: { exempt: MCP_EXEMPTIONS.setColumnProfiles },
+  undoable: false,
+  apply(draft, input) {
+    for (const profile of input.columns) {
+      const column = draft.columns.find((candidate) => candidate.name === profile.name);
+      if (!column) continue;
+      const { name: _name, ...summary } = profile;
+      column.profile = summary;
+    }
   },
 });

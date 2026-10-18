@@ -9,12 +9,15 @@ import {
   type ChartSpecInput,
   type Mark,
 } from '../spec/chart.js';
-import { type Field, type TimeUnit, type YField } from '../spec/field.js';
+import { type CrossfilterDimension } from '../spec/crossfilter.js';
+import { type Aggregate, type Field, type TimeUnit, type YField } from '../spec/field.js';
+import { type Filter } from '../spec/filter.js';
 import { autoTimeUnit, niceBinWidth, numericBinCount, type TimeUnitStrategy } from './bins.js';
-import { Params, quoteIdent, ROW_COUNT_COLUMN, type CompiledQuery } from './builder.js';
+import { cubeSelection } from './align.js';
+import { compareText, Params, quoteIdent, ROW_COUNT_COLUMN, type CompiledQuery } from './builder.js';
 import { ColumnIndex } from './columns.js';
 import { CompileError, type CompileErrorCode } from './errors.js';
-import { filterPredicates, parseOrThrow, whereClause } from './where.js';
+import { compileFilter, filterPredicates, parseOrThrow, whereClause } from './where.js';
 
 /** Target bin count for `bin: 'auto'` (or no bin) on a histogram. */
 export const HISTOGRAM_TARGET_BINS = 50;
@@ -81,14 +84,68 @@ function axisEnd(axis: Axis, key: string): string {
   }
 }
 
-class ChartCompiler {
+/**
+ * Pre-aggregation ("cube") modes of the chart compiler; see sql/cube.ts.
+ *
+ * - `build`: instead of the chart query, emit one GROUP BY over the table
+ *   (the spec's filters applied) by the chart's group keys plus `gb`, the
+ *   bin of the cross-filter dimension, with decomposable partial
+ *   aggregates (`n` rows, `nn` non-NULL y, `s` sum, `mn` min, `mx` max).
+ * - `answer`: emit the chart query over such a cube relation: `__gg_base`
+ *   re-sums the partials of the cells whose `gb` the selection covers, and
+ *   every mark's SQL then aggregates partials instead of rows.
+ */
+export type CubeMode =
+  | { readonly phase: 'build'; readonly dimension: CrossfilterDimension }
+  | { readonly phase: 'answer'; readonly dimension: CrossfilterDimension; readonly selection: Filter | null };
+
+/** A measure: how rows (or cube cells) aggregate into y. */
+interface Measure {
+  /** Table mode: the `"col" AS gy` projection; null for count(*). */
+  readonly select: string | null;
+  readonly column: CompileColumn | null;
+  /** null means count(*). */
+  readonly aggregate: Aggregate | null;
+  /** The aggregate over rows of the relation aliased `alias` (`''` or `'s.'`). */
+  agg(alias: string): string;
+}
+
+/** Cube partial columns: build expression over the y column, and how the answer re-aggregates them. */
+const PARTIALS = {
+  nn: { build: (ref: string) => `count(${ref})`, merge: 'sum' },
+  s: { build: (ref: string) => `sum(${ref})`, merge: 'sum' },
+  mn: { build: (ref: string) => `min(${ref})`, merge: 'min' },
+  mx: { build: (ref: string) => `max(${ref})`, merge: 'max' },
+} as const;
+type Partial = keyof typeof PARTIALS;
+
+function partialsFor(aggregate: Aggregate | null): Partial[] {
+  switch (aggregate) {
+    case null:
+      return [];
+    case 'count':
+      return ['nn'];
+    case 'sum':
+    case 'avg':
+      return ['nn', 's'];
+    case 'min':
+      return ['mn'];
+    case 'max':
+      return ['mx'];
+  }
+}
+
+export class ChartCompiler {
   readonly params = new Params();
   readonly index: ColumnIndex;
+  /** Set by `baseCtes` in build mode: the cube's GROUP BY and its parameters. */
+  cubeBuild: { sql: string; params: unknown[] } | null = null;
 
   constructor(
     readonly table: string,
     readonly spec: ChartSpec,
     columns: readonly CompileColumn[],
+    readonly cube: CubeMode | null = null,
   ) {
     this.index = new ColumnIndex(columns);
   }
@@ -182,12 +239,11 @@ class ChartCompiler {
   }
 
   /** The measure (y aggregate) for bar, histogram, line and area. */
-  measure(): { select: string | null; agg: (ref: string) => string } {
+  measure(): Measure {
     const y = this.spec.y;
-    if (!y) return { select: null, agg: () => 'CAST(count(*) AS DOUBLE)' };
+    if (!y) return this.makeMeasure(null, null);
     this.noBinning(y, 'y', `${this.mark} charts aggregate y per x value`);
     const column = this.column(y, 'y');
-    const ref = quoteIdent(column.name);
     const aggregate = y.aggregate;
     if (aggregate === undefined) {
       this.fail(
@@ -196,10 +252,9 @@ class ChartCompiler {
         'y.aggregate',
       );
     }
-    const select = `${ref} AS gy`;
     switch (aggregate) {
       case 'count':
-        return { select, agg: (r) => `CAST(count(${r}) AS DOUBLE)` };
+        break;
       case 'sum':
       case 'avg':
         if (!isNumericType(column.type)) {
@@ -209,19 +264,54 @@ class ChartCompiler {
             'y.aggregate',
           );
         }
-        return { select, agg: (r) => `CAST(${aggregate}(${r}) AS DOUBLE)` };
+        break;
       case 'min':
       case 'max':
-        if (isTemporalType(column.type)) return { select, agg: (r) => `${aggregate}(${r})` };
-        if (!isNumericType(column.type)) {
+        if (!isNumericType(column.type) && !isTemporalType(column.type)) {
           this.fail(
             'type_mismatch',
             `y.aggregate "${aggregate}" needs a numeric, date or timestamp column, but ${JSON.stringify(column.name)} is ${column.type}. Use "count" instead.`,
             'y.aggregate',
           );
         }
-        return { select, agg: (r) => `CAST(${aggregate}(${r}) AS DOUBLE)` };
+        break;
     }
+    return this.makeMeasure(column, aggregate);
+  }
+
+  private makeMeasure(column: CompileColumn | null, aggregate: Aggregate | null): Measure {
+    const select = column ? `${quoteIdent(column.name)} AS gy` : null;
+    const temporal = column !== null && isTemporalType(column.type);
+    const answer = this.cube?.phase === 'answer';
+    const agg = (alias: string): string => {
+      if (answer) {
+        switch (aggregate) {
+          case null:
+            return `CAST(sum(${alias}n) AS DOUBLE)`;
+          case 'count':
+            return `CAST(sum(${alias}nn) AS DOUBLE)`;
+          case 'sum':
+            return `CAST(sum(${alias}s) AS DOUBLE)`;
+          case 'avg':
+            return `CAST(sum(${alias}s) AS DOUBLE) / CAST(sum(${alias}nn) AS DOUBLE)`;
+          case 'min':
+          case 'max': {
+            const merged = `${aggregate}(${alias}${aggregate === 'min' ? 'mn' : 'mx'})`;
+            return temporal ? merged : `CAST(${merged} AS DOUBLE)`;
+          }
+        }
+      }
+      if (aggregate === null) return 'CAST(count(*) AS DOUBLE)';
+      const ref = `${alias}gy`;
+      if (temporal && (aggregate === 'min' || aggregate === 'max')) return `${aggregate}(${ref})`;
+      return `CAST(${aggregate}(${ref}) AS DOUBLE)`;
+    };
+    return { select, column, aggregate, agg };
+  }
+
+  /** Row count of a group (heatmap cells, scatter series ranking). */
+  countAgg(alias: string): string {
+    return this.cube?.phase === 'answer' ? `CAST(sum(${alias}n) AS DOUBLE)` : 'CAST(count(*) AS DOUBLE)';
   }
 
   colorColumn(): CompileColumn | null {
@@ -236,6 +326,9 @@ class ChartCompiler {
 
   limit(): number | null {
     const limit = this.spec.limit;
+    if (this.spec.other !== undefined && this.mark !== 'bar') {
+      this.fail('unsupported', `other applies only to bar charts (top N plus an "Other" bar), not ${this.mark}.`, 'other');
+    }
     if (this.mark === 'bar') {
       if (limit !== undefined && limit > MAX_BAR_LIMIT) {
         this.fail('unsupported', `limit for bar charts must be at most ${MAX_BAR_LIMIT}; got ${limit}.`, 'limit');
@@ -254,23 +347,111 @@ class ChartCompiler {
    * the chart needs, renamed gx/gy/gc) and, with a colour channel,
    * `__gg_series` (top 8 series) and `__gg_src` (base rows with gc folded to
    * NULL + other = TRUE outside the top 8). Returns the relation to aggregate.
+   *
+   * `keys` are the group keys as `[expression, alias]`; `measure` adds `gy`
+   * (table mode) or the cube partials. In cube build mode this records the
+   * cube's GROUP BY in `cubeBuild` instead; in answer mode `__gg_base` reads
+   * the cube.
    */
   baseCtes(
-    selects: readonly string[],
+    keys: readonly (readonly [string, string])[],
+    measure: Measure | null,
     notNull: readonly CompileColumn[],
     color: CompileColumn | null,
-    rankAgg: (ref: string) => string,
+    rankAgg: (alias: string) => string,
   ): { ctes: string[]; src: string } {
-    const predicates = filterPredicates(this.spec.filters, this.index, this.params);
-    for (const column of notNull) predicates.push(`${quoteIdent(column.name)} IS NOT NULL`);
-    const allSelects = color ? [...selects, `${quoteIdent(color.name)} AS gc`] : selects;
-    const ctes = [`__gg_base AS (\n  SELECT ${allSelects.join(', ')}\n  FROM ${this.table}${whereClause(predicates).replaceAll('\n', '\n  ')}\n)`];
+    const keyAliases = [...keys.map(([, alias]) => alias), ...(color ? ['gc'] : [])];
+    const partials = measure ? partialsFor(measure.aggregate) : [];
+    let base: string;
+    if (this.cube === null) {
+      const predicates = filterPredicates(this.spec.filters, this.index, this.params);
+      for (const column of notNull) predicates.push(`${quoteIdent(column.name)} IS NOT NULL`);
+      const selects = [
+        ...keys.map(([expr, alias]) => `${expr} AS ${alias}`),
+        ...(measure?.select ? [measure.select] : []),
+        ...(color ? [`${quoteIdent(color.name)} AS gc`] : []),
+      ];
+      base = `__gg_base AS (\n  SELECT ${selects.join(', ')}\n  FROM ${this.table}${whereClause(predicates).replaceAll('\n', '\n  ')}\n)`;
+    } else if (this.cube.phase === 'build') {
+      // Filter order does not change the rows; sorting makes equal filter sets build the same cube.
+      const filters = [...this.spec.filters].sort((a, b) => compareText(JSON.stringify(a), JSON.stringify(b)));
+      const predicates = filterPredicates(filters, this.index, this.params);
+      for (const column of notNull) predicates.push(`${quoteIdent(column.name)} IS NOT NULL`);
+      const ref = measure?.column ? quoteIdent(measure.column.name) : null;
+      const selects = [
+        ...keys.map(([expr, alias]) => `${expr} AS ${alias}`),
+        ...(color ? [`${quoteIdent(color.name)} AS gc`] : []),
+        `${this.dimensionKey(this.cube.dimension)} AS gb`,
+        'count(*) AS n',
+        ...(ref ? partials.map((partial) => `${PARTIALS[partial].build(ref)} AS ${partial}`) : []),
+      ];
+      this.cubeBuild = {
+        sql: `SELECT ${selects.join(', ')}\nFROM ${this.table}${whereClause(predicates)}\nGROUP BY ALL`,
+        params: [...this.params.values],
+      };
+      return { ctes: [], src: '__gg_base' };
+    } else {
+      const predicate = this.selectionPredicate(this.cube.dimension, this.cube.selection);
+      const merged = ['sum(n) AS n', ...partials.map((partial) => `${PARTIALS[partial].merge}(${partial}) AS ${partial}`)];
+      base =
+        `__gg_base AS (\n  SELECT ${[...keyAliases, ...merged].join(', ')}\n  FROM ${this.table}` +
+        `${predicate === null ? '' : `\n  WHERE ${predicate}`}\n  GROUP BY ${keyAliases.join(', ')}\n)`;
+    }
+    const ctes = [base];
     if (!color) return { ctes, src: '__gg_base' };
     ctes.push(
-      `__gg_series AS (\n  SELECT gc, ${rankAgg('gy')} AS v, TRUE AS k FROM __gg_base GROUP BY gc\n  ORDER BY v DESC NULLS LAST, gc ASC NULLS LAST LIMIT ${MAX_COLOR_SERIES}\n)`,
+      `__gg_series AS (\n  SELECT gc, ${rankAgg('')} AS v, TRUE AS k FROM __gg_base GROUP BY gc\n  ORDER BY v DESC NULLS LAST, gc ASC NULLS LAST LIMIT ${MAX_COLOR_SERIES}\n)`,
       `__gg_src AS (\n  SELECT b.* EXCLUDE (gc), CASE WHEN s.k THEN b.gc END AS gc, s.k IS NULL AS other\n  FROM __gg_base AS b LEFT JOIN __gg_series AS s ON b.gc IS NOT DISTINCT FROM s.gc\n)`,
     );
     return { ctes, src: '__gg_src' };
+  }
+
+  /** The cube's `gb` expression: the bin of the dimension column, matching how its selections are written. */
+  dimensionKey(dimension: CrossfilterDimension): string {
+    const column = this.index.get(dimension.column, 'dimension.column');
+    const ref = quoteIdent(column.name);
+    switch (dimension.bin.kind) {
+      case 'value':
+        return ref;
+      case 'time':
+        if (!isTemporalType(column.type)) {
+          this.fail('type_mismatch', `A time-bucketed dimension needs a date or timestamp column; ${JSON.stringify(column.name)} is ${column.type}.`, 'dimension');
+        }
+        if (dimension.bin.unit === 'hour' && column.type === 'date') {
+          this.fail('type_mismatch', `An hourly dimension needs a timestamp column; ${JSON.stringify(column.name)} is a date.`, 'dimension');
+        }
+        return `date_trunc('${dimension.bin.unit}', ${ref})`;
+      case 'width': {
+        if (!isNumericType(column.type)) {
+          this.fail('type_mismatch', `A binned dimension needs a numeric column; ${JSON.stringify(column.name)} is ${column.type}.`, 'dimension');
+        }
+        // floor(v / w) can land one bin off at an edge; correct it so that bin k holds exactly
+        // k*w <= v < (k+1)*w with the products DuckDB computes, which is how brush filters compare.
+        const w = this.params.double(dimension.bin.width);
+        const v = `CAST(${ref} AS DOUBLE)`;
+        const f = `floor(${v} / ${w})`;
+        return `(${f} + CASE WHEN ${v} >= (${f} + 1) * ${w} THEN 1 WHEN ${v} < ${f} * ${w} THEN -1 ELSE 0 END)`;
+      }
+    }
+  }
+
+  /** WHERE predicate on `gb` that selects exactly the rows `selection` selects; null selects all. */
+  selectionPredicate(dimension: CrossfilterDimension, selection: Filter | null): string | null {
+    if (selection === null) return null;
+    const column = this.index.get(dimension.column, 'dimension.column');
+    const how = cubeSelection(selection, dimension);
+    if (how === null) {
+      this.fail('unsupported', 'The selection is not aligned to the cube dimension\'s bins; run the query on the table instead.', 'selection');
+    }
+    if (how.kind === 'bins') {
+      const parts: string[] = [];
+      if (how.min !== null) parts.push(`gb >= ${this.params.double(how.min)}`);
+      if (how.max !== null) parts.push(`gb < ${this.params.double(how.max)}`);
+      return parts.length === 0 ? null : parts.join(' AND ');
+    }
+    // Value and time dimensions: gb holds the value (or its bucket start), so the filter applies to it as is.
+    const gb = new ColumnIndex([{ name: 'gb', type: dimension.bin.kind === 'width' ? 'float' : column.type }]);
+    return compileFilter({ ...selection, column: 'gb' }, gb, this.params, 'selection');
   }
 
   /* ------------------------------------------------------------------------ */
@@ -309,25 +490,38 @@ class ChartCompiler {
     const measure = this.measure();
     const color = this.colorColumn();
     const limitValue = this.limit() ?? DEFAULT_BAR_LIMIT;
-    const selects = [`${axisKey(axis)} AS gx`, ...(measure.select ? [measure.select] : [])];
-    const { ctes, src } = this.baseCtes(selects, [], color, measure.agg);
+    const { ctes, src } = this.baseCtes([[axisKey(axis), 'gx']], measure, [], color, (a) => measure.agg(a));
     const limit = this.params.bigint(limitValue);
-    if (!color) {
+    const other = this.spec.other === true;
+    if (!color && !other) {
       return (
         `WITH ${ctes.join(',\n')}\n` +
-        `SELECT gx AS x, ${measure.agg('gy')} AS y\nFROM ${src}\nGROUP BY gx\n` +
+        `SELECT gx AS x, ${measure.agg('')} AS y\nFROM ${src}\nGROUP BY gx\n` +
         `ORDER BY y DESC NULLS LAST, gx ASC NULLS LAST\nLIMIT ${limit}`
       );
     }
     ctes.push(
-      `__gg_top AS (\n  SELECT gx, ${measure.agg('gy')} AS v FROM __gg_base GROUP BY gx\n  ORDER BY v DESC NULLS LAST, gx ASC NULLS LAST LIMIT ${limit}\n)`,
+      `__gg_top AS (\n  SELECT gx, ${measure.agg('')} AS v${other ? ', TRUE AS k' : ''} FROM __gg_base GROUP BY gx\n  ORDER BY v DESC NULLS LAST, gx ASC NULLS LAST LIMIT ${limit}\n)`,
     );
+    if (!other) {
+      return (
+        `WITH ${ctes.join(',\n')}\n` +
+        `SELECT s.gx AS x, s.gc AS color, s.other AS color_other, ${measure.agg('s.')} AS y\n` +
+        `FROM ${src} AS s JOIN __gg_top AS t ON s.gx IS NOT DISTINCT FROM t.gx\n` +
+        `GROUP BY s.gx, s.gc, s.other, t.v\n` +
+        `ORDER BY t.v DESC NULLS LAST, s.gx ASC NULLS LAST, s.other ASC, s.gc ASC NULLS LAST`
+      );
+    }
+    // x values outside the top N fold into one "Other" bar (x NULL, x_other TRUE), measured over its own rows.
+    const colorSelect = color ? ', s.gc AS color, s.other AS color_other' : '';
+    const colorOrder = color ? ', color_other ASC, color ASC NULLS LAST' : '';
     return (
       `WITH ${ctes.join(',\n')}\n` +
-      `SELECT s.gx AS x, s.gc AS color, s.other AS color_other, ${measure.agg('s.gy')} AS y\n` +
-      `FROM ${src} AS s JOIN __gg_top AS t ON s.gx IS NOT DISTINCT FROM t.gx\n` +
-      `GROUP BY s.gx, s.gc, s.other, t.v\n` +
-      `ORDER BY t.v DESC NULLS LAST, s.gx ASC NULLS LAST, s.other ASC, s.gc ASC NULLS LAST`
+      `SELECT x, x_other${color ? ', color, color_other' : ''}, y FROM (\n` +
+      `  SELECT CASE WHEN t.k THEN s.gx END AS x, t.k IS NULL AS x_other${colorSelect}, t.v AS v, ${measure.agg('s.')} AS y\n` +
+      `  FROM ${src} AS s LEFT JOIN __gg_top AS t ON s.gx IS NOT DISTINCT FROM t.gx\n` +
+      `  GROUP BY ALL\n` +
+      `)\nORDER BY x_other ASC, v DESC NULLS LAST, x ASC NULLS LAST${colorOrder}`
     );
   }
 
@@ -336,12 +530,11 @@ class ChartCompiler {
     const measure = this.measure();
     const color = this.colorColumn();
     this.limit();
-    const selects = [`${axisKey(axis)} AS gx`, ...(measure.select ? [measure.select] : [])];
-    const { ctes, src } = this.baseCtes(selects, [axis.column], color, measure.agg);
+    const { ctes, src } = this.baseCtes([[axisKey(axis), 'gx']], measure, [axis.column], color, (a) => measure.agg(a));
     const colorSelect = color ? ', gc AS color, other AS color_other' : '';
     return (
       `WITH ${ctes.join(',\n')}\n` +
-      `SELECT ${axisStart(axis, 'gx')} AS x, ${axisEnd(axis, 'gx')} AS x_end${colorSelect}, ${measure.agg('gy')} AS y\n` +
+      `SELECT ${axisStart(axis, 'gx')} AS x, ${axisEnd(axis, 'gx')} AS x_end${colorSelect}, ${measure.agg('')} AS y\n` +
       `FROM ${src}\nGROUP BY gx${color ? ', gc, other' : ''}\n` +
       `ORDER BY gx${color ? ', other ASC, gc ASC NULLS LAST' : ''}`
     );
@@ -362,7 +555,11 @@ class ChartCompiler {
     this.colorColumn();
     this.limit();
     const { ctes, src } = this.baseCtes(
-      [`${axisKey(xAxis)} AS gx`, `${axisKey(yAxis)} AS gy`],
+      [
+        [axisKey(xAxis), 'gx'],
+        [axisKey(yAxis), 'gy'],
+      ],
+      null,
       [xAxis.column, yAxis.column],
       null,
       () => '',
@@ -370,7 +567,7 @@ class ChartCompiler {
     return (
       `WITH ${ctes.join(',\n')}\n` +
       `SELECT ${axisStart(xAxis, 'gx')} AS x, ${axisEnd(xAxis, 'gx')} AS x_end, ` +
-      `${axisStart(yAxis, 'gy')} AS y, ${axisEnd(yAxis, 'gy')} AS y_end, CAST(count(*) AS DOUBLE) AS count\n` +
+      `${axisStart(yAxis, 'gy')} AS y, ${axisEnd(yAxis, 'gy')} AS y_end, ${this.countAgg('')} AS count\n` +
       `FROM ${src}\nGROUP BY gx, gy\nORDER BY gx, gy`
     );
   }
@@ -392,11 +589,16 @@ class ChartCompiler {
   }
 
   scatter(): string {
+    if (this.cube !== null) this.fail('unsupported', 'scatter plots raw points, which a cube does not hold.', 'mark');
     const channels = this.scatterChannels();
     const color = this.colorColumn();
     const limitValue = this.limit() ?? SCATTER_MAX_POINTS;
     const { ctes, src } = this.baseCtes(
-      [`${quoteIdent(channels.x.name)} AS gx`, `${quoteIdent(channels.y.name)} AS gy`],
+      [
+        [quoteIdent(channels.x.name), 'gx'],
+        [quoteIdent(channels.y.name), 'gy'],
+      ],
+      null,
       [channels.x, channels.y],
       color,
       () => 'count(*)',
@@ -442,14 +644,13 @@ class ChartCompiler {
     const measure = this.measure();
     const color = this.colorColumn();
     this.limit();
-    const selects = [`${axisKey(axis)} AS gx`, ...(measure.select ? [measure.select] : [])];
-    const { ctes, src } = this.baseCtes(selects, [column], color, measure.agg);
+    const { ctes, src } = this.baseCtes([[axisKey(axis), 'gx']], measure, [column], color, (a) => measure.agg(a));
     const width = this.params.double(pixelWidth);
     const xn = axis.kind === 'time' ? 'epoch_us(x)' : 'CAST(x AS DOUBLE)';
     const series = color ? 'color, color_other, ' : '';
     const window = (order: string) => `row_number() OVER (PARTITION BY ${series}px ORDER BY ${order})`;
     ctes.push(
-      `__gg_agg AS (\n  SELECT ${axisStart(axis, 'gx')} AS x${color ? ', gc AS color, other AS color_other' : ''}, ${measure.agg('gy')} AS y\n` +
+      `__gg_agg AS (\n  SELECT ${axisStart(axis, 'gx')} AS x${color ? ', gc AS color, other AS color_other' : ''}, ${measure.agg('')} AS y\n` +
         `  FROM ${src} GROUP BY gx${color ? ', gc, other' : ''}\n)`,
       `__gg_xn AS (SELECT *, ${xn} AS xn FROM __gg_agg)`,
       `__gg_px AS (\n  SELECT a.*, CASE WHEN b.hi = b.lo THEN 0 ELSE least(floor((a.xn - b.lo) / (b.hi - b.lo) * ${width}), ${width} - 1) END AS px\n` +

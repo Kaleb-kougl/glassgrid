@@ -2,11 +2,15 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, use
 import {
   CommandError,
   effectiveColumnType,
+  effectiveFilters,
+  filterChips,
+  GRID_VIEW_ID,
   isNumericType,
   tableIdForFile,
   type ChartSpecInput,
   type ColumnState,
   type Filter,
+  type FilterChip as FilterChipModel,
   type GlassgridBridge,
   type TableColumnProfile,
   type TableId,
@@ -26,7 +30,7 @@ import {
   type ToastAction,
 } from '@glassgrid/ui';
 import { openFileAction } from './actions/open-file';
-import { chartTitle, describeEntry, filterCondition } from './describe';
+import { chartTitle, describeEntry } from './describe';
 import { isAbandoned, type EngineClient, type RowsResult } from './engine-client';
 import {
   COUNT_ROWS_MEASURE,
@@ -178,7 +182,9 @@ export function App({ engine, bridge, workspace }: AppProps) {
   // ---------------------------------------------------------------------------
   // Views of the data source
 
-  const filters = useMemo(() => Object.values(state.filters), [state.filters]);
+  // The grid queries with every selection but its own, plus every user filter (core's cross-filter model).
+  const gridFiltersKey = JSON.stringify(effectiveFilters(state, GRID_VIEW_ID));
+  const filters = useMemo(() => JSON.parse(gridFiltersKey) as Filter[], [gridFiltersKey]);
   // Bumped when the engine's data for the table changes under the same view (type overrides applied, engine restart).
   const [dataVersion, setDataVersion] = useState(0);
 
@@ -387,6 +393,23 @@ export function App({ engine, bridge, workspace }: AppProps) {
           columns: profiled.columns.length,
         } satisfies ProfileMeasureDetail);
         setProfile({ table: tableId, rowCount: profiled.rowCount, columns: profiled.columns });
+        // Record the profile in the workspace (default charts and brush snapping read it); not an undo entry.
+        registry
+          .dispatch(
+            'setColumnProfiles',
+            {
+              columns: profiled.columns.map(({ name, type, distinctCount, nullFraction, min, max }) => ({
+                name,
+                type,
+                distinctCount,
+                nullFraction,
+                min,
+                max,
+              })),
+            },
+            { caller: 'user' },
+          )
+          .catch(() => undefined);
       },
       (cause: unknown) => {
         if (run.live && !isAbandoned(cause)) showToast({ tone: 'error', message: messageOf(cause) });
@@ -395,7 +418,7 @@ export function App({ engine, bridge, workspace }: AppProps) {
     return () => {
       run.live = false;
     };
-  }, [engine, tableId, firstPageTable, dataVersion, showToast]);
+  }, [engine, registry, tableId, firstPageTable, dataVersion, showToast]);
 
   useEffect(() => {
     if (tableId === null || firstPageTable !== tableId) return;
@@ -477,9 +500,10 @@ export function App({ engine, bridge, workspace }: AppProps) {
   );
 
 
-  const removeFilter = (viewId: string, filter: Filter) => {
-    dispatch('clearFilter', { viewId });
-    showToast({ tone: 'info', message: `Removed filter ${filter.column}`, action: { label: 'Undo', shortcut: mod('Z'), onClick: () => dispatch('undo') } });
+  // Removing a chip dispatches the command the model names for it, which also clears the brush it came from.
+  const removeFilter = (chip: FilterChipModel) => {
+    dispatch(chip.remove.command, chip.remove.input);
+    showToast({ tone: 'info', message: `Removed filter ${chip.column}`, action: { label: 'Undo', shortcut: mod('Z'), onClick: () => dispatch('undo') } });
   };
 
   const stepTo = (entryId: string) => {
@@ -540,7 +564,7 @@ export function App({ engine, bridge, workspace }: AppProps) {
   const rowCount = count?.table === tableId ? count.rowCount : null;
   const totalRows = profiled?.rowCount ?? (filters.length === 0 ? rowCount : null);
   const callers = useMemo(() => chartCallers(history.past), [history.past]);
-  const filterEntries = Object.entries(state.filters);
+  const chips = useMemo(() => filterChips(state), [state]);
   const optimizingNow = optimizing && optimizing.table === tableId ? { fraction: optimizing.fraction } : null;
 
   // Header click: ascending, then descending, then file order.
@@ -651,16 +675,16 @@ export function App({ engine, bridge, workspace }: AppProps) {
 
             <section className="panel grid-panel" aria-label="Rows">
               <div className="grid-panel__bar">
-                {filterEntries.length > 0 ? (
+                {chips.length > 0 ? (
                   <div className="grid-panel__filters">
                     <div className="grid-panel__chips" role="list" aria-label="Active filters">
-                      {filterEntries.map(([viewId, filter]) => (
-                        <div role="listitem" key={viewId}>
+                      {chips.map((chip) => (
+                        <div role="listitem" key={chip.id}>
                           <FilterChip
-                            column={filter.column}
-                            condition={filterCondition(filter)}
-                            onRemove={() => removeFilter(viewId, filter)}
-                            testId={`filter-${filter.column}`}
+                            column={chip.column}
+                            condition={chip.condition}
+                            onRemove={() => removeFilter(chip)}
+                            testId={`filter-${chip.column}`}
                           />
                         </div>
                       ))}
@@ -781,8 +805,8 @@ export function App({ engine, bridge, workspace }: AppProps) {
                     tableId={tableId}
                     dataVersion={dataVersion}
                     chart={chart}
-                    selection={state.filters[chart.id]}
-                    crossFilters={filterEntries.filter(([viewId]) => viewId !== chart.id).map(([, filter]) => filter)}
+                    selection={state.selections[chart.id]?.clauses[0]?.filter}
+                    crossFilters={effectiveFilters(state, chart.id)}
                     columns={state.columns}
                     tokens={tokens}
                     addedBy={callers.get(chart.id) ?? 'user'}

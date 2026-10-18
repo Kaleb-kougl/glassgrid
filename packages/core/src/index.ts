@@ -9,4 +9,5 @@ export * from './format.js';
 export * from './spec/index.js';
 export * from './sql/index.js';
 export * from './state/index.js';
+export * from './crossfilter/index.js';
 export * from './commands/index.js';

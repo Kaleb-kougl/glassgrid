@@ -116,3 +116,31 @@ export function niceBinWidth(min: number, max: number, target: number, integer: 
 export function numericBinCount(min: number, max: number, width: number): number {
   return Math.floor(max / width) - Math.floor(min / width) + 1;
 }
+
+/** Start of the `unit` bucket holding `ms` (UTC), as `date_trunc` computes it. */
+export function truncateTime(ms: number, unit: TimeUnit): number {
+  switch (unit) {
+    case 'hour':
+      return Math.floor(ms / MS_PER_HOUR) * MS_PER_HOUR;
+    case 'day':
+      return Math.floor(ms / MS_PER_DAY) * MS_PER_DAY;
+    case 'month': {
+      const d = new Date(ms);
+      return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1);
+    }
+  }
+}
+
+/** `ms` moved by `count` units (UTC; months keep the day of month, so pass bucket starts). */
+export function addTime(ms: number, unit: TimeUnit, count = 1): number {
+  switch (unit) {
+    case 'hour':
+      return ms + count * MS_PER_HOUR;
+    case 'day':
+      return ms + count * MS_PER_DAY;
+    case 'month': {
+      const d = new Date(ms);
+      return Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + count, d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds(), d.getUTCMilliseconds());
+    }
+  }
+}

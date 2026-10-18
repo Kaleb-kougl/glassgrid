@@ -215,7 +215,7 @@ describe('App', () => {
   });
 
   it('opens a file: first rows on the canvas grid, profile distinct counts and the row count', async () => {
-    const { engine } = await openFile();
+    const { engine, workspace } = await openFile();
     expect(screen.getByTestId('file-name').textContent).toBe('trips.csv');
     expect(engine.pageFetcher).toHaveBeenCalledWith(tableId, { viewId: 'grid', sort: [], filters: [] });
     expect(engine.pages[0]).toMatchObject({ table: tableId, offset: 0, limit: 1000 });
@@ -225,6 +225,14 @@ describe('App', () => {
     await waitFor(() => expect(within(screen.getByTestId('column-category')).getByText('12,345')).toBeDefined());
     expect(within(screen.getByTestId('column-amount')).getByText('8.41M')).toBeDefined();
     expect(screen.getByTestId('column-amount').getAttribute('title')).toBe('no nulls');
+    // The profile is recorded in the workspace (for default charts and brush snapping), without an undo entry.
+    expect(workspace.store.getState().columns.find((column) => column.name === 'category')?.profile).toEqual({
+      type: 'text',
+      distinctCount: 12_345,
+      nullFraction: 0,
+      min: null,
+      max: null,
+    });
     expect(historyEntries()).toEqual(['Opened trips.csvby you · ' + new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(1_000)]);
   });
 
@@ -376,7 +384,9 @@ describe('App', () => {
     const bars = await screen.findByRole('listbox', { name: /Rows by category/ });
     await waitFor(() => expect(within(bars).getAllByRole('option')).toHaveLength(2));
     fireEvent.keyDown(bars, { key: 'Enter' });
-    expect(workspace.store.getState().filters).toEqual({ chart_2: { kind: 'in', column: 'category', values: ['alpha'] } });
+    const clicked = { source: 'click', clauses: [{ channel: 'x', filter: { kind: 'in', column: 'category', values: ['alpha'] } }] };
+    expect(workspace.store.getState().selections).toEqual({ chart_2: clicked });
+    expect(workspace.store.getHistory().past.at(-1)?.name).toBe('brush');
     expect(within(bars).getAllByRole('option')[0]?.getAttribute('aria-selected')).toBe('true');
     expect(screen.getByText('1 selected')).toBeDefined();
 
@@ -391,10 +401,10 @@ describe('App', () => {
     expect(engine.aggregate).toHaveBeenCalledTimes(1);
 
     fireEvent.click(within(chip).getByRole('button', { name: 'Remove filter on category' }));
-    expect(workspace.store.getState().filters).toEqual({});
+    expect(workspace.store.getState().selections).toEqual({});
     const toast = toastWith('Removed filter category');
     fireEvent.click(within(toast).getByRole('button', { name: /Undo/ }));
-    expect(workspace.store.getState().filters).toEqual({ chart_2: { kind: 'in', column: 'category', values: ['alpha'] } });
+    expect(workspace.store.getState().selections).toEqual({ chart_2: clicked });
   });
 
   it('shows the engine message on a chart that cannot be computed', async () => {

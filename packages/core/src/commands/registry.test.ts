@@ -168,6 +168,7 @@ describe('registration and listing', () => {
     const list = registry.list();
     expect(list.map((info) => info.name)).toEqual([
       'openFile',
+      'setColumnProfiles',
       'setColumnType',
       'sortGrid',
       'resizeColumn',
@@ -176,14 +177,17 @@ describe('registration and listing', () => {
       'copySelection',
       'setFilter',
       'clearFilter',
+      'addFilter',
+      'brush',
       'addChart',
       'removeChart',
       'renameChart',
       'setShelf',
+      'setMark',
       'undo',
       'redo',
     ]);
-    for (const name of ['sortGrid', 'resizeColumn', 'reorderColumn', 'setSelection', 'setFilter', 'clearFilter', 'addChart', 'removeChart', 'renameChart', 'setShelf']) {
+    for (const name of ['sortGrid', 'resizeColumn', 'reorderColumn', 'setSelection', 'setFilter', 'clearFilter', 'addFilter', 'brush', 'addChart', 'removeChart', 'renameChart', 'setShelf', 'setMark']) {
       expect(list.find((info) => info.name === name), name).toMatchObject({ tier: 'edit', mcp: { exposed: true } });
     }
 

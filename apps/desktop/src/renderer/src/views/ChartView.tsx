@@ -75,7 +75,7 @@ export function ChartView({
     const without = selectedValues.filter((value) => valueKey(value) !== row.key);
     const values = without.length === selectedValues.length ? [...selectedValues, row.filterValue] : without;
     if (values.length === 0) dispatch('clearFilter', { viewId: chart.id });
-    else dispatch('setFilter', { viewId: chart.id, filter: { kind: 'in', column: spec.x.column, values } });
+    else dispatch('brush', { viewId: chart.id, selection: { type: 'points', values } });
   };
 
   const yColumn = spec.y ? columns.find((column) => column.name === spec.y?.column) : undefined;
