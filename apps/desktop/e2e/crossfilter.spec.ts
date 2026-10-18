@@ -48,6 +48,8 @@ const PARQUET = ROWS > 2_000_000;
 const BRUSHES = 20;
 /** Chart creations per mark beyond the first (each under a fresh filter, so none is a result-cache hit). */
 const CREATE_ROUNDS = 5;
+/** Wait after a filter before timing chart creation (the engine's background index build for the grid). */
+const SETTLE_MS = PARQUET ? 6_000 : 2_500;
 /** `[from, to]` as fractions of the histogram's canvas width; each differs from the one before. */
 const BRUSH_PATH: readonly (readonly [number, number])[] = [
   [0.14, 0.3],
@@ -406,6 +408,9 @@ async function createRounds(page: Page, run: SourceResults): Promise<void> {
     await editor.getByTestId('filter-editor-value').fill(String(round));
     await editor.getByTestId('filter-editor-submit').click();
     await expect(page.getByTestId('filter-fare_amount')).toBeVisible();
+    // Steady state: 1.5 s after a filter settles the engine builds the grid's filtered row-number index
+    // in the background (docs/m3-xfilter-notes.md); a chart created during that build shares the 2 cores with it.
+    await page.waitForTimeout(SETTLE_MS);
     for (const mark of ['line', 'bar', 'histogram', 'heatmap'] as const) {
       const created = await dropColumns(page, DROPS[mark]);
       expect(created.detail.mark).toBe(mark);
