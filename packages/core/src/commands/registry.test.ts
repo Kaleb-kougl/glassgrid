@@ -170,6 +170,10 @@ describe('registration and listing', () => {
       'openFile',
       'setColumnType',
       'sortGrid',
+      'resizeColumn',
+      'reorderColumn',
+      'setSelection',
+      'copySelection',
       'setFilter',
       'clearFilter',
       'addChart',
@@ -179,7 +183,7 @@ describe('registration and listing', () => {
       'undo',
       'redo',
     ]);
-    for (const name of ['sortGrid', 'setFilter', 'clearFilter', 'addChart', 'removeChart', 'renameChart', 'setShelf']) {
+    for (const name of ['sortGrid', 'resizeColumn', 'reorderColumn', 'setSelection', 'setFilter', 'clearFilter', 'addChart', 'removeChart', 'renameChart', 'setShelf']) {
       expect(list.find((info) => info.name === name), name).toMatchObject({ tier: 'edit', mcp: { exposed: true } });
     }
 

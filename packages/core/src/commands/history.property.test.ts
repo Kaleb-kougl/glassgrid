@@ -1,7 +1,7 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { COLUMN_TYPES } from '../spec/column.js';
-import { createInitialWorkspaceState } from '../state/workspace.js';
+import { createInitialWorkspaceState, type WorkspaceState } from '../state/workspace.js';
 import { openFileInput, testWorkspace } from './test-support.js';
 
 const callerArb = fc.constantFrom('user' as const, 'ai' as const);
@@ -23,8 +23,24 @@ const setTypeArb = fc.record({
   type: typeArb,
 });
 const historyArb = fc.record({ kind: fc.constantFrom('undo' as const, 'redo' as const), caller: callerArb });
+const resizeArb = fc.record({ kind: fc.constant('resize' as const), caller: callerArb, index: fc.nat({ max: 10 }), width: fc.integer({ min: 48, max: 2000 }) });
+const reorderArb = fc.record({ kind: fc.constant('reorder' as const), caller: callerArb, index: fc.nat({ max: 10 }), to: fc.nat({ max: 10 }) });
+/** Not undoable: interleaved selections must not disturb what undo and redo restore. */
+const selectArb = fc.record({ kind: fc.constant('select' as const), caller: callerArb, index: fc.nat({ max: 10 }), row: fc.nat({ max: 1_000_000 }) });
 
-const opArb = fc.oneof({ arbitrary: openArb, weight: 1 }, { arbitrary: setTypeArb, weight: 4 }, { arbitrary: historyArb, weight: 2 });
+const opArb = fc.oneof(
+  { arbitrary: openArb, weight: 1 },
+  { arbitrary: setTypeArb, weight: 4 },
+  { arbitrary: historyArb, weight: 2 },
+  { arbitrary: resizeArb, weight: 1 },
+  { arbitrary: reorderArb, weight: 1 },
+  { arbitrary: selectArb, weight: 2 },
+);
+
+/** The state without the (unrecorded) selection. */
+function recorded(state: WorkspaceState): WorkspaceState {
+  return { ...state, grid: { ...state.grid, selection: null } };
+}
 
 describe('undo/redo (property)', () => {
   it('undoing everything restores the initial state and redoing everything restores the tip', async () => {
@@ -45,6 +61,17 @@ describe('undo/redo (property)', () => {
             const column = columns[op.index % Math.max(columns.length, 1)];
             if (column === undefined) continue;
             await registry.dispatch('setColumnType', { column: column.name, type: op.type }, { caller: op.caller });
+          } else if (op.kind === 'resize' || op.kind === 'reorder' || op.kind === 'select') {
+            const columns = store.getState().columns;
+            const column = columns[op.index % Math.max(columns.length, 1)];
+            if (column === undefined) continue;
+            if (op.kind === 'resize') await registry.dispatch('resizeColumn', { column: column.name, width: op.width }, { caller: op.caller });
+            else if (op.kind === 'reorder') {
+              await registry.dispatch('reorderColumn', { column: column.name, toIndex: op.to % columns.length }, { caller: op.caller });
+            } else {
+              const at = { row: op.row, column: column.name };
+              await registry.dispatch('setSelection', { selection: { anchor: at, focus: at } }, { caller: op.caller });
+            }
           } else {
             await registry.dispatch(op.kind, {}, { caller: op.caller });
           }
@@ -52,17 +79,17 @@ describe('undo/redo (property)', () => {
 
         // Ops may end mid-undo; the tip is the state with every entry applied.
         while (store.canRedo()) await registry.dispatch('redo', {}, { caller: 'user' });
-        const tip = store.getState();
+        const tip = recorded(store.getState());
         const entries = store.getHistory().past.length;
         expect(JSON.parse(JSON.stringify(tip))).toEqual(tip);
 
         for (let i = 0; i < entries; i++) await registry.dispatch('undo', {}, { caller: 'ai' });
         expect(store.canUndo()).toBe(false);
-        expect(store.getState()).toEqual(initial);
+        expect(recorded(store.getState())).toEqual(initial);
 
         for (let i = 0; i < entries; i++) await registry.dispatch('redo', {}, { caller: 'user' });
         expect(store.canRedo()).toBe(false);
-        expect(store.getState()).toEqual(tip);
+        expect(recorded(store.getState())).toEqual(tip);
         expect(store.getHistory().past).toHaveLength(entries);
       }),
       { numRuns: 300 },

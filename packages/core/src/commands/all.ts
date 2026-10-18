@@ -2,7 +2,7 @@ import { createInitialWorkspaceState, type WorkspaceState } from '../state/works
 import { redo, undo } from './builtins/history.js';
 import { addChart, removeChart, renameChart, setShelf } from './builtins/charts.js';
 import { clearFilter, setFilter } from './builtins/filters.js';
-import { sortGrid } from './builtins/grid.js';
+import { copySelection, reorderColumn, resizeColumn, setSelection, sortGrid } from './builtins/grid.js';
 import { openFile } from './builtins/open-file.js';
 import { setColumnType } from './builtins/set-column-type.js';
 import type { AnyCommand } from './define.js';
@@ -17,6 +17,10 @@ export const ALL_COMMANDS: readonly AnyCommand[] = Object.freeze([
   openFile,
   setColumnType,
   sortGrid,
+  resizeColumn,
+  reorderColumn,
+  setSelection,
+  copySelection,
   setFilter,
   clearFilter,
   addChart,

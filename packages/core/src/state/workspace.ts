@@ -59,10 +59,66 @@ export const ChartStateSchema = z.strictObject({
 });
 export type ChartState = z.infer<typeof ChartStateSchema>;
 
+/** Narrowest and widest a grid column may be dragged (px, padding included). */
+export const MIN_GRID_COLUMN_WIDTH = 48;
+export const MAX_GRID_COLUMN_WIDTH = 2_000;
+
+export const GridColumnWidthSchema = z.strictObject({
+  column: ColumnNameSchema,
+  /** Width in px, padding included. */
+  width: z.number().int().min(MIN_GRID_COLUMN_WIDTH).max(MAX_GRID_COLUMN_WIDTH),
+});
+export type GridColumnWidth = z.infer<typeof GridColumnWidthSchema>;
+
+/** One cell of the grid: a row of the current view (sort and filters applied) and a column by name. */
+export const GridCellRefSchema = z.strictObject({
+  row: z.number().int().nonnegative(),
+  column: ColumnNameSchema,
+});
+export type GridCellRef = z.infer<typeof GridCellRefSchema>;
+
+/**
+ * A rectangular cell range: from `anchor` (where it started) to `focus` (the
+ * focused cell), both inclusive. Columns are named, so the corners stay on the
+ * same columns when columns are reordered; the range covers the columns
+ * between them in display order.
+ */
+export const GridSelectionSchema = z.strictObject({
+  anchor: GridCellRefSchema,
+  focus: GridCellRefSchema,
+});
+export type GridSelection = z.infer<typeof GridSelectionSchema>;
+
 export const GridStateSchema = z.strictObject({
   sort: z.array(SortKeySchema),
+  /**
+   * Display order by column name. Empty means file order; columns missing
+   * from a non-empty list follow in file order.
+   */
+  columnOrder: z.array(ColumnNameSchema),
+  /** Widths the person or agent set; other columns use their default width. */
+  columnWidths: z.array(GridColumnWidthSchema),
+  /**
+   * The selected cell range, or null. View state: changing it is not an undo
+   * entry (`setSelection` is `undoable: false`), and rows refer to the current
+   * view, so the app clears it whenever the sort, filters or data change.
+   * Kept in the store so `get_state` and agents can read and drive it.
+   */
+  selection: GridSelectionSchema.nullable(),
 });
 export type GridState = z.infer<typeof GridStateSchema>;
+
+export function createInitialGridState(): GridState {
+  return { sort: [], columnOrder: [], columnWidths: [], selection: null };
+}
+
+/** Column names in display order: `grid.columnOrder` first (known names only), then the rest in file order. */
+export function gridColumnOrder(state: Pick<WorkspaceState, 'columns' | 'grid'>): string[] {
+  const known = new Set(state.columns.map((column) => column.name));
+  const ordered = state.grid.columnOrder.filter((name) => known.delete(name));
+  for (const column of state.columns) if (known.has(column.name)) ordered.push(column.name);
+  return ordered;
+}
 
 /** Position of a chart card on the dashboard grid, in grid units. */
 export const LayoutCardSchema = z.strictObject({
@@ -97,7 +153,7 @@ export function createInitialWorkspaceState(): WorkspaceState {
     columns: [],
     charts: [],
     filters: {},
-    grid: { sort: [] },
+    grid: createInitialGridState(),
     layout: { cards: [] },
   };
 }

@@ -95,12 +95,14 @@ export class WorkspaceStore {
    * Applies `recipe` to a draft of the state. If it changed anything, records
    * an undo entry, clears the redo stack and notifies subscribers once.
    * Returns the entry, or null for a no-op (nothing recorded or notified).
+   * With `record: false` a change is applied and notified but not recorded,
+   * and the redo stack is kept (commands declared `undoable: false`).
    * If `recipe` throws, state is untouched and the error propagates.
    */
   commit(
     meta: CommitMeta,
     recipe: (draft: Draft<WorkspaceState>, ctx: CommandContext) => void,
-    options: { readOnly?: boolean } = {},
+    options: { readOnly?: boolean; record?: boolean } = {},
   ): UndoEntry | null {
     const now = this.clock();
     const ctx: CommandContext = { caller: meta.caller, now, newId: this.newId };
@@ -110,6 +112,12 @@ export class WorkspaceStore {
     if (patches.length === 0) return null;
     if (options.readOnly === true) {
       throw new Error(`Read-tier command "${meta.name}" tried to change state`);
+    }
+    if (options.record === false) {
+      // Not undoable (view state such as the selection): apply and notify, keep both stacks as they are.
+      this.state = next;
+      this.emit();
+      return null;
     }
     const entry: UndoEntry = Object.freeze({
       id: this.newId('entry'),

@@ -3,6 +3,7 @@
  * hit-testing and scroll-into-view. No DOM, no allocation in the functions
  * the paint loop calls (they write into caller-owned `out` objects).
  */
+import { MAX_GRID_COLUMN_WIDTH, MIN_GRID_COLUMN_WIDTH } from '@glassgrid/core';
 
 /**
  * Largest spacer the grid puts in its scroll container. Chromium caps
@@ -21,9 +22,9 @@ export const OVERSCAN = 1;
 /** Half-width of the column-resize hit zone around a header's right edge. */
 export const RESIZE_HANDLE = 4;
 
-/** Narrowest a column can be resized to. */
-export const MIN_COLUMN_WIDTH = 48;
-export const MAX_COLUMN_WIDTH = 2_000;
+/** Narrowest and widest a column can be resized to (the `resizeColumn` command's bounds). */
+export const MIN_COLUMN_WIDTH = MIN_GRID_COLUMN_WIDTH;
+export const MAX_COLUMN_WIDTH = MAX_GRID_COLUMN_WIDTH;
 
 export interface ScrollMapping {
   /** True when the virtual height exceeds the spacer and positions are scaled. */

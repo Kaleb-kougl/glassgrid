@@ -10,7 +10,9 @@ export type CommandErrorCode =
   /** The tier policy, or the command's MCP exemption, refused the call. */
   | 'forbidden'
   /** The input was well formed but does not fit the current state. */
-  | 'precondition_failed';
+  | 'precondition_failed'
+  /** An effect command this host has not implemented (see `CommandRegistry.provide`). */
+  | 'unavailable';
 
 export interface CommandIssue {
   /** Dotted path into the input, e.g. `columns[2].type`; empty for the root. */

@@ -13,6 +13,12 @@ export function sequentialIds(): (prefix: string) => string {
   return (prefix) => `${prefix}_${++next}`;
 }
 
+/** The desktop app's policy: a person's own action confirms a write; AI callers are refused. */
+export const desktopLikePolicy: CommandPolicy = {
+  confirmWrite: (request) => request.caller === 'user',
+  allowRaw: () => false,
+};
+
 export function testWorkspace(policy?: CommandPolicy): ReturnType<typeof createWorkspace> {
   return createWorkspace({
     clock: fakeClock(),

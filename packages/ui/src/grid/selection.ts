@@ -1,3 +1,4 @@
+import { MAX_COPY_CELLS as CORE_MAX_COPY_CELLS, MAX_COPY_ROWS as CORE_MAX_COPY_ROWS } from '@glassgrid/core';
 import type { GridCell, GridCellRef, GridRange, GridSelection } from './types.js';
 
 /** The selection as an inclusive rectangle, or null. */
@@ -180,10 +181,9 @@ export function moveSelection(selection: GridSelection | null, move: GridMove, e
  * Copy as TSV
  */
 
-/** Copies stop at this many rows… */
-export const MAX_COPY_ROWS = 10_000;
-/** …or this many cells, whichever comes first. */
-export const MAX_COPY_CELLS = 250_000;
+/** Copies stop at this many rows or cells, whichever comes first (the `copySelection` command's limits). */
+export const MAX_COPY_ROWS = CORE_MAX_COPY_ROWS;
+export const MAX_COPY_CELLS = CORE_MAX_COPY_CELLS;
 
 /**
  * One TSV field. NULL is an empty field; values with a tab, newline,

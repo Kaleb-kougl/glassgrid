@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { WorkspaceState } from '../state/workspace.js';
-import { type AnyCommand, type Caller, CallerSchema, type Tier } from './define.js';
+import { type AnyCommand, type Caller, CallerSchema, type EffectCommand, type Tier } from './define.js';
 import { CommandError, invalidInput } from './errors.js';
 import type { WorkspaceStore } from './store.js';
 
@@ -35,10 +35,23 @@ export interface DispatchResult {
   readonly state: WorkspaceState;
   /**
    * The history entry the call recorded, or for `undo`/`redo` the entry it
-   * moved. Null when nothing changed (no-op, read command, empty history).
+   * moved. Null when nothing was recorded (no-op, read, effect or
+   * `undoable: false` command, empty history).
    */
   readonly entryId: string | null;
+  /** What an effect command's handler returned (plain JSON), e.g. what was copied. */
+  readonly value?: unknown;
 }
+
+/** What an effect handler is told besides its validated input. */
+export interface EffectContext {
+  readonly caller: Caller;
+  /** The workspace state when the command runs. */
+  readonly state: WorkspaceState;
+}
+
+/** The host's implementation of an effect command. Its return value becomes `DispatchResult.value`. */
+export type EffectHandler = (input: unknown, ctx: EffectContext) => unknown;
 
 export type JsonSchema = z.core.JSONSchema.BaseSchema;
 
@@ -62,6 +75,7 @@ export class CommandRegistry {
   private readonly commands = new Map<string, { command: AnyCommand; info: CommandInfo }>();
   private readonly store: WorkspaceStore;
   private readonly policy: CommandPolicy;
+  private readonly effects = new Map<string, EffectHandler>();
 
   constructor(store: WorkspaceStore, options: { policy?: CommandPolicy } = {}) {
     this.store = store;
@@ -90,6 +104,20 @@ export class CommandRegistry {
     return this;
   }
 
+  /**
+   * Implements a registered effect command (e.g. `copySelection` with the
+   * app's clipboard). One handler per command; providing again replaces it.
+   * Returns a function that removes this handler.
+   */
+  provide(name: string, handler: EffectHandler): () => void {
+    const entry = this.commands.get(name);
+    if (entry?.command.kind !== 'effect') throw new Error(`"${name}" is not a registered effect command`);
+    this.effects.set(name, handler);
+    return () => {
+      if (this.effects.get(name) === handler) this.effects.delete(name);
+    };
+  }
+
   has(name: string): boolean {
     return this.commands.has(name);
   }
@@ -115,7 +143,9 @@ export class CommandRegistry {
     try {
       const { command, input, caller } = this.prepare(name, rawInput, options);
       const hook = command.tier === 'write' ? this.policy.confirmWrite : command.tier === 'raw' ? this.policy.allowRaw : null;
-      if (hook === null) return Promise.resolve(this.run(command, input, caller));
+      if (hook === null) {
+        return command.kind === 'effect' ? this.runEffect(command, input, caller) : Promise.resolve(this.run(command, input, caller));
+      }
       if (hook === undefined) {
         return Promise.reject(
           new CommandError('forbidden', `"${name}" is a ${command.tier}-tier command and this host does not allow it`, {
@@ -128,7 +158,7 @@ export class CommandRegistry {
         if (!allowed) {
           throw new CommandError('forbidden', `"${name}" was not allowed (${command.tier} tier)`, { command: name });
         }
-        return this.run(command, input, caller);
+        return command.kind === 'effect' ? this.runEffect(command, input, caller) : this.run(command, input, caller);
       });
     } catch (error) {
       return Promise.reject(error instanceof Error ? error : new Error(String(error)));
@@ -167,7 +197,16 @@ export class CommandRegistry {
     return { command, input: parsed.data, caller };
   }
 
-  private run(command: AnyCommand, input: unknown, caller: Caller): DispatchResult {
+  private async runEffect(command: EffectCommand, input: unknown, caller: Caller): Promise<DispatchResult> {
+    const handler = this.effects.get(command.name);
+    if (handler === undefined) {
+      throw new CommandError('unavailable', `"${command.name}" is not available in this app right now`, { command: command.name });
+    }
+    const value = await handler(input, { caller, state: this.store.getState() });
+    return { state: this.store.getState(), entryId: null, value };
+  }
+
+  private run(command: Exclude<AnyCommand, EffectCommand>, input: unknown, caller: Caller): DispatchResult {
     let entryId: string | null;
     if (command.kind === 'history') {
       const moved = command.direction === 'undo' ? this.store.undo() : this.store.redo();
@@ -178,7 +217,7 @@ export class CommandRegistry {
         (draft, ctx) => {
           command.apply(draft, input, ctx);
         },
-        { readOnly: command.tier === 'read' },
+        { readOnly: command.tier === 'read', record: command.undoable !== false },
       );
       entryId = entry?.id ?? null;
     }

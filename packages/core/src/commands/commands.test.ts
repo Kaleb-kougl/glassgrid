@@ -152,6 +152,27 @@ describe('WorkspaceStore', () => {
     expect(store.getState()).toEqual(initial);
   });
 
+  it('applies an unrecorded change without touching either stack', () => {
+    const { store } = testWorkspace();
+    store.commit({ name: 'a', caller: 'user', input: {} }, (draft) => {
+      draft.grid.sort = [{ column: 'a', direction: 'asc' }];
+    });
+    store.undo();
+    const history = store.getHistory();
+    const entry = store.commit(
+      { name: 'select', caller: 'user', input: {} },
+      (draft) => {
+        draft.grid.selection = { anchor: { row: 0, column: 'a' }, focus: { row: 0, column: 'a' } };
+      },
+      { record: false },
+    );
+    expect(entry).toBeNull();
+    expect(store.getHistory()).toBe(history);
+    expect(store.getState().grid.selection).not.toBeNull();
+    store.redo();
+    expect(store.getState().grid).toMatchObject({ sort: [{ column: 'a', direction: 'asc' }], selection: { anchor: { row: 0 } } });
+  });
+
   it('passes the injected clock and id generator to commands', () => {
     const store = new WorkspaceStore(createInitialWorkspaceState(), {
       clock: fakeClock(5_000),

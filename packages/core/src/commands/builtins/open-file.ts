@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { FileHandleSchema } from '../../ids.js';
 import { ColumnTypeSchema } from '../../spec/column.js';
 import { FingerprintSchema } from '../../protocol/engine.js';
-import { ColumnNameSchema } from '../../state/workspace.js';
+import { ColumnNameSchema, createInitialGridState } from '../../state/workspace.js';
 import { defineCommand } from '../define.js';
 import { MCP_EXEMPTIONS } from '../mcp-exemptions.js';
 
@@ -44,7 +44,7 @@ export const openFile = defineCommand({
     }));
     draft.charts = [];
     draft.filters = {};
-    draft.grid = { sort: [] };
+    draft.grid = createInitialGridState();
     draft.layout = { cards: [] };
   },
 });

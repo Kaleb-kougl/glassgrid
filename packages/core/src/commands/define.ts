@@ -47,6 +47,16 @@ export interface CommandSpec<S extends z.ZodType> {
   readonly tier: Tier;
   readonly mcp: McpExposure;
   /**
+   * Whether a change is recorded on the undo stack (default true). Set
+   * `false` only for ephemeral view state that a person would not expect
+   * Undo to step through, such as the grid selection: the change is applied
+   * and broadcast like any other, but records no entry and keeps the redo
+   * stack. Undo and redo replay recorded entries' patches, which may
+   * overwrite such state (undoing `openFile` brings back the previous
+   * file's selection), so keep it to state where that is harmless.
+   */
+  readonly undoable?: boolean;
+  /**
    * Pure, synchronous state update on an Immer draft. Mutate the draft; do not
    * return a value. Throw `CommandError('precondition_failed', …)` when the
    * input does not fit the state; the draft is then discarded.
@@ -74,7 +84,29 @@ export interface HistoryCommand {
   readonly mcp: McpExposure;
 }
 
-export type AnyCommand = StateCommand | HistoryCommand;
+/**
+ * A command whose effect is outside the workspace state, such as copying
+ * cells to the clipboard. Core declares it (name, schema, tier, MCP
+ * exposure) so every caller sees it in one registry and the tier policy
+ * applies; the host implements it with `registry.provide(name, handler)`,
+ * because the effect needs the host's runtime (DOM, preload bridge). It
+ * never changes state and is never recorded on the undo stack.
+ */
+export interface EffectCommand<S extends z.ZodType = z.ZodType> {
+  readonly kind: 'effect';
+  readonly name: string;
+  readonly description: string;
+  readonly input: S;
+  readonly tier: Tier;
+  readonly mcp: McpExposure;
+}
+
+export type AnyCommand = StateCommand | HistoryCommand | EffectCommand;
+
+/** Declares an effect command; the host supplies its implementation with `registry.provide`. */
+export function defineEffect<S extends z.ZodType>(spec: Omit<EffectCommand<S>, 'kind'>): EffectCommand<S> {
+  return Object.freeze({ ...spec, kind: 'effect' as const });
+}
 
 /** Declares a state command. The returned object is what you register. */
 export function defineCommand<S extends z.ZodType>(spec: CommandSpec<S>): StateCommand<S> {
