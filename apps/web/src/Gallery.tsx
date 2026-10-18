@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react';
+import { ChartsGallery } from './ChartsGallery';
 import { APP_NAME, compileCountQuery, quoteIdent, type ColumnType } from '@glassgrid/core';
 import {
   AgentIndicator,
@@ -238,6 +239,14 @@ function Sheet({ theme }: { theme: ThemeName }) {
             />
           </div>
         </div>
+      </Section>
+
+      <Section
+        title="Charts"
+        wide
+        note="M3 chart layer on synthetic results: drag to brush (handles resize, double-click or Escape clears; arrows move a focused brush), hover for exact values, “View data” for the rows. The 200,000-point scatter draws on the sheet's one shared WebGL canvas."
+      >
+        <ChartsGallery theme={theme} />
       </Section>
 
       <Section title="Tooltip" note="Values come from the aggregate rows, never from pixel position; flips at container edges.">

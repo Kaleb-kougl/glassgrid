@@ -32,11 +32,15 @@ export {
   BarChart,
   layoutBars,
   hitTestBars,
-  formatAggregate,
+  drawBars,
+  barDataFromArrow,
   type BarChartProps,
   type BarDatum,
+  type BarData,
+  type BarSegment,
   type BarLayout,
 } from './components/BarChart.js';
+export * from './charts/index.js';
 export {
   CanvasGrid,
   copySelectionAsTsv,

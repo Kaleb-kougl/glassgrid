@@ -843,6 +843,129 @@ button.gg-shelf-chip {
 }
 
 /* ---------------------------------------------------------------------------
+ * Charts (canvas): line, area, histogram, heatmap, scatter
+ *
+ * Stacking: the plot is positioned without a z-index, so its base canvas
+ * paints below a panel's shared WebGL overlay (z-index 1) and the top
+ * canvas (brush, hover) above it (z-index 2). Tooltips are z-index 10.
+ */
+.gg-chart {
+  position: relative;
+  padding: 10px 12px 4px;
+}
+
+.gg-chart__plot {
+  position: relative;
+  outline: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.gg-chart__base {
+  display: block;
+}
+
+.gg-chart__top {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 2;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.gg-chart__plot:focus-visible {
+  outline: var(--gg-focus-width) solid var(--gg-focus);
+  outline-offset: var(--gg-focus-offset);
+  border-radius: 2px;
+}
+
+.gg-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  font: var(--gg-type-ui-xs);
+  color: var(--gg-text-secondary);
+}
+
+.gg-chart-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.gg-chart-legend__swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex: none;
+}
+
+.gg-chart-legend__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 160px;
+}
+
+.gg-chart-legend__label--null {
+  font-style: italic;
+}
+
+.gg-chart-legend--ramp {
+  display: grid;
+  grid-template-columns: auto minmax(80px, 160px);
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  row-gap: 2px;
+}
+
+.gg-chart-legend--ramp .gg-chart-legend__label {
+  grid-row: 1 / span 2;
+  align-self: start;
+  font: var(--gg-type-code);
+}
+
+.gg-chart-legend__ramp {
+  height: 8px;
+  border-radius: 2px;
+}
+
+.gg-chart-legend__ticks {
+  display: flex;
+  justify-content: space-between;
+  font-variant-numeric: tabular-nums;
+}
+
+.gg-chart-data__note {
+  caption-side: bottom;
+  padding: 6px 10px;
+  text-align: left;
+  font: var(--gg-type-ui-xs);
+  color: var(--gg-text-tertiary);
+}
+
+/* One WebGL canvas per charts panel (WebGLOverlayProvider). */
+.gg-webgl-overlay-root {
+  position: relative;
+  isolation: isolate;
+}
+
+.gg-webgl-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------------------------
  * Tooltip
  */
 .gg-tooltip {
