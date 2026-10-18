@@ -17,4 +17,6 @@ export default defineConfig({
     chunkSizeWarningLimit: 4096,
   },
   worker: { format: 'es' },
+  // DuckDB-WASM imports apache-arrow ^17 for helpers the engine does not use; one copy (the engine's 21) is enough.
+  resolve: { dedupe: ['apache-arrow'] },
 });

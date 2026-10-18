@@ -1,0 +1,224 @@
+{
+  "label": "",
+  "csv": "tools/datasets/out/synthetic-1m-seed42.csv",
+  "parquet": "../../tools/datasets/out/synthetic-1m-seed42.parquet",
+  "runs": 3,
+  "duckdb": {
+    "native": "v1.5.6",
+    "wasm": "v1.4.3"
+  },
+  "machine": {
+    "platform": "linux",
+    "arch": "x64",
+    "cpus": 2,
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "memoryGb": 8
+  },
+  "results": {
+    "native": {
+      "csv": {
+        "runs": [
+          {
+            "openToFirstPageMs": 236.3,
+            "openMs": 142.9,
+            "firstPageMs": 93.4,
+            "profileMs": 621.6,
+            "sortedFirstPageMs": 822.4,
+            "barMs": 459.8,
+            "heatmapMs": 334.2,
+            "crossfilterPrepareMs": 985,
+            "brushMs": 20.9,
+            "brushPlainMs": 907.9,
+            "rows": 1000000,
+            "fromCube": true
+          },
+          {
+            "openToFirstPageMs": 117.4,
+            "openMs": 87.9,
+            "firstPageMs": 29.5,
+            "profileMs": 606.1,
+            "sortedFirstPageMs": 993.3,
+            "barMs": 445.5,
+            "heatmapMs": 412.2,
+            "crossfilterPrepareMs": 1033.3,
+            "brushMs": 30.8,
+            "brushPlainMs": 1009.8,
+            "rows": 1000000,
+            "fromCube": true
+          },
+          {
+            "openToFirstPageMs": 130.8,
+            "openMs": 94.2,
+            "firstPageMs": 36.6,
+            "profileMs": 748.9,
+            "sortedFirstPageMs": 859.5,
+            "barMs": 339.9,
+            "heatmapMs": 377.1,
+            "crossfilterPrepareMs": 1126.2,
+            "brushMs": 29.5,
+            "brushPlainMs": 1010.1,
+            "rows": 1000000,
+            "fromCube": true
+          }
+        ],
+        "median": {
+          "openToFirstPageMs": 130.8,
+          "openMs": 94.2,
+          "firstPageMs": 36.6,
+          "profileMs": 621.6,
+          "sortedFirstPageMs": 859.5,
+          "barMs": 445.5,
+          "heatmapMs": 377.1,
+          "crossfilterPrepareMs": 1033.3,
+          "brushMs": 29.5,
+          "brushPlainMs": 1009.8,
+          "rows": 1000000,
+          "fromCube": true
+        }
+      },
+      "parquet": {
+        "runs": [
+          {
+            "openToFirstPageMs": 67.7,
+            "openMs": 26.2,
+            "firstPageMs": 41.5,
+            "profileMs": 381.9,
+            "sortedFirstPageMs": 195.1,
+            "barMs": 34.3,
+            "heatmapMs": 119.8,
+            "crossfilterPrepareMs": 179,
+            "brushMs": 24.2,
+            "brushPlainMs": 121,
+            "rows": 1000000,
+            "fromCube": true
+          },
+          {
+            "openToFirstPageMs": 77.6,
+            "openMs": 20.9,
+            "firstPageMs": 56.7,
+            "profileMs": 422.2,
+            "sortedFirstPageMs": 194.8,
+            "barMs": 20,
+            "heatmapMs": 121.4,
+            "crossfilterPrepareMs": 239.4,
+            "brushMs": 39.6,
+            "brushPlainMs": 151.5,
+            "rows": 1000000,
+            "fromCube": true
+          },
+          {
+            "openToFirstPageMs": 97.7,
+            "openMs": 45.8,
+            "firstPageMs": 51.8,
+            "profileMs": 378.5,
+            "sortedFirstPageMs": 189.5,
+            "barMs": 26,
+            "heatmapMs": 140.1,
+            "crossfilterPrepareMs": 167.4,
+            "brushMs": 22,
+            "brushPlainMs": 130.4,
+            "rows": 1000000,
+            "fromCube": true
+          }
+        ],
+        "median": {
+          "openToFirstPageMs": 77.6,
+          "openMs": 26.2,
+          "firstPageMs": 51.8,
+          "profileMs": 381.9,
+          "sortedFirstPageMs": 194.8,
+          "barMs": 26,
+          "heatmapMs": 121.4,
+          "crossfilterPrepareMs": 179,
+          "brushMs": 24.2,
+          "brushPlainMs": 130.4,
+          "rows": 1000000,
+          "fromCube": true
+        }
+      }
+    },
+    "wasm": {
+      "csv": {
+        "runs": [
+          {
+            "openToFirstPageMs": 359.9,
+            "openMs": 340.4,
+            "firstPageMs": 19.5,
+            "profileMs": 1601.3,
+            "sortedFirstPageMs": 1261.6,
+            "barMs": 1308,
+            "heatmapMs": 1692.1,
+            "crossfilterPrepareMs": 2475.5,
+            "brushMs": 22.6,
+            "brushPlainMs": 1942.6,
+            "rows": 1000000,
+            "fromCube": true
+          },
+          {
+            "openToFirstPageMs": 206.7,
+            "openMs": 188.9,
+            "firstPageMs": 17.8,
+            "profileMs": 1579,
+            "sortedFirstPageMs": 1218.6,
+            "barMs": 1283,
+            "heatmapMs": 1998.2,
+            "crossfilterPrepareMs": 2189.7,
+            "brushMs": 15.9,
+            "brushPlainMs": 1633.1,
+            "rows": 1000000,
+            "fromCube": true
+          },
+          {
+            "openToFirstPageMs": 282.8,
+            "openMs": 269.1,
+            "firstPageMs": 13.8,
+            "profileMs": 1406.8,
+            "sortedFirstPageMs": 1198.4,
+            "barMs": 1119.8,
+            "heatmapMs": 1674.7,
+            "crossfilterPrepareMs": 2694.2,
+            "brushMs": 28,
+            "brushPlainMs": 1778.2,
+            "rows": 1000000,
+            "fromCube": true
+          }
+        ],
+        "median": {
+          "openToFirstPageMs": 282.8,
+          "openMs": 269.1,
+          "firstPageMs": 17.8,
+          "profileMs": 1579,
+          "sortedFirstPageMs": 1218.6,
+          "barMs": 1283,
+          "heatmapMs": 1692.1,
+          "crossfilterPrepareMs": 2475.5,
+          "brushMs": 22.6,
+          "brushPlainMs": 1778.2,
+          "rows": 1000000,
+          "fromCube": true
+        }
+      },
+      "parquet": {
+        "skipped": "no Parquet support in this driver"
+      }
+    }
+  },
+  "parity": {
+    "columns": true,
+    "profile": true,
+    "distinct": true,
+    "first page": true,
+    "sorted page": true,
+    "bar": true,
+    "bar sum": false,
+    "heatmap": true,
+    "histogram": true,
+    "line": true
+  },
+  "differences": {
+    "bar sum": {
+      "native": "[{\"x\":\"completed\",\"y\":1016585913.1300163},{\"x\":\"pending\",\"y\":216666543.55000135},{\"x\":\"refunded\",\"y\":145768230.7400009},{\"x\":\"failed\",\"y\":71886276.51}]",
+      "wasm": "[{\"x\":\"completed\",\"y\":1016585913.1300356},{\"x\":\"pending\",\"y\":216666543.54999724},{\"x\":\"refunded\",\"y\":145768230.7399997},{\"x\":\"failed\",\"y\":71886276.50999965}]"
+    }
+  }
+}

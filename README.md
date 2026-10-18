@@ -11,9 +11,10 @@ as its embedded engine; nothing leaves your machine.
 
 | Path | What |
 | --- | --- |
-| `apps/desktop` | Electron app: main, preload, React renderer, DuckDB engine (utility process) |
+| `apps/desktop` | Electron app: main, preload, React renderer, engine host (utility process) |
 | `apps/web` | Browser build (DuckDB-WASM), placeholder for now |
 | `packages/core` | Platform-neutral TypeScript: types, Zod schemas, protocols, SQL |
+| `packages/engine` | The query engine, with native (`@duckdb/node-api`) and DuckDB-WASM drivers and the web worker; see [docs/m4-engine-portability.md](docs/m4-engine-portability.md) |
 | `packages/ui` | Shared React components |
 
 DuckDB (`@duckdb/node-api`) runs in an Electron `utilityProcess`. The renderer
@@ -35,7 +36,7 @@ pnpm build        # build desktop (electron-vite) and web (vite)
 pnpm lint         # ESLint, including the core/renderer boundary rules
 pnpm typecheck    # tsc for every package and process
 pnpm test         # Vitest unit tests
-pnpm e2e          # build, then Playwright E2E on a generated 1M-row CSV
+pnpm e2e          # build, then Playwright E2E on a generated 1M-row CSV, then the engine worker in Chromium
 pnpm e2e:10m      # same with 10M rows
 pnpm package      # electron-builder installer for the current OS (unsigned)
 ```

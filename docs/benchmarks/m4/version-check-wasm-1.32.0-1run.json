@@ -1,0 +1,140 @@
+{
+  "label": "wasm-1.32.0",
+  "csv": "tools/datasets/out/synthetic-1m-seed42.csv",
+  "parquet": "../../tools/datasets/out/synthetic-1m-seed42.parquet",
+  "runs": 1,
+  "duckdb": {
+    "native": "v1.5.6",
+    "wasm": "v1.4.3"
+  },
+  "machine": {
+    "platform": "linux",
+    "arch": "x64",
+    "cpus": 2,
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "memoryGb": 8
+  },
+  "results": {
+    "native": {
+      "csv": {
+        "runs": [
+          {
+            "openToFirstPageMs": 352.3,
+            "openMs": 244.8,
+            "firstPageMs": 107.5,
+            "profileMs": 1198.3,
+            "sortedFirstPageMs": 879.2,
+            "barMs": 1330.2,
+            "heatmapMs": 1414,
+            "crossfilterPrepareMs": 2600.6,
+            "brushMs": 57.3,
+            "brushPlainMs": 2001.8,
+            "rows": 1000000,
+            "fromCube": true
+          }
+        ],
+        "median": {
+          "openToFirstPageMs": 352.3,
+          "openMs": 244.8,
+          "firstPageMs": 107.5,
+          "profileMs": 1198.3,
+          "sortedFirstPageMs": 879.2,
+          "barMs": 1330.2,
+          "heatmapMs": 1414,
+          "crossfilterPrepareMs": 2600.6,
+          "brushMs": 57.3,
+          "brushPlainMs": 2001.8,
+          "rows": 1000000,
+          "fromCube": true
+        }
+      },
+      "parquet": {
+        "runs": [
+          {
+            "openToFirstPageMs": 123.5,
+            "openMs": 58.6,
+            "firstPageMs": 64.9,
+            "profileMs": 964,
+            "sortedFirstPageMs": 446.6,
+            "barMs": 36.9,
+            "heatmapMs": 168,
+            "crossfilterPrepareMs": 269.4,
+            "brushMs": 46.5,
+            "brushPlainMs": 215.9,
+            "rows": 1000000,
+            "fromCube": true
+          }
+        ],
+        "median": {
+          "openToFirstPageMs": 123.5,
+          "openMs": 58.6,
+          "firstPageMs": 64.9,
+          "profileMs": 964,
+          "sortedFirstPageMs": 446.6,
+          "barMs": 36.9,
+          "heatmapMs": 168,
+          "crossfilterPrepareMs": 269.4,
+          "brushMs": 46.5,
+          "brushPlainMs": 215.9,
+          "rows": 1000000,
+          "fromCube": true
+        }
+      }
+    },
+    "wasm": {
+      "csv": {
+        "runs": [
+          {
+            "openToFirstPageMs": 779.9,
+            "openMs": 748.5,
+            "firstPageMs": 31.4,
+            "profileMs": 2575.7,
+            "sortedFirstPageMs": 2040.1,
+            "barMs": 2011.6,
+            "heatmapMs": 2080.6,
+            "crossfilterPrepareMs": 2938.9,
+            "brushMs": 51.2,
+            "brushPlainMs": 1746.9,
+            "rows": 1000000,
+            "fromCube": true
+          }
+        ],
+        "median": {
+          "openToFirstPageMs": 779.9,
+          "openMs": 748.5,
+          "firstPageMs": 31.4,
+          "profileMs": 2575.7,
+          "sortedFirstPageMs": 2040.1,
+          "barMs": 2011.6,
+          "heatmapMs": 2080.6,
+          "crossfilterPrepareMs": 2938.9,
+          "brushMs": 51.2,
+          "brushPlainMs": 1746.9,
+          "rows": 1000000,
+          "fromCube": true
+        }
+      },
+      "parquet": {
+        "skipped": "no Parquet support in this driver"
+      }
+    }
+  },
+  "parity": {
+    "columns": true,
+    "profile": true,
+    "distinct": true,
+    "first page": true,
+    "sorted page": true,
+    "bar": true,
+    "bar sum": false,
+    "heatmap": true,
+    "histogram": true,
+    "line": true
+  },
+  "differences": {
+    "bar sum": {
+      "native": "[{\"x\":\"completed\",\"y\":1016585913.1300141},{\"x\":\"pending\",\"y\":216666543.55000043},{\"x\":\"refunded\",\"y\":145768230.7400006},{\"x\":\"failed\",\"y\":71886276.51000035}]",
+      "wasm": "[{\"x\":\"completed\",\"y\":1016585913.1300356},{\"x\":\"pending\",\"y\":216666543.54999724},{\"x\":\"refunded\",\"y\":145768230.7399997},{\"x\":\"failed\",\"y\":71886276.50999965}]"
+    }
+  }
+}

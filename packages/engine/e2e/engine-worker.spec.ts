@@ -23,7 +23,11 @@ test('starts DuckDB-WASM in a worker: version, single-threaded EH build, capabil
   const info = await page.evaluate(() => globalThis.gg.info());
   console.info(JSON.stringify(info));
   expect(info.duckdbVersion).toMatch(/^v1\.\d+\.\d+/);
-  expect(info.capabilities).toMatchObject({ interrupt: 'cooperative', progress: false, cache: 'opfs', crossOriginIsolated: false });
+  // GLASSGRID_COI=1 serves the page with COOP/COEP (e2e/serve.ts): the page is then cross-origin isolated,
+  // but the engine still runs DuckDB-WASM's single-threaded build (see docs/m4-engine-portability.md).
+  const isolated = process.env['GLASSGRID_COI'] === '1';
+  expect(info.capabilities).toMatchObject({ interrupt: 'cooperative', progress: false, cache: 'opfs', crossOriginIsolated: isolated });
+  expect(info.crossOriginIsolated).toBe(isolated);
 });
 
 test('runs the shared engine scenario on a File, like native DuckDB does', async ({ page }) => {
