@@ -20,6 +20,7 @@ const DRIVER_NEUTRAL = [
   'src/column-types.test.ts',
   'src/bench.test.ts',
   'src/crossfilter-bench.test.ts',
+  'src/m4-bench.test.ts',
 ];
 
 export default defineConfig({

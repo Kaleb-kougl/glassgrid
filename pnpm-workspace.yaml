@@ -11,3 +11,5 @@ ignoredBuiltDependencies:
 
 onlyBuiltDependencies:
   - esbuild
+patchedDependencies:
+  '@duckdb/duckdb-wasm@1.32.0': patches/@duckdb__duckdb-wasm@1.32.0.patch

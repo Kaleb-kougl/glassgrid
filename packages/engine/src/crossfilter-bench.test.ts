@@ -32,7 +32,7 @@ import { createHarness, mulberry32, writeTaxiLikeCsv } from './test-support';
  * replies. `sql` mode sends no cross-filter hints (M2 behaviour); `cube` mode
  * sends them, so the engine answers from per-chart cubes.
  *
- *   GLASSGRID_XF_BENCH_ROWS=10000000 pnpm --filter @glassgrid/desktop exec vitest run src/engine/crossfilter-bench.test.ts
+ *   GLASSGRID_XF_BENCH_ROWS=10000000 pnpm --filter @glassgrid/engine exec vitest run --project native src/crossfilter-bench.test.ts
  *
  * GLASSGRID_XF_BENCH_CSV=<path> reuses (or creates) the fixture file;
  * GLASSGRID_XF_MODES=sql,cube picks the modes; GLASSGRID_XF_SOURCES=parquet,csv

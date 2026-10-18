@@ -66,7 +66,7 @@ describe('ParquetCache (files only)', () => {
     await new ParquetCache(nodeFiles, h.cacheDir).ready();
     const names = await listCache(h.cacheDir);
     expect(names).toHaveLength(1);
-    expect(names[0]).toMatch(new RegExp(`^${KEY_B}\\.parquet\\.[0-9a-f]+\\.tmp$`));
+    expect(names[0]).toMatch(new RegExp(`^${KEY_B}\\.parquet\\.[0-9a-f]+\\.partial$`));
   });
 });
 
@@ -133,7 +133,7 @@ describe.skipIf(!hasParquet)('QueryService Parquet cache', () => {
     const { table } = await openCsv(1_500_000);
     const conversion = h.service.ensureParquetCache(table);
     // Let COPY start writing, then clear the cache, which interrupts it.
-    await waitFor(async () => (await listCache(h.cacheDir)).some((name) => name.endsWith('.tmp')));
+    await waitFor(async () => (await listCache(h.cacheDir)).some((name) => name.endsWith('.partial')));
     await h.service.clearCache('parquet');
     await expect(conversion).rejects.toMatchObject({ code: 'cancelled' });
     expect(await listCache(h.cacheDir)).toEqual([]);

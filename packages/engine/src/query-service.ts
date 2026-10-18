@@ -1152,8 +1152,10 @@ export class QueryService extends Emitter<QueryServiceEvents> {
         // PRAGMAs, unlike SET, still work after lock_configuration; they only touch this connection.
         await connection.enableProgress();
         if (flags.interrupted) throw new EngineFailure('cancelled', 'Parquet conversion was cancelled');
+        // The engine writes to its own temp file and renames it (ParquetCache.commit), so DuckDB's own
+        // temp-file-then-move is off: in the browser the target already exists as an OPFS handle.
         await connection.run(
-          `COPY (SELECT * FROM ${await this.csvReader(connection, state)}) TO ${quoteLiteral(tempPath)} (FORMAT parquet, COMPRESSION ${PARQUET_COMPRESSION})`,
+          `COPY (SELECT * FROM ${await this.csvReader(connection, state)}) TO ${quoteLiteral(tempPath)} (FORMAT parquet, COMPRESSION ${PARQUET_COMPRESSION}, USE_TMP_FILE false)`,
         );
         // The CSV may have changed while it was being copied; never cache a mix.
         const after = await fingerprintFile(this.driver.files, state.csvPath);

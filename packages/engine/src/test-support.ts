@@ -12,6 +12,7 @@ import { finished } from 'node:stream/promises';
 import { tableFromIPC, type Table } from 'apache-arrow';
 import { tableIdForFile, toFileHandle, type FileHandle, type TableId } from '@glassgrid/core';
 import type { DuckDriver } from './driver';
+import { FIXTURE_HEADER, fixtureLines } from './testing/fixture';
 import { createNativeDriver } from './native/driver';
 import { QueryService, type QueryServiceOptions } from './query-service';
 
@@ -53,18 +54,7 @@ export function latencyBudget(nativeMs: number): number {
   return isWasm ? Math.max(nativeMs, 1_500) : nativeMs;
 }
 
-export const CATEGORIES = ['alpha', 'bravo', 'charlie', 'delta', 'echo'] as const;
-
-/** Same shape as the E2E fixture: id,category,amount,created_on. Row i (0-based) has id i+1. */
-export function fixtureRow(i: number): { id: number; category: string; amount: number; createdOn: string } {
-  const pad2 = (value: number) => String(value).padStart(2, '0');
-  return {
-    id: i + 1,
-    category: CATEGORIES[i % CATEGORIES.length] ?? 'alpha',
-    amount: ((i * 7919) % 1_000_000) / 100,
-    createdOn: `2026-${pad2((i % 12) + 1)}-${pad2((i % 28) + 1)}`,
-  };
-}
+export { CATEGORIES, fixtureLines, fixtureRow } from './testing/fixture';
 
 export async function writeLines(path: string, header: string, lines: Iterable<string>): Promise<void> {
   const out = createWriteStream(path, { encoding: 'utf8' });
@@ -83,15 +73,9 @@ export async function writeLines(path: string, header: string, lines: Iterable<s
 }
 
 export async function writeFixtureCsv(path: string, rows: number): Promise<void> {
-  await writeLines(path, 'id,category,amount,created_on', fixtureLines(rows));
+  await writeLines(path, FIXTURE_HEADER, fixtureLines(rows));
 }
 
-function* fixtureLines(rows: number): Generator<string> {
-  for (let i = 0; i < rows; i += 1) {
-    const row = fixtureRow(i);
-    yield `${row.id},${row.category},${row.amount},${row.createdOn}`;
-  }
-}
 
 /** Deterministic PRNG (mulberry32): the same seed always yields the same sequence. */
 export function mulberry32(seed: number): () => number {

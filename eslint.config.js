@@ -14,7 +14,8 @@ const ENGINE_NODE_FILES = [
   'packages/engine/src/wasm/node.ts',
   'packages/engine/src/**/*.test.ts',
   'packages/engine/src/test-support.ts',
-  'packages/engine/web/*.ts',
+  'packages/engine/e2e/*.ts',
+  'packages/engine/playwright.config.ts',
 ];
 
 /** Imports that only make sense in Node or Electron's privileged processes. */
@@ -46,6 +47,9 @@ export default defineConfig(
     '**/bench/.out/',
     '**/bench/.out-charts/',
     '**/bench/results/',
+    // Engine browser test build output and generated samples.
+    '**/e2e/.out/',
+    '**/e2e/.samples/',
     // Claude Design export (gitignored reference material).
     'design/',
   ]),
@@ -95,7 +99,7 @@ export default defineConfig(
     languageOptions: { globals: globals.node },
   },
   {
-    files: ['packages/engine/src/worker/**', 'packages/engine/src/client/**', 'packages/engine/web/**'],
+    files: ['packages/engine/src/worker/**', 'packages/engine/src/client/**', 'packages/engine/src/web/**', 'packages/engine/e2e/page/**'],
     languageOptions: { globals: { ...globals.browser, ...globals.worker } },
   },
   {
@@ -152,7 +156,7 @@ export default defineConfig(
     // worker: no Node built-ins, no Electron, no DOM. Drivers and runtimes
     // (native, wasm/node, worker) are the exceptions.
     files: ['packages/engine/src/**'],
-    ignores: [...ENGINE_NODE_FILES, 'packages/engine/src/worker/**', 'packages/engine/src/client/**'],
+    ignores: [...ENGINE_NODE_FILES, 'packages/engine/src/worker/**', 'packages/engine/src/web/**', 'packages/engine/src/client/port-client.test.ts'],
     rules: {
       'no-restricted-imports': [
         'error',

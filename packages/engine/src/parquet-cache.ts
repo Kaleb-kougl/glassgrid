@@ -6,7 +6,14 @@ export const DEFAULT_PARQUET_CACHE_BYTES = 20 * 1024 ** 3;
 const STALE_TEMP_MS = 60 * 60 * 1000;
 
 const ENTRY_SUFFIX = '.parquet';
-const TEMP_SUFFIX = '.tmp';
+/**
+ * Suffix of conversions in progress. Not `.tmp`: DuckDB-WASM's COPY drops a
+ * trailing `.tmp` from its target name (native DuckDB does not), so the file
+ * would land under the entry's final name before it is complete.
+ */
+const TEMP_SUFFIX = '.partial';
+/** Older builds wrote `.tmp` temp files; stale ones are still removed. */
+const STALE_SUFFIXES = [TEMP_SUFFIX, '.tmp'];
 const KEY_PATTERN = /^[0-9a-f]{32}$/;
 
 export interface CacheEntry {
@@ -20,7 +27,7 @@ export interface CacheEntry {
  * content. The folder is a rebuildable cache: deleting any part of it only
  * costs a reconversion.
  *
- * - Writes are atomic: DuckDB writes `<key>.parquet.<random>.tmp` in the
+ * - Writes are atomic: DuckDB writes `<key>.parquet.<random>.partial` in the
  *   same folder and the file is renamed into place only after COPY
  *   succeeds, so a crash never leaves a truncated entry behind.
  * - Recency is the entry's mtime, bumped on every hit (atime is unreliable
@@ -139,7 +146,7 @@ export class ParquetCache {
   private async removeStaleTemps(): Promise<void> {
     const now = Date.now();
     for (const name of await this.files.readdir(this.dir)) {
-      if (!name.endsWith(TEMP_SUFFIX)) continue;
+      if (!STALE_SUFFIXES.some((suffix) => name.endsWith(suffix))) continue;
       const path = this.files.join(this.dir, name);
       try {
         const info = await this.files.stat(path);

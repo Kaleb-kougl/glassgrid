@@ -9,7 +9,7 @@ import { createHarness, writeFixtureCsv } from './test-support';
 /*
  * Engine timings without Electron. Opt-in:
  *
- *   GLASSGRID_BENCH_ROWS=10000000 pnpm --filter @glassgrid/desktop exec vitest run src/engine/bench.test.ts
+ *   GLASSGRID_BENCH_ROWS=10000000 pnpm --filter @glassgrid/engine exec vitest run --project native src/bench.test.ts
  *
  * Writes e2e-results/engine-bench-<rows>-<platform>-<arch>.json. Set
  * GLASSGRID_BENCH_LABEL to tag the file (e.g. `before`). See

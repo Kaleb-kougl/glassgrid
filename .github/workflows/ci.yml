@@ -28,7 +28,7 @@ jobs:
   checks:
     name: Lint, typecheck, unit tests
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
@@ -40,6 +40,10 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+      # The engine on DuckDB-WASM in a real Web Worker (packages/engine/e2e).
+      - name: Install Chromium for the engine worker test
+        run: pnpm --filter @glassgrid/engine exec playwright install --with-deps chromium
+      - run: pnpm --filter @glassgrid/engine e2e
 
   e2e:
     name: Build + E2E (${{ matrix.os }})

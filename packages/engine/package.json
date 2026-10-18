@@ -11,16 +11,21 @@
     "./native": "./src/native/index.ts",
     "./test-support": "./src/test-support.ts",
     "./wasm": "./src/wasm/index.ts",
-    "./wasm/node": "./src/wasm/node.ts"
+    "./wasm/node": "./src/wasm/node.ts",
+    "./client": "./src/client/index.ts",
+    "./web": "./src/web/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit -p tsconfig.core.json && tsc --noEmit -p tsconfig.node.json",
-    "test": "vitest run"
+    "typecheck": "tsc --noEmit -p tsconfig.core.json && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.worker.json && tsc --noEmit -p tsconfig.e2e.json",
+    "test": "vitest run",
+    "e2e": "vite build --config e2e/vite.config.ts && playwright test",
+    "bench:web": "vite build --config e2e/vite.config.ts && playwright test e2e/bench.spec.ts"
   },
   "dependencies": {
-    "@duckdb/duckdb-wasm": "1.33.1-dev65.0",
+    "@duckdb/duckdb-wasm": "1.32.0",
     "@glassgrid/core": "workspace:*",
-    "apache-arrow": "21.2.0"
+    "apache-arrow": "21.2.0",
+    "zod": "4.6.7"
   },
   "peerDependencies": {
     "@duckdb/node-api": "1.5.6-r.1"
@@ -33,9 +38,11 @@
   "devDependencies": {
     "@duckdb/node-api": "1.5.6-r.1",
     "@glassgrid/ui": "workspace:*",
+    "@playwright/test": "1.64.1",
     "@types/node": "24.19.2",
     "fast-check": "4.10.2",
     "typescript": "6.0.3",
+    "vite": "8.3.4",
     "vitest": "5.0.5"
   }
 }

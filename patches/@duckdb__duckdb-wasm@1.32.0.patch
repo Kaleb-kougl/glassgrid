@@ -1,0 +1,28 @@
+diff --git a/package.json b/package.json
+index 6080902fb87ab83a5b7a4dbe3475c6a26a2ac1c9..0a8f87c2980df92e62096e0addf28adaba9688b9 100644
+--- a/package.json
++++ b/package.json
+@@ -119,8 +119,13 @@
+                 "require": "./dist/duckdb-node-blocking.cjs",
+                 "import": "./dist/duckdb-node-blocking.cjs"
+             },
++            "browser": {
++                "types": "./dist/duckdb-browser-blocking.d.ts",
++                "import": "./dist/duckdb-browser-blocking.mjs",
++                "require": "./dist/duckdb-browser-blocking.cjs"
++            },
+             "types": "./dist/duckdb-node-blocking.d.ts",
+-            "import": "./dist/duckdb-node-blocking.mjs",
++            "import": "./dist/duckdb-browser-blocking.mjs",
+             "require": "./dist/duckdb-node-blocking.cjs"
+         },
+         ".": {
+@@ -137,6 +142,7 @@
+             "types": "./dist/duckdb-browser.d.ts",
+             "import": "./dist/duckdb-browser.mjs",
+             "require": "./dist/duckdb-browser.cjs"
+-        }
++        },
++        "./dist/duckdb-browser-blocking.mjs": "./dist/duckdb-browser-blocking.mjs"
+     }
+ }
