@@ -53,6 +53,7 @@ function scriptedDialogs(answers: (string | null)[]): Dialogs<null> & { calls: D
 
 function setup(answers: (string | null)[] = []) {
   const dialogs = scriptedDialogs(answers);
+  const recentChanges: number[] = [];
   const handles = new Map<FileHandle, string>();
   let next = 0;
   const registered: string[] = [];
@@ -72,9 +73,10 @@ function setup(answers: (string | null)[] = []) {
     appState: new AppStateStore(join(userData, 'state.json')),
     recovery: new RecoveryStore(join(userData, 'recovery')),
     now: () => new Date((clock += 1_000)),
+    onRecentChanged: () => recentChanges.push(clock),
   });
   const win = { key: 1, owner: null };
-  return { service, dialogs, handles, registered, win, registerFile };
+  return { service, dialogs, handles, registered, win, registerFile, recentChanges };
 }
 
 async function csv(path: string, body = 'id,amount\n1,2.5\n2,3.5\n'): Promise<string> {
@@ -234,6 +236,43 @@ describe('opening and relinking', () => {
     await utimes(data, new Date('2026-01-01T00:00:00Z'), new Date('2026-01-01T00:00:00Z'));
     const result = opened(await ctx.service.openPath(join(root, 'a.glassgrid')));
     expect(result.fingerprintMismatch).toEqual({ sizeBytes: null, mtimeMs: { expected: expect.any(Number) as number, actual: Date.parse('2026-01-01T00:00:00Z') }, contentChanged: false });
+  });
+
+  it('a mismatch comes with a relink token: locating another file restores the workspace over it', async () => {
+    const data = await csv(join(root, 'trips.csv'));
+    const ctx = setup();
+    await saved(ctx, join(root, 'a.glassgrid'), data);
+    await writeFile(data, 'id,amount\n1,2.5\n2,3.5\n3,4.5\n');
+    const right = await csv(join(root, 'backup', 'trips.csv'));
+    await utimes(right, new Date(0), new Date(0));
+
+    const relink = setup([right]);
+    const first = opened(await relink.service.openPath(join(root, 'a.glassgrid')));
+    expect(first.fingerprintMismatch).toMatchObject({ contentChanged: true });
+    expect(first.relinkToken).toMatch(/^ot_/);
+    const again = opened(await relink.service.locateData(relink.win, first.relinkToken ?? ''));
+    expect(again).toMatchObject({ dataFoundBy: 'located', documentId: first.documentId, workspace: persisted });
+    expect(relink.handles.get(again.file.handle)).toBe(right);
+    // Same content, only the time differs: still a mismatch, so another token.
+    expect(again.fingerprintMismatch).toMatchObject({ sizeBytes: null, contentChanged: false });
+    expect(again.relinkToken).toMatch(/^ot_/);
+    expect(again.relinkToken).not.toBe(first.relinkToken);
+    expect(await relink.service.locateData(relink.win, first.relinkToken ?? '')).toMatchObject({ status: 'failed', code: 'not_found' });
+
+    // A matching file has no token.
+    const clean = setup();
+    await saved(clean, join(root, 'b.glassgrid'), await csv(join(root, 'b', 'trips.csv')));
+    expect(opened(await clean.service.openPath(join(root, 'b.glassgrid')))).not.toHaveProperty('relinkToken');
+  });
+
+  it('tells the menu when the recent list changes', async () => {
+    const ctx = setup();
+    await saved(ctx, join(root, 'a.glassgrid'), await csv(join(root, 'trips.csv')));
+    expect(ctx.recentChanges).toHaveLength(1);
+    const [entry] = await ctx.service.listRecent();
+    await rm(join(root, 'a.glassgrid'));
+    await ctx.service.open(ctx.win, { source: 'recent', id: entry?.id ?? '' });
+    expect(ctx.recentChanges).toHaveLength(2);
   });
 
   it('cancelOpen forgets a pending open', async () => {

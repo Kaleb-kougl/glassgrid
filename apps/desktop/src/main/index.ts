@@ -44,7 +44,17 @@ const workspaces = new WorkspaceService<BrowserWindow | null>({
   appState: new AppStateStore(join(app.getPath('userData'), 'state.json')),
   recovery: new RecoveryStore(join(app.getPath('userData'), 'recovery')),
   addRecentDocument: (path) => app.addRecentDocument(path),
+  onRecentChanged: () => refreshAppMenu(),
 });
+
+/** Rebuilds the application menu with the current recent list (File → Open Recent). */
+function refreshAppMenu(): void {
+  if (!ready) return;
+  workspaces.listRecent().then(
+    (recent) => installAppMenu(recent),
+    (error: unknown) => console.warn('[main] could not read the recent workspaces', error),
+  );
+}
 
 const windowRef = (win: BrowserWindow): WindowRef<BrowserWindow | null> => ({ key: win.webContents.id, owner: win });
 
@@ -202,6 +212,12 @@ function registerIpcHandlers(): void {
       const win = BrowserWindow.getAllWindows().find((candidate) => candidate.webContents.id === key);
       if (win && !win.isDestroyed()) win.webContents.send(IpcChannel.workspaceOpenRequest, request);
     },
+    // macOS: the proxy icon / title menu of the workspace file, and the edited dot in the close button.
+    setDocumentState: ({ owner }, { path, edited }) => {
+      if (process.platform !== 'darwin' || !owner || owner.isDestroyed()) return;
+      owner.setRepresentedFilename(path ?? '');
+      owner.setDocumentEdited(edited);
+    },
   });
 }
 
@@ -235,6 +251,7 @@ if (!primary) {
     createMainWindow();
 
     ready = true;
+    refreshAppMenu();
     for (const path of [...workspacePathsFromArgv(process.argv, process.cwd()), ...earlyOpens.splice(0)]) requestExternalOpen(path);
 
     app.on('activate', () => {

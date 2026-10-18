@@ -2,6 +2,7 @@ import { stat } from 'node:fs/promises';
 import { basename, isAbsolute } from 'node:path';
 import {
   CloseReplySchema,
+  DocumentStateSchema,
   IpcChannel,
   OpenTokenSchema,
   OpenWorkspaceRequestSchema,
@@ -47,6 +48,12 @@ export interface WorkspaceIpcDeps<Owner> {
   readonly windowOf: (event: IpcEventLike) => WindowRef<Owner>;
   /** Sends a pushed open request to the window with this webContents id. */
   readonly sendOpenRequest: (key: number, request: ExternalOpenRequest) => void;
+  /**
+   * The window's document and unsaved state, for native chrome (macOS
+   * represented file and edited dot). `path` is the workspace file main
+   * knows for the document id, or null (untitled, or an id it never issued).
+   */
+  readonly setDocumentState?: (win: WindowRef<Owner>, state: { path: string | null; edited: boolean }) => void;
 }
 
 function parse<T>(schema: z.ZodType<T>, value: unknown, what: string): T {
@@ -109,6 +116,11 @@ export function registerWorkspaceIpc<Owner>(deps: WorkspaceIpcDeps<Owner>): void
     const parsed = update === null ? { success: true as const, data: null } : RecoveryUpdateSchema.safeParse(update);
     if (parsed.success) service.updateRecovery(deps.windowOf(event), parsed.data);
     else console.warn('[workspace-ipc] dropped a malformed recovery update');
+  });
+  on(IpcChannel.workspaceDocumentState, (event, state) => {
+    const parsed = DocumentStateSchema.safeParse(state);
+    if (!parsed.success) return;
+    deps.setDocumentState?.(deps.windowOf(event), { path: service.documentPath(parsed.data.documentId) ?? null, edited: parsed.data.edited });
   });
   on(IpcChannel.workspaceCloseReply, (event, reply) => {
     const parsed = CloseReplySchema.safeParse(reply);

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { OpenWorkspaceResult, RecoveryUpdate, SaveWorkspaceRequest, SaveWorkspaceResult } from '../protocol/workspace.js';
-import type { WorkspaceBridge } from '../protocol/ipc.js';
+import { isWorkspaceMenuCommand, type WorkspaceBridge } from '../protocol/ipc.js';
 import { closeAnswer, provideWorkspacePersistence, reportUnsavedWork } from '../workspace-file/host.js';
 import { digestPersisted, isWorkspaceDirty, persistedWorkspace, type OpenedData } from '../workspace-file/persisted.js';
 import { must, taxiData, taxiWorkspace } from '../workspace-file/test-support.js';
@@ -209,6 +209,29 @@ describe('workspace effect commands', () => {
     expect((value as { warnings: { code: string }[] }).warnings.map((w) => w.code)).toEqual(['column_missing', 'selection_dropped']);
     expect(store.getState().document?.id).toBe(DOC_ID);
     expect(store.getHistory().past.at(-1)).toMatchObject({ name: 'loadWorkspace', caller: 'user' });
+  });
+
+  it('passes a fingerprint mismatch and its relink token through', async () => {
+    const { registry } = testWorkspace(desktopLikePolicy);
+    const mismatch = { sizeBytes: { expected: 10, actual: 12 }, mtimeMs: null, contentChanged: true };
+    const { bridge } = fakeBridge();
+    const opened = (await bridge.open({ source: 'dialog' })) as Extract<OpenWorkspaceResult, { status: 'opened' }>;
+    bridge.open = vi.fn(() => Promise.resolve({ ...opened, fingerprintMismatch: mismatch, relinkToken: 'ot_relink-123' }));
+    provideWorkspacePersistence({ registry, bridge, openTable });
+    const { value } = await registry.dispatch('openWorkspace', { source: 'dialog' }, user);
+    expect(value).toMatchObject({ status: 'opened', fingerprintMismatch: mismatch, relinkToken: 'ot_relink-123' });
+
+    bridge.open = vi.fn(() => Promise.resolve(opened));
+    expect((await registry.dispatch('openWorkspace', { source: 'dialog' }, user)).value).toMatchObject({ fingerprintMismatch: null, relinkToken: null });
+  });
+
+  it('recognises File-menu workspace commands, including Open Recent with a valid id', () => {
+    expect(isWorkspaceMenuCommand({ kind: 'saveWorkspace' })).toBe(true);
+    expect(isWorkspaceMenuCommand({ kind: 'openRecentWorkspace', id: `rw_${'0'.repeat(24)}` })).toBe(true);
+    expect(isWorkspaceMenuCommand({ kind: 'openRecentWorkspace', id: '/etc/passwd' })).toBe(false);
+    expect(isWorkspaceMenuCommand({ kind: 'openRecentWorkspace' })).toBe(false);
+    expect(isWorkspaceMenuCommand({ kind: 'deleteEverything' })).toBe(false);
+    expect(isWorkspaceMenuCommand(null)).toBe(false);
   });
 
   it('AI callers may open only from the recent list', async () => {

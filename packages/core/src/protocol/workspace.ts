@@ -102,6 +102,12 @@ export const OpenWorkspaceResultSchema = z.discriminatedUnion('status', [
     migratedFrom: z.number().int().nonnegative().nullable(),
     /** Set when this is a crash-recovery snapshot: the workspace is unsaved work. */
     recovered: z.strictObject({ id: RecoveryIdSchema, savedAt: z.string() }).nullable(),
+    /**
+     * With a fingerprint mismatch: a pending open the person can finish with
+     * `locateData` (pick the right data file; the workspace is restored over
+     * it) or forget with `cancelOpen`. Absent when the data matched.
+     */
+    relinkToken: OpenTokenSchema.optional(),
   }),
   z.strictObject({
     status: z.literal('needsData'),
@@ -156,6 +162,14 @@ export const CloseReplySchema = z.strictObject({
   answer: CloseAnswerSchema.nullable(),
 });
 export type CloseReply = z.infer<typeof CloseReplySchema>;
+
+/** The renderer's document, for native window chrome (`setDocumentState`). */
+export const DocumentStateSchema = z.strictObject({
+  documentId: DocumentIdSchema.nullable(),
+  /** Unsaved changes (`isWorkspaceDirty`). */
+  edited: z.boolean(),
+});
+export type DocumentState = z.infer<typeof DocumentStateSchema>;
 
 /** A workspace file handed to the app by the OS; open it with `{ source: 'external', token }`. */
 export const ExternalOpenRequestSchema = z.strictObject({

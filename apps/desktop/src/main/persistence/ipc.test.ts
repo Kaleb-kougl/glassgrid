@@ -58,10 +58,12 @@ function setup() {
     restoreRecovery: vi.fn(() => Promise.resolve({ status: 'cancelled' })),
     discardRecovery: vi.fn(() => Promise.resolve()),
     updateRecovery: vi.fn(),
+    documentPath: vi.fn((id: string | null) => (id === 'doc_12345678' ? '/work/trips.glassgrid' : undefined)),
   };
   const closeGuard = { reply: vi.fn() };
   const openRequests = { listen: vi.fn(() => [{ token: 'ot_12345678', fileName: 'a.glassgrid' }]) };
   const sendOpenRequest = vi.fn();
+  const setDocumentState = vi.fn();
   registerWorkspaceIpc<null>({
     ipcMain,
     service: service as unknown as WorkspaceService<null>,
@@ -70,6 +72,7 @@ function setup() {
     assertTrustedSender: createSenderGuard((url) => url.startsWith(ORIGIN)),
     windowOf: (event) => ({ key: event.sender.id, owner: null }),
     sendOpenRequest,
+    setDocumentState,
   });
   const invoke = (channel: string, event: IpcEventLike, ...args: unknown[]) => {
     const handler = ipcMain.handlers.get(channel);
@@ -81,7 +84,7 @@ function setup() {
     if (!listener) throw new Error(`no listener for ${channel}`);
     listener(event, ...args);
   };
-  return { ipcMain, service, closeGuard, openRequests, sendOpenRequest, invoke, send };
+  return { ipcMain, service, closeGuard, openRequests, sendOpenRequest, setDocumentState, invoke, send };
 }
 
 const HANDLED = [
@@ -97,7 +100,7 @@ const HANDLED = [
   IpcChannel.workspaceDiscardRecovery,
   IpcChannel.workspaceOpenRequestsListen,
 ];
-const SENT = [IpcChannel.workspaceRecoveryUpdate, IpcChannel.workspaceCloseReply];
+const SENT = [IpcChannel.workspaceRecoveryUpdate, IpcChannel.workspaceCloseReply, IpcChannel.workspaceDocumentState];
 
 describe('workspace IPC', () => {
   it('registers every workspace channel', () => {
@@ -115,10 +118,11 @@ describe('workspace IPC', () => {
   });
 
   it.each(SENT)('%s ignores untrusted senders', (channel) => {
-    const { send, service, closeGuard } = setup();
+    const { send, service, closeGuard, setDocumentState } = setup();
     for (const event of [subframe, foreign, detached]) expect(() => send(channel, event, null)).toThrow(/untrusted sender/);
     expect(service.updateRecovery).not.toHaveBeenCalled();
     expect(closeGuard.reply).not.toHaveBeenCalled();
+    expect(setDocumentState).not.toHaveBeenCalled();
   });
 
   it('validates requests with the core schemas', async () => {
@@ -163,6 +167,20 @@ describe('workspace IPC', () => {
     send(IpcChannel.workspaceCloseReply, trusted(4), reply);
     send(IpcChannel.workspaceCloseReply, trusted(4), { requestId: 'r2', answer: { dirty: true } });
     expect(closeGuard.reply.mock.calls).toEqual([[4, reply]]);
+  });
+
+  it('resolves the document id of a window\'s document state to its path in main, dropping malformed ones', () => {
+    const { send, setDocumentState } = setup();
+    send(IpcChannel.workspaceDocumentState, trusted(5), { documentId: 'doc_12345678', edited: true });
+    send(IpcChannel.workspaceDocumentState, trusted(5), { documentId: null, edited: false });
+    send(IpcChannel.workspaceDocumentState, trusted(5), { documentId: 'doc_unknown-1', edited: false });
+    send(IpcChannel.workspaceDocumentState, trusted(5), { documentId: '/etc/passwd', edited: true });
+    send(IpcChannel.workspaceDocumentState, trusted(5), { edited: 'yes' });
+    expect(setDocumentState.mock.calls).toEqual([
+      [{ key: 5, owner: null }, { path: '/work/trips.glassgrid', edited: true }],
+      [{ key: 5, owner: null }, { path: null, edited: false }],
+      [{ key: 5, owner: null }, { path: null, edited: false }],
+    ]);
   });
 
   it('a listening window gets the queued OS open requests, and later ones pushed to it', async () => {

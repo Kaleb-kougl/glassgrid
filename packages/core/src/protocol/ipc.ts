@@ -1,6 +1,7 @@
 import type { OpenCsvResult } from './bridge.js';
 import type {
   CloseAnswer,
+  DocumentState,
   ExternalOpenRequest,
   OpenWorkspaceRequest,
   OpenWorkspaceResult,
@@ -72,11 +73,14 @@ export const IpcChannel = {
   workspaceCloseReply: 'glassgrid:workspace-close-reply',
   /** main -> preload: a File-menu workspace command (WorkspaceMenuCommand). */
   workspaceMenuCommand: 'glassgrid:workspace-menu-command',
+  /** send(DocumentState): the window's document and whether it has unsaved changes (macOS represented file, edited dot). */
+  workspaceDocumentState: 'glassgrid:workspace-document-state',
 } as const;
 
-/** File-menu workspace commands main forwards to the focused window (Open Workspace…, Save, Save As…). */
+/** File-menu workspace commands main forwards to the focused window (Open Workspace…, Open Recent, Save, Save As…). */
 export type WorkspaceMenuCommand =
   | { readonly kind: 'openWorkspace' }
+  | { readonly kind: 'openRecentWorkspace'; readonly id: string }
   | { readonly kind: 'saveWorkspace' }
   | { readonly kind: 'saveWorkspaceAs' };
 
@@ -89,7 +93,8 @@ export function isExternalOpenRequest(value: unknown): value is ExternalOpenRequ
 
 export function isWorkspaceMenuCommand(value: unknown): value is WorkspaceMenuCommand {
   if (typeof value !== 'object' || value === null) return false;
-  const kind = (value as { kind?: unknown }).kind;
+  const { kind, id } = value as { kind?: unknown; id?: unknown };
+  if (kind === 'openRecentWorkspace') return typeof id === 'string' && /^rw_[0-9a-f]{24}$/.test(id);
   return kind === 'openWorkspace' || kind === 'saveWorkspace' || kind === 'saveWorkspaceAs';
 }
 
@@ -175,6 +180,12 @@ export interface WorkspaceBridge {
    * replaces the old). Without a handler the window closes without asking.
    */
   onCloseRequest(handler: () => CloseAnswer | Promise<CloseAnswer>): () => void;
-  /** File-menu workspace commands (Open Workspace…, Save, Save As…). */
+  /** File-menu workspace commands (Open Workspace…, Open Recent, Save, Save As…). */
   onMenuCommand(listener: (command: WorkspaceMenuCommand) => void): () => void;
+  /**
+   * Tell main which document the window shows and whether it has unsaved
+   * changes, for native chrome (macOS: the represented file and the edited
+   * dot in the close button). Fire and forget.
+   */
+  setDocumentState(state: DocumentState): void;
 }
