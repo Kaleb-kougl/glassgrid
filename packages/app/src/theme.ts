@@ -39,6 +39,13 @@ export function resolveTheme(preference: ThemePreference, systemDark: boolean): 
   return preference;
 }
 
+/** Sets the theme before the first paint (shells call it before rendering), so the page never flashes the other theme. */
+export function applyInitialTheme(): ThemeName {
+  const theme = resolveTheme(readThemePreference(safeStorage()), systemPrefersDark());
+  document.documentElement.dataset['ggTheme'] = theme;
+  return theme;
+}
+
 /**
  * The window's theme: follows the OS (`prefers-color-scheme`) unless View →
  * Theme overrides it; the override persists in localStorage. Sets

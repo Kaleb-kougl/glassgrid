@@ -30,7 +30,7 @@ import {
   type TableHandle,
   type TableId,
 } from '@glassgrid/core';
-import { renderPerf } from './render-perf-core';
+import { renderPerf } from '@glassgrid/app/render-perf-core';
 
 /** `tableFromIPC`, timed for the render-perf recording in render-perf builds. */
 function decode(reply: { requestId: string | null; ipc: Uint8Array }): Table {

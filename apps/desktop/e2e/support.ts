@@ -3,7 +3,7 @@ import { arch, cpus, platform, totalmem } from 'node:os';
 import { join, resolve } from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
-import { COUNT_ROWS_MEASURE, type CountRowsMeasureDetail } from '../src/renderer/src/perf';
+import { COUNT_ROWS_MEASURE, type CountRowsMeasureDetail } from '@glassgrid/app/perf';
 import { e2eRowCount } from './config';
 
 /*

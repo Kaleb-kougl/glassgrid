@@ -16,7 +16,7 @@ import {
   type GridColumn,
   type GridSelection as IndexSelection,
 } from '@glassgrid/ui';
-import type { EngineClient, FetchPage, RowsResult } from '../engine-client';
+import type { EngineClientLike, FetchPage, RowsResult } from '../engine';
 
 /*
  * The grid's side of the workspace: which rows the canvas grid pages from
@@ -98,7 +98,7 @@ export class EngineGridSource {
   private fetch: FetchPage;
 
   constructor(
-    private readonly engine: Pick<EngineClient, 'pageFetcher'>,
+    private readonly engine: Pick<EngineClientLike, 'pageFetcher'>,
     readonly table: TableId,
     view: GridView,
   ) {

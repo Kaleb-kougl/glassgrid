@@ -6,7 +6,7 @@ import { tableFromArrays } from 'apache-arrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { tableIdForFile, toFileHandle, type FilterInput, type MenuCommand, type SortKey, type TableHandle } from '@glassgrid/core';
 import { App, formatNulls, type AppProps } from './App';
-import { EngineRequestError } from './engine-client';
+import { EngineError } from './engine';
 import { THEME_STORAGE_KEY } from './theme';
 import { createAppWorkspace } from './workspace';
 
@@ -438,7 +438,7 @@ describe('App', () => {
   it('shows the engine message on a chart that cannot be computed', async () => {
     const { engine, workspace } = await openFile();
     engine.aggregate.mockImplementationOnce(() =>
-      Promise.reject(new EngineRequestError('bad_request', 'y.aggregate "sum" needs a numeric column, but "category" is text. Use "count" instead.', 'y.aggregate')),
+      Promise.reject(new EngineError('bad_request', 'y.aggregate "sum" needs a numeric column, but "category" is text. Use "count" instead.', 'y.aggregate')),
     );
     await act(() => workspace.registry.dispatch('addChart', { spec: { mark: 'bar', x: { column: 'id' }, y: { column: 'category', aggregate: 'sum' } } }, { caller: 'ai' }));
     const alert = await screen.findByRole('alert');

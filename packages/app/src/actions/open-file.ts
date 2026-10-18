@@ -5,12 +5,12 @@ import {
   type OpenedFile,
   type TableHandle,
 } from '@glassgrid/core';
-import type { EngineClient } from '../engine-client';
+import type { EngineClientLike } from '../engine';
 
 /** What the open action needs; narrow so tests can pass fakes. */
 export interface OpenFileDeps {
   readonly bridge: Pick<GlassgridBridge, 'openCsv'>;
-  readonly engine: Pick<EngineClient, 'open'>;
+  readonly engine: Pick<EngineClientLike, 'open'>;
   readonly registry: Pick<CommandRegistry, 'dispatch'>;
   /**
    * Where the file comes from; defaults to main's open dialog. Drag and drop

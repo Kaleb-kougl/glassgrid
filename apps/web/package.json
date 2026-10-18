@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@glassgrid/app": "workspace:*",
     "@glassgrid/core": "workspace:*",
     "@glassgrid/ui": "workspace:*",
     "react": "19.3.1",

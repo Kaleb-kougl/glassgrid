@@ -84,10 +84,10 @@ describe('openFileAction', () => {
 
 describe('desktop policy', () => {
   it('lets a person confirm writes by clicking, refuses AI writes and raw reads', async () => {
-    const { desktopPolicy } = await import('../workspace');
+    const { appPolicy } = await import('../workspace');
     const request = { command: 'saveWorkspace', tier: 'write' as const, input: {} };
-    expect(await desktopPolicy.confirmWrite?.({ ...request, caller: 'user' })).toBe(true);
-    expect(await desktopPolicy.confirmWrite?.({ ...request, caller: 'ai' })).toBe(false);
-    expect(await desktopPolicy.allowRaw?.({ ...request, tier: 'raw', caller: 'user' })).toBe(false);
+    expect(await appPolicy.confirmWrite?.({ ...request, caller: 'user' })).toBe(true);
+    expect(await appPolicy.confirmWrite?.({ ...request, caller: 'ai' })).toBe(false);
+    expect(await appPolicy.allowRaw?.({ ...request, tier: 'raw', caller: 'user' })).toBe(false);
   });
 });

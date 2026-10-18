@@ -6,7 +6,7 @@ import {
   PROFILE_MEASURE,
   type ChartCreateMeasureDetail,
   type CrossfilterMeasureDetail,
-} from '../src/renderer/src/perf';
+} from '@glassgrid/app/perf';
 import { digits, gridGeometry, measureCount, nextMeasure, ROWS } from './support';
 
 /*

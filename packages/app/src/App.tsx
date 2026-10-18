@@ -38,7 +38,7 @@ import {
 } from '@glassgrid/ui';
 import { openFileAction } from './actions/open-file';
 import { chartTitle, describeEntry } from './describe';
-import { isAbandoned, type EngineClient, type RowsResult } from './engine-client';
+import { isAbandoned, type EngineClientLike, type RowsResult } from './engine';
 import {
   CHART_CREATE_MEASURE,
   COUNT_ROWS_MEASURE,
@@ -73,19 +73,7 @@ import type { AppWorkspace } from './workspace';
 export { describeEntry };
 
 export interface AppProps {
-  engine: Pick<
-    EngineClient,
-    | 'open'
-    | 'pageFetcher'
-    | 'profile'
-    | 'count'
-    | 'aggregate'
-    | 'prepareCrossfilter'
-    | 'onEvent'
-    | 'onRestarted'
-    | 'setColumnTypes'
-    | 'closeTable'
-  >;
+  engine: EngineClientLike;
   bridge: Pick<GlassgridBridge, 'openCsv' | 'openDroppedFile' | 'setTheme' | 'onMenuCommand' | 'platform' | 'clipboard'>;
   workspace: AppWorkspace;
 }

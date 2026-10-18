@@ -12,7 +12,7 @@ import {
   type OpenToFirstRowsMeasureDetail,
   type ProfileMeasureDetail,
   type SortToFirstRowsMeasureDetail,
-} from '../src/renderer/src/perf';
+} from '@glassgrid/app/perf';
 import { CATEGORIES, writeFixtureCsv } from './csv-fixture';
 import { fling, scrollSweep, type FlingResult, type MemorySample } from './grid-perf';
 import {
