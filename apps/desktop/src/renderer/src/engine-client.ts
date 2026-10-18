@@ -328,10 +328,18 @@ export class EngineClient {
     overrides: readonly ColumnTypeOverride[],
     options: { signal?: AbortSignal } = {},
   ): Promise<ColumnTypesResult> {
-    // Pages requested from now on must not join ones issued with the old types.
-    for (const [key, page] of this.pages) if (page.table === table) this.pages.delete(key);
-    const reply = await this.call({ kind: 'setColumnTypes', table, overrides: [...overrides] }, 'columnTypes', options);
-    return { table: reply.table, columns: reply.columns, engineMs: reply.engineMs };
+    // Pages requested from now on must not join ones issued with the old types: neither those in flight
+    // now, nor those requested while the engine applies the change (they may be read with either set).
+    const forget = () => {
+      for (const [key, page] of this.pages) if (page.table === table) this.pages.delete(key);
+    };
+    forget();
+    try {
+      const reply = await this.call({ kind: 'setColumnTypes', table, overrides: [...overrides] }, 'columnTypes', options);
+      return { table: reply.table, columns: reply.columns, engineMs: reply.engineMs };
+    } finally {
+      forget();
+    }
   }
 
   /**

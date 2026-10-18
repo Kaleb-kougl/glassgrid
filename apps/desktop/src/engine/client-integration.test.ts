@@ -1,5 +1,6 @@
 import { MessageChannel, type MessagePort as NodeMessagePort } from 'node:worker_threads';
 import { join } from 'node:path';
+import { DataType } from 'apache-arrow';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { EngineRequest, FileHandle, GlassgridBridge, TableId } from '@glassgrid/core';
 import { EngineClient, EngineRequestError, isAbandoned } from '../renderer/src/engine-client';
@@ -130,6 +131,23 @@ describe('EngineClient.setColumnTypes', () => {
     await client.setColumnTypes(table, []);
     const restored = await client.fetchPage(table, { offset: 0, limit: 3 });
     expect([...(restored.table.getChild('category') ?? [])]).toEqual(['alpha', 'bravo', 'charlie']);
+  });
+});
+
+describe('EngineClient pages around a type change', () => {
+  it('never lets a page requested after setColumnTypes join one requested before it finished', async () => {
+    await client.clearCache('results');
+    const query = { offset: ROWS - 3_000, limit: 1000 };
+    const change = client.setColumnTypes(table, [{ column: 'amount', type: 'text' }]);
+    // Requested while the engine applies the change: it may be read with either set of types.
+    const during = outcome(client.fetchPage(table, query));
+    await change;
+    const pending = (client as unknown as { pages: Map<string, { table: string }> }).pages;
+    expect([...pending.values()].filter((page) => page.table === table)).toEqual([]);
+    const after = await client.fetchPage(table, query);
+    expect(DataType.isUtf8(after.table.schema.fields.find((field) => field.name === 'amount')?.type)).toBe(true);
+    await during;
+    await client.setColumnTypes(table, []);
   });
 });
 
