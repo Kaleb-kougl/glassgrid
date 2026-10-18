@@ -1,4 +1,5 @@
-import { Bool, Table, TimestampMicrosecond, Utf8, makeData, makeVector, vectorFromArray, type Vector } from 'apache-arrow';
+import { Bool, Float64, Table, TimestampMicrosecond, Utf8, makeData, makeVector, type Vector } from 'apache-arrow';
+import { vectorFromValues } from './arrow-build.js';
 
 /*
  * Deterministic synthetic chart results, shaped exactly like the compiler's
@@ -36,7 +37,7 @@ function colorColumns(series: Uint8Array, count: number, withOther: boolean): Re
     names.push(isOther ? null : (SERIES_NAMES[s] ?? `Series ${s}`));
     other.push(isOther);
   }
-  return { color: vectorFromArray(names, new Utf8()), color_other: vectorFromArray(other, new Bool()) };
+  return { color: vectorFromValues(names, new Utf8()), color_other: vectorFromValues(other, new Bool()) };
 }
 
 function timestamps(ms: Float64Array): Vector {
@@ -75,7 +76,7 @@ export function syntheticLineTable({ points = 31, series = 1, other = false, nul
       y.push(random() < nulls ? null : Math.round(level));
     }
   }
-  const columns: Record<string, Vector> = { x: timestamps(x), y: vectorFromArray(y) };
+  const columns: Record<string, Vector> = { x: timestamps(x), y: vectorFromValues(y, new Float64()) };
   return new Table(series > 1 ? { ...columns, ...colorColumns(s, series, other) } : columns);
 }
 
@@ -187,5 +188,5 @@ export function syntheticBarTable({ categories = 20, seed = 9 }: SyntheticBarOpt
     values.push(Math.round(v));
     v *= 0.45 + random() * 0.4;
   }
-  return new Table({ x: vectorFromArray(labels, new Utf8()), y: makeVector(Float64Array.from(values)) });
+  return new Table({ x: vectorFromValues(labels, new Utf8()), y: makeVector(Float64Array.from(values)) });
 }

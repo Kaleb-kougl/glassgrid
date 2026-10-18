@@ -1,5 +1,6 @@
 export type { AxisKind, BrushHandler, BrushPhase, BrushValue, ChartCategory, ChartColumns, ChartMark, ChartSeries, IntervalSelection } from './types.js';
 export { chartColumnsFromArrow, fillNumbers, axisKindOf, valueKey, OTHER_SERIES_KEY } from './arrow.js';
+export { vectorFromValues } from './arrow-build.js';
 export {
   formatAggregate,
   formatAxisValue,
