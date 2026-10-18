@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { FileHandleSchema, RequestIdSchema, type FileHandle } from '../ids.js';
 import { ChartSpecSchema, MarkSchema } from '../spec/chart.js';
 import { ColumnProfileSchema, ColumnTypeSchema } from '../spec/column.js';
+import { CrossfilterDimensionSchema, CrossfilterHintSchema } from '../spec/crossfilter.js';
 import { FilterSchema } from '../spec/filter.js';
 import { SortKeySchema } from '../spec/rows.js';
 import { MAX_PIXEL_WIDTH } from '../sql/chart.js';
@@ -190,6 +191,13 @@ export const CountRequestSchema = z.object({
   ...QueryBase,
   /** Count only rows matching every filter; compiled with `compileWhere`. */
   filters: RequestFiltersSchema.optional(),
+  /**
+   * Another view is being brushed: `filters[crossfilter.filter]` is its
+   * selection. The engine may count from a cube of the other filters grouped
+   * by the brushed dimension (see `CrossfilterHintSchema`); the answer is the
+   * same either way.
+   */
+  crossfilter: CrossfilterHintSchema.optional(),
 });
 
 /**
@@ -202,6 +210,41 @@ export const AggregateRequestSchema = z.object({
   kind: z.literal('aggregate'),
   ...QueryBase,
   spec: AggregateSpecSchema,
+  /**
+   * Another view is being brushed: `spec.filters[crossfilter.filter]` is its
+   * selection. The engine answers from a per-chart cube (the chart's group
+   * keys x the brushed dimension's bins, under the spec's other filters)
+   * when the selection is aligned to the bins, the mark is not scatter and
+   * the cube is small enough; otherwise it runs the plain query. Results are
+   * the same rows either way (sums up to floating-point order).
+   */
+  crossfilter: CrossfilterHintSchema.optional(),
+});
+
+/** Most cubes one `prepareCrossfilter` builds. */
+export const MAX_CROSSFILTER_TARGETS = 64;
+
+export const CubeTargetSchema = z.discriminatedUnion('kind', [
+  /** A chart: its spec with every filter except the brushed view's selection. */
+  z.object({ kind: z.literal('aggregate'), spec: AggregateSpecSchema }),
+  /** The grid's row count: its filters except the brushed view's selection. */
+  z.object({ kind: z.literal('count'), filters: RequestFiltersSchema }),
+]);
+export type CubeTarget = z.infer<typeof CubeTargetSchema>;
+
+/**
+ * Sent when a brush starts (pointer down): build the cubes the other views
+ * will need while the person drags, so the brush's commit (and every later
+ * brush on the same axis) is answered from them. View scoped: use one view
+ * id for brushing (e.g. `brush`), so starting another brush supersedes it.
+ * Builds that already started finish anyway (the cubes stay cached).
+ * Answered with `crossfilterPrepared` once every cube is ready or skipped.
+ */
+export const PrepareCrossfilterRequestSchema = z.object({
+  kind: z.literal('prepareCrossfilter'),
+  ...QueryBase,
+  dimension: CrossfilterDimensionSchema,
+  targets: z.array(CubeTargetSchema).max(MAX_CROSSFILTER_TARGETS),
 });
 
 export const CancelRequestSchema = z.object({
@@ -271,6 +314,7 @@ export const EngineRequestSchema = z.discriminatedUnion('kind', [
   CacheStatsRequestSchema,
   SetColumnTypesRequestSchema,
   CloseTableRequestSchema,
+  PrepareCrossfilterRequestSchema,
 ]);
 export type EngineRequest = z.infer<typeof EngineRequestSchema>;
 export type OpenRequest = z.infer<typeof OpenRequestSchema>;
@@ -284,13 +328,18 @@ export type ClearCacheRequest = z.infer<typeof ClearCacheRequestSchema>;
 export type CacheStatsRequest = z.infer<typeof CacheStatsRequestSchema>;
 export type SetColumnTypesRequest = z.infer<typeof SetColumnTypesRequestSchema>;
 export type CloseTableRequest = z.infer<typeof CloseTableRequestSchema>;
+export type PrepareCrossfilterRequest = z.infer<typeof PrepareCrossfilterRequestSchema>;
 
 /** Requests subject to per-view ordering and superseding. */
-export type ViewScopedRequest = ProfileRequest | RowsRequest | CountRequest | AggregateRequest;
+export type ViewScopedRequest = ProfileRequest | RowsRequest | CountRequest | AggregateRequest | PrepareCrossfilterRequest;
 
 export function isViewScopedRequest(request: EngineRequest): request is ViewScopedRequest {
   return (
-    request.kind === 'profile' || request.kind === 'rows' || request.kind === 'count' || request.kind === 'aggregate'
+    request.kind === 'profile' ||
+    request.kind === 'rows' ||
+    request.kind === 'count' ||
+    request.kind === 'aggregate' ||
+    request.kind === 'prepareCrossfilter'
   );
 }
 
@@ -343,6 +392,8 @@ export const AggregateResultSchema = z.object({
   mark: MarkSchema,
   /** True when a scatter spec had too many points and a heatmap was returned instead. */
   fellBackToHeatmap: z.boolean(),
+  /** Answered from a cross-filter cube rather than a scan of the table. */
+  fromCube: z.boolean().optional(),
   ...Timing,
   ...Cached,
 });
@@ -367,8 +418,25 @@ export const CountResultSchema = z.object({
   kind: z.literal('count'),
   requestId: RequestIdSchema,
   rowCount: z.number().int().nonnegative(),
+  /** Answered from a cross-filter cube rather than a scan of the table. */
+  fromCube: z.boolean().optional(),
   ...Timing,
   ...Cached,
+});
+
+/** One target of `prepareCrossfilter`, in request order. */
+export const PreparedCubeSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('ready'), rows: z.number().int().nonnegative() }),
+  /** No cube: the mark (scatter), the estimated or actual size, or the dimension does not allow one. */
+  z.object({ status: z.literal('skipped'), reason: z.string() }),
+]);
+export type PreparedCube = z.infer<typeof PreparedCubeSchema>;
+
+export const CrossfilterPreparedResultSchema = z.object({
+  kind: z.literal('crossfilterPrepared'),
+  requestId: RequestIdSchema,
+  cubes: z.array(PreparedCubeSchema),
+  ...Timing,
 });
 
 export const ParquetCacheResultSchema = z.object({
@@ -483,6 +551,7 @@ export const EngineResponseSchema = z.discriminatedUnion('kind', [
   ParquetCacheResultSchema,
   CacheStatsResultSchema,
   ColumnTypesResultSchema,
+  CrossfilterPreparedResultSchema,
   AckResultSchema,
   EngineErrorSchema,
   EngineEventMessageSchema,
@@ -497,6 +566,7 @@ export type ParquetCacheResult = z.infer<typeof ParquetCacheResultSchema>;
 export type CacheStatsResult = z.infer<typeof CacheStatsResultSchema>;
 export type AckResult = z.infer<typeof AckResultSchema>;
 export type ColumnTypesResult = z.infer<typeof ColumnTypesResultSchema>;
+export type CrossfilterPreparedResult = z.infer<typeof CrossfilterPreparedResultSchema>;
 export type EngineError = z.infer<typeof EngineErrorSchema>;
 export type EngineEventMessage = z.infer<typeof EngineEventMessageSchema>;
 

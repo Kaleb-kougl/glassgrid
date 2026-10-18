@@ -102,11 +102,14 @@ function matches(table: TestTable, filter: FilterInput, row: Row): boolean {
       return true;
     }
     case 'in':
-      return filter.values.some((candidate) => {
+    case 'notIn': {
+      const listed = filter.values.some((candidate) => {
         if (candidate === null || value === null) return candidate === value;
         if (temporal && typeof candidate !== 'boolean') return temporalMs(candidate) === value;
         return candidate === value;
       });
+      return filter.kind === 'in' ? listed : !listed;
+    }
   }
 }
 
@@ -349,20 +352,29 @@ export function refBar(table: TestTable, spec: ChartSpecInput): ResultRow[] {
     return v === null || unit === undefined ? v : truncMs(num(v), unit);
   };
   const agg = makeAgg(table, spec.y);
-  const top = groupBy(rows, (row) => [xOf(row)] as const)
+  const ranked = groupBy(rows, (row) => [xOf(row)] as const)
     .map((group) => ({ x: group.key[0], rows: group.rows, agg: agg(group.rows) }))
-    .sort((a, b) => compareRankDesc(a.agg.rank, b.agg.rank) || compareNullsLast(a.x, b.x))
-    .slice(0, spec.limit ?? DEFAULT_BAR_LIMIT);
-  if (!spec.color) return top.map((g) => ({ x: g.x, y: g.agg.value }));
+    .sort((a, b) => compareRankDesc(a.agg.rank, b.agg.rank) || compareNullsLast(a.x, b.x));
+  const limit = spec.limit ?? DEFAULT_BAR_LIMIT;
+  const top = ranked.slice(0, limit);
+  const folded = ranked.slice(limit).flatMap((group) => group.rows);
+  const other = spec.other === true;
+  // With other: named bars, then one Other bar (x NULL, x_other TRUE) over every folded row.
+  const bars = [
+    ...top.map((g) => ({ x: g.x, xOther: false, rows: g.rows })),
+    ...(other && folded.length > 0 ? [{ x: null, xOther: true, rows: folded }] : []),
+  ];
+  const xFields = (bar: { x: Cell; xOther: boolean }): ResultRow => (other ? { x: bar.x, x_other: bar.xOther } : { x: bar.x });
+  if (!spec.color) return bars.map((bar) => ({ ...xFields(bar), y: agg(bar.rows).value }));
   const fold = makeFold(table, rows, spec.color.column, agg);
-  return top.flatMap((g) =>
-    groupBy(g.rows, (row) => {
+  return bars.flatMap((bar) =>
+    groupBy(bar.rows, (row) => {
       const f = fold(row);
       return [f.color, f.other] as const;
     })
       .map((sub) => ({ fold: { color: sub.key[0], other: sub.key[1] }, rows: sub.rows }))
       .sort((a, b) => compareFold(a.fold, b.fold))
-      .map((sub) => ({ x: g.x, color: sub.fold.color, color_other: sub.fold.other, y: agg(sub.rows).value })),
+      .map((sub) => ({ ...xFields(bar), color: sub.fold.color, color_other: sub.fold.other, y: agg(sub.rows).value })),
   );
 }
 

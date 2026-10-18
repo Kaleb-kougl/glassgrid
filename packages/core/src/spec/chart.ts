@@ -32,6 +32,12 @@ export const ChartSpecSchema = z.strictObject({
   filters: z.array(FilterSchema).default([]),
   /** Top-N categories for bar charts (default 20) or a point cap for scatter. */
   limit: z.number().int().positive().max(SCATTER_MAX_POINTS).optional(),
+  /**
+   * Bar charts only: fold every x value beyond the top `limit` into one
+   * "Other" bar (`x` NULL, `x_other` TRUE), whose measure is computed from
+   * its rows. Used by the default chart for categories with many values.
+   */
+  other: z.boolean().optional(),
 });
 export type ChartSpec = z.infer<typeof ChartSpecSchema>;
 export type ChartSpecInput = z.input<typeof ChartSpecSchema>;

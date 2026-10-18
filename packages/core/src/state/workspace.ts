@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { FileHandleSchema } from '../ids.js';
 import { FingerprintSchema } from '../protocol/engine.js';
 import { ChartSpecSchema } from '../spec/chart.js';
-import { ColumnTypeSchema, type ColumnType } from '../spec/column.js';
+import { ColumnTypeSchema, ProfileValueSchema, type ColumnType } from '../spec/column.js';
 import { FilterSchema } from '../spec/filter.js';
 import { SortKeySchema } from '../spec/rows.js';
 
@@ -39,12 +39,30 @@ export type DataSource = z.infer<typeof DataSourceSchema>;
 
 export const ColumnNameSchema = z.string().min(1).max(1024);
 
+/**
+ * What the engine's profile says about a column, kept in state so commands
+ * (default charts, brush snapping) can use it. Recorded by `setColumnProfiles`
+ * after the profile arrives; `type` is the type it was computed for, so a
+ * summary whose type differs from the column's effective type is stale.
+ */
+export const ColumnProfileSummarySchema = z.strictObject({
+  type: ColumnTypeSchema,
+  /** Approximate number of distinct non-NULL values. */
+  distinctCount: z.number().int().nonnegative(),
+  nullFraction: z.number().min(0).max(1),
+  min: ProfileValueSchema,
+  max: ProfileValueSchema,
+});
+export type ColumnProfileSummary = z.infer<typeof ColumnProfileSummarySchema>;
+
 export const ColumnStateSchema = z.strictObject({
   name: ColumnNameSchema,
   /** What the engine inferred when the file was opened. */
   inferredType: ColumnTypeSchema,
   /** The user's choice, or null to use the inferred type. */
   typeOverride: ColumnTypeSchema.nullable(),
+  /** The engine's profile of the column; absent until it has been recorded. */
+  profile: ColumnProfileSummarySchema.optional(),
 });
 export type ColumnState = z.infer<typeof ColumnStateSchema>;
 
@@ -138,12 +156,51 @@ export const LayoutStateSchema = z.strictObject({
 });
 export type LayoutState = z.infer<typeof LayoutStateSchema>;
 
+/** How a selection was made: a brush (ranges), a click on marks (values) or a filter set directly. */
+export const SelectionSourceSchema = z.enum(['brush', 'click', 'filter']);
+export type SelectionSource = z.infer<typeof SelectionSourceSchema>;
+
+/** The chart channel a clause selects on; null for the grid and for filters not on an axis. */
+export const SelectionChannelSchema = z.enum(['x', 'y']);
+export type SelectionChannel = z.infer<typeof SelectionChannelSchema>;
+
+export const SelectionClauseSchema = z.strictObject({
+  channel: SelectionChannelSchema.nullable(),
+  filter: FilterSchema,
+});
+export type SelectionClause = z.infer<typeof SelectionClauseSchema>;
+
+/**
+ * A view's selection: one clause per brushed axis (a 2-D brush has two
+ * ranges), ANDed. Every other view queries with it; the owning view does not.
+ */
+export const SelectionSchema = z.strictObject({
+  source: SelectionSourceSchema,
+  clauses: z.array(SelectionClauseSchema).min(1).max(2),
+});
+export type Selection = z.infer<typeof SelectionSchema>;
+
+/** A filter chip not tied to a view (the "+ Filter" editor, or an agent): applies to every view. */
+export const UserFilterSchema = z.strictObject({
+  id: SafeIdSchema,
+  filter: FilterSchema,
+});
+export type UserFilter = z.infer<typeof UserFilterSchema>;
+
+/** Most filters not tied to a view a workspace may hold. */
+export const MAX_USER_FILTERS = 64;
+
 export const WorkspaceStateSchema = z.strictObject({
   dataSource: DataSourceSchema.nullable(),
   columns: z.array(ColumnStateSchema),
   charts: z.array(ChartStateSchema),
-  /** One selection per view (chart id or grid); see Cross-filtering. */
-  filters: z.record(ViewIdSchema, FilterSchema),
+  /**
+   * One selection per view (chart id or "grid"); see Cross-filtering. Each
+   * view queries with every selection except its own, plus `userFilters`.
+   */
+  selections: z.record(ViewIdSchema, SelectionSchema),
+  /** Filters that apply to every view, in the order they were added. */
+  userFilters: z.array(UserFilterSchema).max(MAX_USER_FILTERS),
   grid: GridStateSchema,
   layout: LayoutStateSchema,
 });
@@ -155,7 +212,8 @@ export function createInitialWorkspaceState(): WorkspaceState {
     dataSource: null,
     columns: [],
     charts: [],
-    filters: {},
+    selections: {},
+    userFilters: [],
     grid: createInitialGridState(),
     layout: { cards: [] },
   };
@@ -164,4 +222,10 @@ export function createInitialWorkspaceState(): WorkspaceState {
 /** The type the grid and compiler should use for a column. */
 export function effectiveColumnType(column: Pick<ColumnState, 'inferredType' | 'typeOverride'>): ColumnType {
   return column.typeOverride ?? column.inferredType;
+}
+
+/** The column's profile summary if it is current (computed for the column's effective type). */
+export function currentProfile(column: Pick<ColumnState, 'inferredType' | 'typeOverride' | 'profile'>): ColumnProfileSummary | null {
+  const profile = column.profile;
+  return profile !== undefined && profile.type === effectiveColumnType(column) ? profile : null;
 }

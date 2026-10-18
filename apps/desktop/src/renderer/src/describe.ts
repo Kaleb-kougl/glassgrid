@@ -56,6 +56,13 @@ export function filterCondition(filter: Filter): string {
       if (min !== null) return `${filter.minInclusive ? '≥' : '>'} ${min}`;
       return `${filter.maxInclusive ? '≤' : '<'} ${max ?? ''}`;
     }
+    case 'notIn': {
+      const values = filter.values.map(formatFilterValue);
+      if (values.length === 0) return 'any value';
+      if (values.length === 1) return `≠ ${values[0] ?? ''}`;
+      if (values.length <= 3) return `not in ${values.join(', ')}`;
+      return `not in ${values.length} values`;
+    }
     case 'isNull':
       return 'is null';
     case 'notNull':
@@ -99,12 +106,26 @@ export function describeEntry(entry: Pick<UndoEntry, 'name' | 'input'>, state?: 
     case 'setFilter': {
       const filter = input['filter'] as Filter | undefined;
       if (!filter) return 'Set a filter';
-      const verb = filter.kind === 'in' ? 'Selected' : filter.kind === 'range' ? 'Brushed' : 'Filtered';
+      const verb = filter.kind === 'in' || filter.kind === 'notIn' ? 'Selected' : filter.kind === 'range' ? 'Brushed' : 'Filtered';
       return `${verb} ${filter.column} ${filterCondition(filter)}`;
     }
     case 'clearFilter':
+      if (typeof input['filterId'] === 'string') return 'Removed a filter';
       return input['viewId'] === 'grid' ? 'Cleared the grid filter' : `Cleared the selection on ${chartName(input['viewId'])}`;
+    case 'addFilter': {
+      const filter = input['filter'] as Filter | undefined;
+      return filter ? `Filtered ${filter.column} ${filterCondition(filter)}` : 'Added a filter';
+    }
+    case 'brush': {
+      const selection = record(input['selection']);
+      if (input['selection'] === null) return `Cleared the selection on ${input['viewId'] === 'grid' ? 'the grid' : chartName(input['viewId'])}`;
+      return `${selection['type'] === 'points' ? 'Selected on' : 'Brushed'} ${input['viewId'] === 'grid' ? 'the grid' : chartName(input['viewId'])}`;
+    }
+    case 'setMark':
+      return `Changed ${chartName(input['chartId'])} to a ${text(input, 'mark')} chart`;
     case 'addChart': {
+      const columns = Array.isArray(input['columns']) ? (input['columns'] as unknown[]).filter((c): c is string => typeof c === 'string') : null;
+      if (columns && typeof input['title'] !== 'string') return `Added a chart of ${columns.join(' and ')}`;
       const spec = input['spec'] as ChartSpec | undefined;
       const title = typeof input['title'] === 'string' ? input['title'] : spec ? defaultChartTitle(spec) : 'chart';
       return `Added chart “${title}”`;

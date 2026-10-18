@@ -1,0 +1,107 @@
+{
+  "benchmark": "crossfilter",
+  "label": "before",
+  "recordedAt": "2026-10-18T12:06:28.179Z",
+  "rows": 1000000,
+  "brushes": 20,
+  "gapMs": 300,
+  "machine": {
+    "platform": "linux",
+    "arch": "x64",
+    "cpuModel": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "cpuCount": 2,
+    "totalMemBytes": 8419655680
+  },
+  "results": {
+    "parquet": {
+      "profileMs": 118.6,
+      "initialRenderMs": 108.9,
+      "binWidth": 0.5,
+      "brushMs": [
+        106.7,
+        122.8,
+        68,
+        73.4,
+        75.5,
+        58.7,
+        62.6,
+        105,
+        85.6,
+        100,
+        93.6,
+        69.3,
+        86.7,
+        75.8,
+        95.5,
+        73.8,
+        73.5,
+        62.6,
+        77.4,
+        0.9
+      ],
+      "firstBrushMs": 106.7,
+      "p50": 75.5,
+      "p95": 106.7,
+      "max": 122.8,
+      "perViewP50": {
+        "payment": 51.9,
+        "firstPage": 60.7,
+        "count": 41.5,
+        "zones": 52.3,
+        "pickups": 73.8
+      },
+      "perViewP95": {
+        "payment": 83.9,
+        "firstPage": 82,
+        "count": 57.2,
+        "zones": 85.1,
+        "pickups": 106.7
+      }
+    },
+    "csv": {
+      "profileMs": 289.3,
+      "initialRenderMs": 600.6,
+      "binWidth": 0.5,
+      "brushMs": [
+        541.1,
+        762.6,
+        576.3,
+        722,
+        703.1,
+        549.4,
+        617.4,
+        610.4,
+        553.5,
+        532.9,
+        601.3,
+        560,
+        532.4,
+        530.3,
+        614.6,
+        639.9,
+        645.8,
+        665.5,
+        771.5,
+        0.8
+      ],
+      "firstBrushMs": 541.1,
+      "p50": 601.3,
+      "p95": 762.6,
+      "max": 771.5,
+      "perViewP50": {
+        "pickups": 592.3,
+        "firstPage": 385.1,
+        "payment": 446.7,
+        "count": 490.7,
+        "zones": 485.2
+      },
+      "perViewP95": {
+        "pickups": 722,
+        "firstPage": 557.2,
+        "payment": 639.9,
+        "count": 615.3,
+        "zones": 596.9
+      }
+    }
+  }
+}

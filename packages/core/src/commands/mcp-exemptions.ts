@@ -10,6 +10,8 @@
 export const MCP_EXEMPTIONS = Object.freeze({
   openFile:
     'Files are opened only through the native dialog or drag-drop; the input is engine-produced metadata (handle, fingerprint, inferred columns) that an external caller cannot supply truthfully.',
+  setColumnProfiles:
+    'The input is the engine\'s profile of the open file, recorded by the app when the engine reports it; an external caller cannot supply it truthfully, and agents read profiles through get_state and profile_table.',
 } as const satisfies Record<string, string>);
 
 export type McpExemptions = Readonly<Record<string, string>>;

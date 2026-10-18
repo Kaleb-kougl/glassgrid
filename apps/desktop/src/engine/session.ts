@@ -1,8 +1,15 @@
 import {
   EngineRequestSchema,
+  compileChartCubeAnswer,
+  compileChartCubeBuild,
   compileChartQuery,
+  compileCountCubeAnswer,
+  compileCountCubeBuild,
   compileScatterCountQuery,
   compileWhere,
+  cubeSelection,
+  estimateCubeCells,
+  dimensionCardinality,
   isCompileError,
   isViewScopedRequest,
   quoteIdent,
@@ -12,13 +19,19 @@ import {
   type AggregateSpec,
   type ChartSpec,
   type CompiledQuery,
+  type CrossfilterDimension,
+  type CrossfilterHint,
+  type CubeTarget,
   type EngineEvent,
   type EngineReply,
   type EngineRequest,
   type EngineResponse,
   type Filter,
+  type PreparedCube,
+  type TableColumnProfile,
   type TableId,
 } from '@glassgrid/core';
+import { MAX_CUBE_ESTIMATE } from './cubes';
 import { EngineFailure, abortCode, errorMessage, toEngineFailure } from './errors';
 import { QueryService, type Cached, type RequestContext } from './query-service';
 import type { SqlFragment, SqlParam } from './sql-text';
@@ -60,19 +73,125 @@ export interface AggregateOutcome extends Cached<Uint8Array> {
   /** The mark the rows are shaped for (`heatmap` after a scatter fallback). */
   mark: ChartSpec['mark'];
   fellBackToHeatmap: boolean;
+  /** Answered from a cross-filter cube. */
+  fromCube: boolean;
+}
+
+/** Why a request with a cross-filter hint cannot use a cube, or the parts to build and answer it. */
+type CubePlan =
+  | { ok: true; base: Filter[]; selection: Filter | null }
+  | { ok: false; reason: string };
+
+/**
+ * Split `filters` into the cube's base filters and the brushed selection
+ * (`hint.filter`), and check that a cube over `dimension` can answer it
+ * exactly. With no hint index (prepare), every filter is a base filter.
+ */
+function planCube(
+  filters: readonly Filter[],
+  hintIndex: number | null,
+  dimension: CrossfilterDimension,
+  columns: readonly TableColumnProfile[],
+): CubePlan {
+  const column = columns.find((candidate) => candidate.name === dimension.column);
+  if (!column) return { ok: false, reason: `unknown column ${JSON.stringify(dimension.column)}` };
+  if (hintIndex === null) return { ok: true, base: [...filters], selection: null };
+  const selection = filters[hintIndex];
+  if (selection === undefined) return { ok: false, reason: 'the hint names no filter' };
+  if (cubeSelection(selection, dimension) === null) return { ok: false, reason: 'the selection is not aligned to the dimension' };
+  return { ok: true, base: filters.filter((_, i) => i !== hintIndex), selection };
+}
+
+/** Cube sizes the profile can rule out before a build. */
+function estimateTooLarge(estimate: number | null): string | null {
+  return estimate !== null && estimate > MAX_CUBE_ESTIMATE ? `about ${estimate} cells` : null;
+}
+
+/**
+ * A chart from its cross-filter cube, or null when no cube applies (the
+ * caller then runs the plain query). Building the cube is the expensive part
+ * and happens once per (chart, other filters, dimension).
+ */
+async function cubeAggregate(
+  service: QueryService,
+  table: TableId,
+  request: AggregateSpec,
+  hint: { index: number | null; dimension: CrossfilterDimension },
+  ctx: RequestContext,
+): Promise<{ outcome: Cached<Uint8Array> | null; skipped: string | null; rows: number }> {
+  const { pixelWidth, ...spec } = request;
+  if (spec.mark === 'scatter') return { outcome: null, skipped: 'scatter plots raw points', rows: 0 };
+  const columns = (await service.profile(table, ctx)).value.columns;
+  const plan = planCube(spec.filters, hint.index, hint.dimension, columns);
+  if (!plan.ok) return { outcome: null, skipped: plan.reason, rows: 0 };
+  const baseSpec: ChartSpec = { ...spec, filters: plan.base };
+  const tooLarge = estimateTooLarge(estimateCubeCells(baseSpec, columns, hint.dimension));
+  if (tooLarge) return { outcome: null, skipped: tooLarge, rows: 0 };
+  const relation = quoteIdent(QueryService.viewName(table));
+  const opts = pixelWidth === undefined ? {} : { pixelWidth };
+  const cube = await service.cube(table, toFragment(compileChartCubeBuild(relation, baseSpec, columns, hint.dimension, opts)), ctx);
+  if (cube === null) return { outcome: null, skipped: 'the cube has too many cells', rows: 0 };
+  if (hint.index === null) return { outcome: null, skipped: null, rows: cube.rows };
+  const answer = compileChartCubeAnswer(cube.name, baseSpec, columns, hint.dimension, plan.selection, opts);
+  return { outcome: await service.cubeAggregate(table, cube, toFragment(answer), { pixelWidth }, ctx), skipped: null, rows: cube.rows };
+}
+
+/** A row count from its cross-filter cube, or null when no cube applies. */
+async function cubeCount(
+  service: QueryService,
+  table: TableId,
+  filters: readonly Filter[],
+  hint: { index: number | null; dimension: CrossfilterDimension },
+  ctx: RequestContext,
+): Promise<{ outcome: Cached<number> | null; skipped: string | null; rows: number }> {
+  const columns = (await service.profile(table, ctx)).value.columns;
+  const plan = planCube(filters, hint.index, hint.dimension, columns);
+  if (!plan.ok) return { outcome: null, skipped: plan.reason, rows: 0 };
+  const tooLarge = estimateTooLarge(dimensionCardinality(columns, hint.dimension));
+  if (tooLarge) return { outcome: null, skipped: tooLarge, rows: 0 };
+  const relation = quoteIdent(QueryService.viewName(table));
+  const cube = await service.cube(table, toFragment(compileCountCubeBuild(relation, plan.base, columns, hint.dimension)), ctx);
+  if (cube === null) return { outcome: null, skipped: 'the cube has too many cells', rows: 0 };
+  if (hint.index === null) return { outcome: null, skipped: null, rows: cube.rows };
+  const answer = compileCountCubeAnswer(cube.name, columns, hint.dimension, plan.selection);
+  return { outcome: await service.cubeCount(table, cube, toFragment(answer), ctx), skipped: null, rows: cube.rows };
+}
+
+/**
+ * Runs `attempt` (a cube answer) and falls back to null on any failure that
+ * is not the caller's cancellation, e.g. a cube evicted between its build and
+ * the answer, or a compile error the plain query will report properly.
+ */
+async function orPlain<T>(attempt: () => Promise<T | null>, ctx: RequestContext): Promise<T | null> {
+  try {
+    return await attempt();
+  } catch (error) {
+    if (ctx.signal?.aborted) throw error;
+    return null;
+  }
 }
 
 /**
  * Compile and run a chart aggregate against the table's cached profile.
  * Scatter specs are counted first: above `scatterPointLimit(spec)` points the
  * engine answers with `scatterAsHeatmap(spec)` instead (see docs/m1-compiler.md).
+ * With a cross-filter hint the chart is answered from its cube when one
+ * applies (see `cubeAggregate`).
  */
 export async function runAggregate(
   service: QueryService,
   table: TableId,
   request: AggregateSpec,
   ctx: RequestContext,
+  crossfilter?: CrossfilterHint,
 ): Promise<AggregateOutcome> {
+  if (crossfilter) {
+    const fromCube = await orPlain(
+      async () => (await cubeAggregate(service, table, request, { index: crossfilter.filter, dimension: crossfilter.dimension }, ctx)).outcome,
+      ctx,
+    );
+    if (fromCube) return { ...fromCube, mark: request.mark, fellBackToHeatmap: false, fromCube: true };
+  }
   const { pixelWidth, ...spec } = request;
   // Profiles are cached per table, so only the first chart pays for the scan.
   const columns = (await service.profile(table, ctx)).value.columns;
@@ -89,7 +208,50 @@ export async function runAggregate(
   }
   const compiled = compileChartQuery(relation, chart, columns, pixelWidth === undefined ? {} : { pixelWidth });
   const result = await service.aggregate(table, toFragment(compiled), { pixelWidth }, ctx);
-  return { ...result, mark: chart.mark, fellBackToHeatmap };
+  return { ...result, mark: chart.mark, fellBackToHeatmap, fromCube: false };
+}
+
+/** A filtered row count, from a cross-filter cube when the hint allows one. */
+export async function runCount(
+  service: QueryService,
+  table: TableId,
+  filters: readonly Filter[] | undefined,
+  ctx: RequestContext,
+  crossfilter?: CrossfilterHint,
+): Promise<Cached<number> & { fromCube: boolean }> {
+  if (crossfilter && filters) {
+    const fromCube = await orPlain(
+      async () => (await cubeCount(service, table, filters, { index: crossfilter.filter, dimension: crossfilter.dimension }, ctx)).outcome,
+      ctx,
+    );
+    if (fromCube) return { ...fromCube, fromCube: true };
+  }
+  const where = await compileFilters(service, table, filters, ctx);
+  return { ...(await service.count(table, where, ctx)), fromCube: false };
+}
+
+/** Builds (or finds) the cubes a brush on `dimension` will need; one entry per target, in order. */
+export async function prepareCrossfilter(
+  service: QueryService,
+  table: TableId,
+  dimension: CrossfilterDimension,
+  targets: readonly CubeTarget[],
+  ctx: RequestContext,
+): Promise<PreparedCube[]> {
+  return Promise.all(
+    targets.map(async (target): Promise<PreparedCube> => {
+      try {
+        const outcome =
+          target.kind === 'aggregate'
+            ? await cubeAggregate(service, table, target.spec, { index: null, dimension }, ctx)
+            : await cubeCount(service, table, target.filters, { index: null, dimension }, ctx);
+        return outcome.skipped === null ? { status: 'ready', rows: outcome.rows } : { status: 'skipped', reason: outcome.skipped };
+      } catch (error) {
+        if (ctx.signal?.aborted) throw error;
+        return { status: 'skipped', reason: errorMessage(error) };
+      }
+    }),
+  );
 }
 
 /**
@@ -257,21 +419,25 @@ export class EngineSession {
           return { kind: 'arrow', requestId, ipc: value, cached, engineMs: elapsed() };
         }
         case 'count': {
-          const where = await compileFilters(service, request.table, request.filters, ctx);
-          const { value, cached } = await service.count(request.table, where, ctx);
-          return { kind: 'count', requestId, rowCount: value, cached, engineMs: elapsed() };
+          const { value, cached, fromCube } = await runCount(service, request.table, request.filters, ctx, request.crossfilter);
+          return { kind: 'count', requestId, rowCount: value, cached, fromCube, engineMs: elapsed() };
         }
         case 'aggregate': {
-          const outcome = await runAggregate(service, request.table, request.spec, ctx);
+          const outcome = await runAggregate(service, request.table, request.spec, ctx, request.crossfilter);
           return {
             kind: 'aggregate',
             requestId,
             ipc: outcome.value,
             mark: outcome.mark,
             fellBackToHeatmap: outcome.fellBackToHeatmap,
+            fromCube: outcome.fromCube,
             cached: outcome.cached,
             engineMs: elapsed(),
           };
+        }
+        case 'prepareCrossfilter': {
+          const cubes = await prepareCrossfilter(service, request.table, request.dimension, request.targets, ctx);
+          return { kind: 'crossfilterPrepared', requestId, cubes, engineMs: elapsed() };
         }
         case 'ensureParquetCache': {
           const outcome = await service.ensureParquetCache(request.table);

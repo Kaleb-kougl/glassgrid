@@ -39,15 +39,18 @@ describe('setFilter and clearFilter', () => {
     const chartId = state.charts[0]?.id ?? '';
     await registry.dispatch('setFilter', { viewId: chartId, filter: { kind: 'in', column: 'category', values: ['alpha'] } }, { caller: 'user' });
     await registry.dispatch('setFilter', { viewId: chartId, filter: { kind: 'in', column: 'category', values: ['bravo'] } }, { caller: 'user' });
-    expect(store.getState().filters).toEqual({ [chartId]: { kind: 'in', column: 'category', values: ['bravo'] } });
+    expect(store.getState().selections).toEqual({
+      [chartId]: { source: 'filter', clauses: [{ channel: 'x', filter: { kind: 'in', column: 'category', values: ['bravo'] } }] },
+    });
 
     await registry.dispatch('setFilter', { viewId: 'grid', filter: { kind: 'range', column: 'amount', min: 10 } }, { caller: 'ai' });
-    expect(Object.keys(store.getState().filters)).toEqual([chartId, 'grid']);
+    expect(Object.keys(store.getState().selections)).toEqual([chartId, 'grid']);
+    expect(store.getState().selections['grid']?.clauses[0]?.channel).toBeNull();
 
     await registry.dispatch('clearFilter', { viewId: chartId }, { caller: 'user' });
-    expect(Object.keys(store.getState().filters)).toEqual(['grid']);
+    expect(Object.keys(store.getState().selections)).toEqual(['grid']);
     await registry.dispatch('undo', {}, { caller: 'user' });
-    expect(store.getState().filters[chartId]).toEqual({ kind: 'in', column: 'category', values: ['bravo'] });
+    expect(store.getState().selections[chartId]?.clauses[0]?.filter).toEqual({ kind: 'in', column: 'category', values: ['bravo'] });
   });
 
   it('clearing a view without a selection records nothing', async () => {
@@ -113,9 +116,9 @@ describe('chart commands', () => {
 
     await registry.dispatch('setFilter', { viewId: chartId, filter: { kind: 'in', column: 'category', values: ['alpha'] } }, { caller: 'user' });
     await registry.dispatch('removeChart', { chartId }, { caller: 'user' });
-    expect(store.getState()).toMatchObject({ charts: [], filters: {}, layout: { cards: [] } });
+    expect(store.getState()).toMatchObject({ charts: [], selections: {}, layout: { cards: [] } });
     await registry.dispatch('undo', {}, { caller: 'user' });
-    expect(store.getState().filters[chartId]).toBeDefined();
+    expect(store.getState().selections[chartId]).toBeDefined();
     await expect(registry.dispatch('removeChart', { chartId: 'chart_77' }, { caller: 'ai' })).rejects.toThrow('Unknown chart "chart_77"');
   });
 

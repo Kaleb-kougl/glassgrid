@@ -15,6 +15,8 @@ describe('words for state', () => {
     expect(filterCondition({ kind: 'in', column: 'p', values: [1, 2, 3, 4] })).toBe('in 4 values');
     expect(filterCondition({ kind: 'range', column: 'd', min: 2, max: 6, minInclusive: true, maxInclusive: false })).toBe('2 – 6');
     expect(filterCondition({ kind: 'isNull', column: 'd' })).toBe('is null');
+    expect(filterCondition({ kind: 'notIn', column: 'p', values: ['Cash'] })).toBe('≠ Cash');
+    expect(filterCondition({ kind: 'notIn', column: 'p', values: ['a', 'b'] })).toBe('not in a, b');
   });
 
   it('labels history entries', () => {
@@ -28,5 +30,15 @@ describe('words for state', () => {
     expect(describeEntry({ name: 'clearFilter', input: { viewId: 'c1' } }, { charts: [{ id: 'c1', spec: { mark: 'bar', x: { column: 'a' }, filters: [] } }] })).toBe(
       'Cleared the selection on “Rows by a”',
     );
+    const charts = { charts: [{ id: 'c1', spec: { mark: 'histogram' as const, x: { column: 'trip_distance' }, filters: [] } }] };
+    expect(describeEntry({ name: 'brush', input: { viewId: 'c1', selection: { type: 'interval', x: { min: 1, max: 2 } } } }, charts)).toBe(
+      'Brushed “Rows by trip_distance”',
+    );
+    expect(describeEntry({ name: 'brush', input: { viewId: 'grid', selection: { type: 'points', column: 'a', values: [1] } } })).toBe('Selected on the grid');
+    expect(describeEntry({ name: 'brush', input: { viewId: 'c1', selection: null } }, charts)).toBe('Cleared the selection on “Rows by trip_distance”');
+    expect(describeEntry({ name: 'addFilter', input: { filter: { kind: 'notNull', column: 'fare' } } })).toBe('Filtered fare is not null');
+    expect(describeEntry({ name: 'clearFilter', input: { filterId: 'filter_1' } })).toBe('Removed a filter');
+    expect(describeEntry({ name: 'setMark', input: { chartId: 'c1', mark: 'line' } }, charts)).toBe('Changed “Rows by trip_distance” to a line chart');
+    expect(describeEntry({ name: 'addChart', input: { columns: ['trip_distance', 'fare'] } })).toBe('Added a chart of trip_distance and fare');
   });
 });

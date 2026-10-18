@@ -59,6 +59,49 @@ describe('EngineRequestSchema', () => {
     for (const request of requests) expect(EngineRequestSchema.parse(request)).toEqual(request);
   });
 
+  it('accepts cross-filter hints and prepareCrossfilter, and validates them strictly', () => {
+    const dimension = { column: 'trip_distance', bin: { kind: 'width', width: 2 } } as const;
+    const hint = { filter: 1, dimension };
+    const filters = [
+      { kind: 'notNull', column: 'fare_amount' },
+      { kind: 'range', column: 'trip_distance', min: 2, max: 6, minInclusive: true, maxInclusive: false },
+    ] as const;
+    const requests: EngineRequest[] = [
+      {
+        kind: 'aggregate',
+        requestId: 'x1',
+        viewId: 'chart:a',
+        seq: 1,
+        table,
+        spec: { mark: 'bar', x: { column: 'payment_type' }, filters: [...filters], other: true, limit: 20 },
+        crossfilter: hint,
+      },
+      { kind: 'count', requestId: 'x2', viewId: 'status', seq: 1, table, filters: [...filters], crossfilter: hint },
+      {
+        kind: 'prepareCrossfilter',
+        requestId: 'x3',
+        viewId: 'brush',
+        seq: 1,
+        table,
+        dimension,
+        targets: [
+          { kind: 'aggregate', spec: { mark: 'line', x: { column: 'pickup_datetime' }, filters: [], pixelWidth: 600 } },
+          { kind: 'count', filters: [{ kind: 'notIn', column: 'payment_type', values: ['Cash', null] }] },
+        ],
+      },
+    ];
+    for (const request of requests) expect(EngineRequestSchema.parse(request)).toEqual(request);
+    expect(isViewScopedRequest(requests[2] as EngineRequest)).toBe(true);
+    const bad = (patch: Record<string, unknown>) => EngineRequestSchema.safeParse({ ...requests[0], ...patch }).success;
+    expect(bad({ crossfilter: { filter: -1, dimension } })).toBe(false);
+    expect(bad({ crossfilter: { filter: 0, dimension: { column: 'a', bin: { kind: 'width', width: 0 } } } })).toBe(false);
+    expect(bad({ crossfilter: { filter: 0, dimension: { column: 'a', bin: { kind: 'time', unit: 'week' } } } })).toBe(false);
+    expect(bad({ crossfilter: { filter: 0, dimension: { column: 'a', bin: { kind: 'value' }, sql: 'x' } } })).toBe(false);
+    expect(
+      EngineRequestSchema.safeParse({ ...requests[2], targets: [{ kind: 'rows', filters: [] }] }).success,
+    ).toBe(false);
+  });
+
   it('marks only query requests as view scoped', () => {
     expect(isViewScopedRequest({ kind: 'count', requestId: 'r', viewId: 'v', seq: 1, table })).toBe(true);
     expect(isViewScopedRequest({ kind: 'open', requestId: 'r', file: handle })).toBe(false);
@@ -235,6 +278,22 @@ describe('EngineResponseSchema', () => {
     const reply = { kind: 'aggregate', requestId: 'r', ipc, mark: 'heatmap', fellBackToHeatmap: true, engineMs: 1, cached: false };
     expect(EngineResponseSchema.parse(reply)).toEqual(reply);
     expect(EngineResponseSchema.safeParse({ ...reply, mark: 'pie' }).success).toBe(false);
+  });
+
+  it('accepts fromCube on aggregate and count results, and prepared cubes', () => {
+    const ipc = new Uint8Array([1]);
+    const aggregate = { kind: 'aggregate', requestId: 'r', ipc, mark: 'bar', fellBackToHeatmap: false, fromCube: true, engineMs: 1, cached: false };
+    expect(EngineResponseSchema.parse(aggregate)).toEqual(aggregate);
+    const count = { kind: 'count', requestId: 'r', rowCount: 4, fromCube: true, engineMs: 1, cached: true };
+    expect(EngineResponseSchema.parse(count)).toEqual(count);
+    const prepared = {
+      kind: 'crossfilterPrepared',
+      requestId: 'r',
+      cubes: [{ status: 'ready', rows: 1550 }, { status: 'skipped', reason: 'scatter plots raw points' }],
+      engineMs: 812,
+    };
+    expect(EngineResponseSchema.parse(prepared)).toEqual(prepared);
+    expect(EngineResponseSchema.safeParse({ ...prepared, cubes: [{ status: 'ready' }] }).success).toBe(false);
   });
 
   it('carries the compiler path on bad_request errors', () => {

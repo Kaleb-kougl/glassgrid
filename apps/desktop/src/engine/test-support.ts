@@ -53,6 +53,53 @@ function* fixtureLines(rows: number): Generator<string> {
   }
 }
 
+/** Deterministic PRNG (mulberry32): the same seed always yields the same sequence. */
+export function mulberry32(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+export const PAYMENT_TYPES = ['Credit card', 'Cash', 'No charge', 'Dispute', 'Unknown'] as const;
+
+/**
+ * A taxi-like table for cross-filter tests and the cross-filter bench:
+ * `pickup_datetime` (TIMESTAMP over 91 days), `trip_distance` and
+ * `fare_amount` (DOUBLE, 2 decimals, skewed), `payment_type` (5 values,
+ * skewed), `passenger_count` (1 to 6, about 2% empty) and `PULocationID`
+ * (1 to 265). Deterministic for a given row count and seed.
+ */
+export function* taxiLikeLines(rows: number, seed = 42): Generator<string> {
+  const random = mulberry32(seed);
+  const start = Date.UTC(2024, 2, 1);
+  const span = 91 * 86_400_000;
+  const pad = (value: number) => String(value).padStart(2, '0');
+  for (let i = 0; i < rows; i += 1) {
+    const ms = start + Math.floor((i / rows) * span) + Math.floor(random() * 600_000);
+    const d = new Date(ms);
+    const stamp = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
+    const u = random();
+    const distance = Math.round(Math.min(60, -Math.log(1 - u * 0.999) * 3) * 100) / 100;
+    const fare = Math.round((3 + distance * 2.5 + random() * 4) * 100) / 100;
+    const p = random();
+    const payment = PAYMENT_TYPES[p < 0.7 ? 0 : p < 0.92 ? 1 : p < 0.96 ? 2 : p < 0.98 ? 3 : 4];
+    const passengers = random() < 0.02 ? '' : String(1 + Math.floor(random() ** 2 * 6));
+    const location = 1 + Math.floor(random() ** 1.5 * 265);
+    yield `${stamp},${distance},${fare},${payment},${passengers},${location}`;
+  }
+}
+
+export const TAXI_LIKE_HEADER = 'pickup_datetime,trip_distance,fare_amount,payment_type,passenger_count,PULocationID';
+
+export async function writeTaxiLikeCsv(path: string, rows: number, seed = 42): Promise<void> {
+  await writeLines(path, TAXI_LIKE_HEADER, taxiLikeLines(rows, seed));
+}
+
 export interface Harness {
   dir: string;
   cacheDir: string;

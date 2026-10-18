@@ -116,3 +116,64 @@ export function niceBinWidth(min: number, max: number, target: number, integer: 
 export function numericBinCount(min: number, max: number, width: number): number {
   return Math.floor(max / width) - Math.floor(min / width) + 1;
 }
+
+/** Start of the `unit` bucket holding `ms` (UTC), as `date_trunc` computes it. */
+export function truncateTime(ms: number, unit: TimeUnit): number {
+  switch (unit) {
+    case 'hour':
+      return Math.floor(ms / MS_PER_HOUR) * MS_PER_HOUR;
+    case 'day':
+      return Math.floor(ms / MS_PER_DAY) * MS_PER_DAY;
+    case 'month': {
+      const d = new Date(ms);
+      return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1);
+    }
+  }
+}
+
+/** `ms` moved by `count` units (UTC; months keep the day of month, so pass bucket starts). */
+export function addTime(ms: number, unit: TimeUnit, count = 1): number {
+  switch (unit) {
+    case 'hour':
+      return ms + count * MS_PER_HOUR;
+    case 'day':
+      return ms + count * MS_PER_DAY;
+    case 'month': {
+      const d = new Date(ms);
+      return Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + count, d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds(), d.getUTCMilliseconds());
+    }
+  }
+}
+
+const scratch = new DataView(new ArrayBuffer(8));
+
+/** The next representable double after `x` towards +Infinity (or -Infinity with `down`). */
+export function adjacentDouble(x: number, down = false): number {
+  if (Number.isNaN(x) || !Number.isFinite(x)) return x;
+  if (x === 0) return down ? -Number.MIN_VALUE : Number.MIN_VALUE;
+  scratch.setFloat64(0, x);
+  const bits = scratch.getBigInt64(0);
+  // For positive x the bit pattern grows with the value; for negative x it shrinks.
+  scratch.setBigInt64(0, (x > 0) !== down ? bits + 1n : bits - 1n);
+  return scratch.getFloat64(0);
+}
+
+/**
+ * Where numeric bin `k` of width `w` starts, as the compiler bins:
+ * the smallest double `t` with `floor(t / w) >= k`. A range filter
+ * `[binStart(k, w), binStart(m, w))` therefore selects exactly the rows a
+ * histogram puts in bins k to m - 1 (`floor(CAST(v AS DOUBLE) / w)`), even
+ * where `k * w` rounds to the other side of an edge (1.7 / 0.1 is 17, but
+ * 17 * 0.1 is 1.7000000000000002). Usually it is `k * w` itself.
+ */
+export function binStart(k: number, w: number): number {
+  let t = k * w + 0; // + 0 turns -0 into 0
+  for (let step = 0; step < 64 && Math.floor(t / w) < k; step += 1) t = adjacentDouble(t);
+  // Never step across zero: below 0, t / w only underflows to -0 for subnormals no data holds.
+  for (let step = 0; step < 64 && t !== 0; step += 1) {
+    const below = adjacentDouble(t, true);
+    if (Math.floor(below / w) < k || Math.sign(below) !== Math.sign(t)) break;
+    t = below;
+  }
+  return t;
+}

@@ -1,0 +1,107 @@
+{
+  "benchmark": "crossfilter",
+  "label": "before",
+  "recordedAt": "2026-10-18T12:09:19.046Z",
+  "rows": 10000000,
+  "brushes": 20,
+  "gapMs": 300,
+  "machine": {
+    "platform": "linux",
+    "arch": "x64",
+    "cpuModel": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "cpuCount": 2,
+    "totalMemBytes": 8419655680
+  },
+  "results": {
+    "parquet": {
+      "profileMs": 1196.1,
+      "initialRenderMs": 490.8,
+      "binWidth": 0.5,
+      "brushMs": [
+        479.6,
+        377.2,
+        371.8,
+        496,
+        438.9,
+        622.8,
+        403.3,
+        838.4,
+        953.3,
+        753.6,
+        664.9,
+        963.4,
+        678.9,
+        777.4,
+        1278.7,
+        553.4,
+        659.5,
+        618.1,
+        352,
+        1.2
+      ],
+      "firstBrushMs": 479.6,
+      "p50": 618.1,
+      "p95": 963.4,
+      "max": 1278.7,
+      "perViewP50": {
+        "count": 202.9,
+        "firstPage": 215.6,
+        "payment": 247.1,
+        "zones": 292.1,
+        "pickups": 618
+      },
+      "perViewP95": {
+        "count": 444,
+        "firstPage": 398.9,
+        "payment": 472.3,
+        "zones": 572.8,
+        "pickups": 963.4
+      }
+    },
+    "csv": {
+      "profileMs": 2649.9,
+      "initialRenderMs": 4578.4,
+      "binWidth": 0.5,
+      "brushMs": [
+        4589,
+        4528.6,
+        4737.6,
+        5086.9,
+        4726.2,
+        5248,
+        4586.6,
+        5291.5,
+        5588.9,
+        6313.8,
+        4687.5,
+        4692.1,
+        4978.3,
+        4834.5,
+        5557.4,
+        5074.3,
+        5096.9,
+        5179.7,
+        4958.1,
+        0.9
+      ],
+      "firstBrushMs": 4589,
+      "p50": 4958.1,
+      "p95": 5588.9,
+      "max": 6313.8,
+      "perViewP50": {
+        "payment": 2836.2,
+        "firstPage": 2777.5,
+        "count": 4358.6,
+        "pickups": 4834.5,
+        "zones": 4320
+      },
+      "perViewP95": {
+        "payment": 4419.3,
+        "firstPage": 3448.6,
+        "count": 5289.7,
+        "pickups": 5588.9,
+        "zones": 5086.9
+      }
+    }
+  }
+}

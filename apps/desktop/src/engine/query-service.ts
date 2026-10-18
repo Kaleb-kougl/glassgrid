@@ -31,6 +31,7 @@ import {
 import { tableFromIPC, tableToIPC, type Table } from 'apache-arrow';
 import { readerToArrowIPC } from './arrow';
 import { Coalescer } from './coalesce';
+import { CubeStore, MAX_CUBE_ROWS, type CubeRef, type CubeStoreStats } from './cubes';
 import { overrideDuckdbType, simpleColumnType, toCount, toScalar } from './column-types';
 import {
   EngineFailure,
@@ -62,6 +63,17 @@ export const DEEP_PAGE_ROWS = 100_000;
  * everything, which costs about as much as building the index.
  */
 export const TOP_K_MAX_ROWS = 5_000;
+/**
+ * Codec of the Parquet cache. Uncompressed (DuckDB still dictionary- and
+ * RLE-encodes) because cross-filtering reads it constantly: on the 10M-row
+ * fixture a filtered first page that has to scan the whole file took 263 ms
+ * with zstd, 158 ms with LZ4 and 100 ms uncompressed, and a cube build 1.3 s
+ * vs 0.7 s, for a file 1.65x the zstd size (29% of the CSV instead of 18%).
+ * Writing it takes as long as with zstd. See docs/m3-xfilter-notes.md.
+ */
+export const PARQUET_COMPRESSION = 'uncompressed';
+/** See QueryServiceOptions.filteredIndexDelayMs. */
+export const FILTERED_INDEX_DELAY_MS = 1_500;
 const PROGRESS_INTERVAL_MS = 250;
 /** Spill folders of instances that crashed are removed after this long. */
 const STALE_TEMP_DIR_MS = 60 * 60 * 1000;
@@ -87,6 +99,14 @@ export interface QueryServiceOptions {
   pagingStrategy?: PagingStrategy;
   /** Rows served by the top-K block while an index builds (default TOP_K_MAX_ROWS; tests lower it). */
   topKRows?: number;
+  /**
+   * A filtered view's row-number index starts building only once its filter
+   * has stayed the same this long (default FILTERED_INDEX_DELAY_MS), or at
+   * once when a page past the top-K block needs it. While a person brushes,
+   * every brush is a new filter; building an index per brush would compete
+   * with the next brush's queries for the same cores.
+   */
+  filteredIndexDelayMs?: number;
 }
 
 /** Per-request context: cancellation and the view the request belongs to. */
@@ -190,7 +210,9 @@ type CachedValue =
   | { kind: 'ipc'; ipc: Uint8Array }
   | { kind: 'count'; rowCount: number }
   /** The first TOP_K_MAX_ROWS rows of a sorted/filtered view; `complete` when that is all of them. */
-  | { kind: 'block'; table: Table; complete: boolean };
+  | { kind: 'block'; table: Table; complete: boolean }
+  /** A cube build's outcome (never stored in the result cache): its ref, or the cell count it was too large at. */
+  | { kind: 'cube'; cube: CubeRef | null; rows: number };
 
 interface QueryServiceEvents {
   event: [EngineEvent];
@@ -221,6 +243,7 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
   private readonly parquetJobs = new Map<string, ParquetJob>();
   private readonly results: ResultCache<CachedValue>;
   private readonly inflight = new Coalescer<CachedValue>();
+  private readonly cubes = new CubeStore();
   private readonly sortIndexes: SortIndexes;
   readonly parquetCache: ParquetCache;
   private readonly autoConvertMinBytes: number;
@@ -228,6 +251,9 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
   private readonly memoryLimitBytes: number;
   private readonly pagingStrategy: PagingStrategy;
   private readonly topKRows: number;
+  private readonly filteredIndexDelayMs: number;
+  /** Pending delays of filtered index builds, by index name; calling one starts the build now. */
+  private readonly indexDelays = new Map<string, () => void>();
   private closed = false;
 
   private constructor(options: QueryServiceOptions) {
@@ -240,6 +266,7 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
     this.memoryLimitBytes = options.memoryLimitBytes ?? defaultMemoryLimitBytes();
     this.pagingStrategy = options.pagingStrategy ?? 'auto';
     this.topKRows = options.topKRows ?? TOP_K_MAX_ROWS;
+    this.filteredIndexDelayMs = options.filteredIndexDelayMs ?? FILTERED_INDEX_DELAY_MS;
   }
 
   static async create(options: QueryServiceOptions): Promise<QueryService> {
@@ -319,6 +346,7 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
       // The file changed on disk since it was opened.
       this.results.invalidateTable(id);
       await this.sortIndexes.drop(id);
+      this.dropCubes(existing, this.cubes.remove(id));
     }
 
     let db = existing?.db;
@@ -571,6 +599,7 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
       state.version = overridesVersion(state);
       this.results.invalidateTable(state.id);
       await this.sortIndexes.drop(state.id);
+      this.dropCubes(state, this.cubes.remove(state.id));
       this.emit('event', { type: 'tableUpdated', table: this.handleFor(state) });
     }
 
@@ -723,6 +752,30 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
       return this.runArrow(state, topK(query.offset, query.limit), where?.params, ctx.signal);
     }
 
+    if (this.pagingStrategy === 'auto' && !sorted && query.offset === 0 && !this.sortIndexes.isReady(name)) {
+      // The first page of a filter that just changed (typically a brush): read only as many matching
+      // rows as the page needs. With a selective filter the scan to find 5,000 matches costs up to
+      // 5x more than to find 1,000, and the grid usually needs nothing past the first page.
+      const blockKey = this.key(state, ['topK', orderBy, fragmentKey(where)]);
+      if (this.results.get(blockKey)?.kind !== 'block') {
+        const ipc = await this.runArrow(state, topK(0, query.limit), where?.params, ctx.signal);
+        if (tableFromIPC(ipc).numRows === query.limit) {
+          // More rows may follow: the index builds once the filter has settled (or a deeper page asks).
+          this.sortIndexes.ensure(
+            {
+              ...spec,
+              before: async () => {
+                await this.indexDelay(name);
+                await this.beforeBuild(state);
+              },
+            },
+            ctx.viewId,
+          );
+        }
+        return ipc;
+      }
+    }
+
     if (this.pagingStrategy === 'auto' && !this.sortIndexes.isReady(name)) {
       // The first TOP_K_MAX_ROWS rows come from one top-K query (a heap, one
       // scan); every page inside them is a slice of it. The index builds once
@@ -751,6 +804,8 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
                 const served = await block.catch(() => undefined);
                 // Every row fits in the block: the view never needs the index.
                 if (served?.complete) throw new EngineFailure('superseded', 'No index needed');
+                // A brushed filter changes every few hundred ms: wait until it settles (or a deep page needs it).
+                if (where) await this.indexDelay(name);
                 await this.beforeBuild(state);
               },
             },
@@ -762,6 +817,7 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
       }
     }
 
+    this.indexDelays.get(name)?.();
     const release = await this.sortIndexes.acquire({ ...spec, before: () => this.beforeBuild(state) }, ctx.viewId, ctx.signal);
     try {
       const pageSql = `SELECT * EXCLUDE (${RN}) FROM ${name} WHERE ${RN} > ${intLiteral(query.offset)} AND ${RN} <= ${intLiteral(end)} ORDER BY ${RN}`;
@@ -769,6 +825,20 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
     } finally {
       release();
     }
+  }
+
+  /** Resolves after `filteredIndexDelayMs`, or as soon as a page needs index `name`. */
+  private indexDelay(name: string): Promise<void> {
+    if (this.filteredIndexDelayMs <= 0) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      const done = () => {
+        clearTimeout(timer);
+        if (this.indexDelays.get(name) === done) this.indexDelays.delete(name);
+        resolve();
+      };
+      const timer = setTimeout(done, this.filteredIndexDelayMs);
+      this.indexDelays.set(name, done);
+    });
   }
 
   /** Before an index build: prefer the Parquet copy, which sorts about twice as fast as the CSV. */
@@ -816,6 +886,95 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
       return result;
     });
     return { value: expectCount(value), cached: false };
+  }
+
+  // -------------------------------------------------------------------------
+  // Cross-filter cubes (see packages/core/src/sql/cube.ts and docs/m3-xfilter-notes.md)
+
+  /**
+   * The cube that `build` (from `compileChartCubeBuild` or
+   * `compileCountCubeBuild`) defines, built on first use and kept LRU per
+   * (table, file, type overrides, build SQL). Resolves null when the cube
+   * has more than MAX_CUBE_ROWS cells, so the caller queries the table.
+   *
+   * A build runs to completion even when every caller gives up (a newer
+   * brush superseded the request): the next brush on the same axis wants the
+   * same cube, and restarting it would cost the whole scan again.
+   */
+  async cube(id: TableId, build: SqlFragment, ctx: RequestContext = {}): Promise<CubeRef | null> {
+    const state = await this.table(id, ctx);
+    const key = this.key(state, ['cube', fragmentKey(build)]);
+    const ready = this.cubes.get(key);
+    if (ready) return ready;
+    if (this.cubes.tooLargeRows(key) !== undefined) return null;
+    const name = quoteIdent(`gg_cube_${createHash('sha256').update(key).digest('hex').slice(0, 24)}`);
+    const built = this.inflight.run(key, undefined, async (): Promise<CachedValue> => {
+      await this.awaitConversion(state, undefined);
+      const rows = await this.withConnection(state, undefined, async (connection) => {
+        await connection.run(`CREATE OR REPLACE TABLE ${name} AS ${build.sql}`, bind(build.params));
+        const reader = await connection.runAndReadAll(`SELECT count(*) FROM ${name}`);
+        const count = toCount(reader.getRows()[0]?.[0] ?? null);
+        if (count > MAX_CUBE_ROWS) await connection.run(`DROP TABLE IF EXISTS ${name}`);
+        return count;
+      });
+      if (rows > MAX_CUBE_ROWS) {
+        this.cubes.markTooLarge(key, rows);
+        return { kind: 'cube', cube: null, rows };
+      }
+      const cube: CubeRef = { name, tableId: state.id, rows };
+      // A type change or close while it built: the cube describes data no longer served.
+      if (this.tables.get(state.id) !== state || this.key(state, ['cube', fragmentKey(build)]) !== key) {
+        this.dropCubes(state, [cube]);
+        return { kind: 'cube', cube: null, rows };
+      }
+      this.dropCubes(state, this.cubes.add(key, cube));
+      return { kind: 'cube', cube, rows };
+    });
+    const value = await raceAbort(built, ctx.signal);
+    if (value.kind !== 'cube') throw new EngineFailure('query_failed', 'Unexpected cached value');
+    return value.cube;
+  }
+
+  /** A chart's rows from its cube (`compileChartCubeAnswer`), cached like aggregates. */
+  async cubeAggregate(
+    id: TableId,
+    cube: CubeRef,
+    answer: SqlFragment,
+    options: { pixelWidth?: number | undefined } = {},
+    ctx: RequestContext = {},
+  ): Promise<Cached<Uint8Array>> {
+    const state = await this.table(id, ctx);
+    const key = this.key(state, ['cubeAnswer', cube.name, fragmentKey(answer), options.pixelWidth ?? null]);
+    return this.cachedArrow(key, ctx, (signal) => this.runArrow(state, answer.sql, answer.params, signal));
+  }
+
+  /** A row count from a count cube (`compileCountCubeAnswer`), cached like counts. */
+  async cubeCount(id: TableId, cube: CubeRef, answer: SqlFragment, ctx: RequestContext = {}): Promise<Cached<number>> {
+    const state = await this.table(id, ctx);
+    const key = this.key(state, ['cubeCount', cube.name, fragmentKey(answer)]);
+    const hit = this.results.get(key);
+    if (hit?.kind === 'count') return { value: hit.rowCount, cached: true };
+    const value = await this.inflight.run(key, ctx.signal, async (signal): Promise<CachedValue> => {
+      const rowCount = await this.withConnection(state, signal, async (connection) => {
+        const reader = await connection.runAndReadAll(answer.sql, bind(answer.params));
+        return toCount(reader.getRows()[0]?.[0] ?? null);
+      });
+      const result: CachedValue = { kind: 'count', rowCount };
+      this.results.set(key, result, 64);
+      return result;
+    });
+    return { value: expectCount(value), cached: false };
+  }
+
+  cubeStats(): CubeStoreStats {
+    return this.cubes.stats();
+  }
+
+  private dropCubes(state: TableState, cubes: readonly CubeRef[]): void {
+    if (cubes.length === 0 || state.closed) return;
+    void this.withConnection(state, undefined, async (connection) => {
+      for (const cube of cubes) await connection.run(`DROP TABLE IF EXISTS ${cube.name}`);
+    }).catch(() => undefined);
   }
 
   private indexSpec(state: TableState, name: string, orderBy: string, where: SqlFragment | undefined): BuildSpec {
@@ -983,7 +1142,7 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
         await connection.run('PRAGMA disable_print_progress_bar');
         if (flags.interrupted) throw new EngineFailure('cancelled', 'Parquet conversion was cancelled');
         await connection.run(
-          `COPY (SELECT * FROM ${await this.csvReader(connection, state)}) TO ${quoteLiteral(tempPath)} (FORMAT parquet, COMPRESSION zstd)`,
+          `COPY (SELECT * FROM ${await this.csvReader(connection, state)}) TO ${quoteLiteral(tempPath)} (FORMAT parquet, COMPRESSION ${PARQUET_COMPRESSION})`,
         );
         // The CSV may have changed while it was being copied; never cache a mix.
         const after = await fingerprintFile(state.csvPath);
@@ -1049,6 +1208,10 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
   async clearCache(scope: CacheScope = 'all'): Promise<void> {
     if (scope === 'results' || scope === 'all') {
       this.results.clear();
+      for (const cube of this.cubes.remove()) {
+        const state = this.tables.get(cube.tableId as TableId);
+        if (state) this.dropCubes(state, [cube]);
+      }
       for (const state of this.tables.values()) {
         state.stats.clear();
         state.failedCasts.clear();
@@ -1104,6 +1267,8 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
     this.tables.delete(id);
     this.results.invalidateTable(id);
     await this.sortIndexes.drop(id);
+    // The instance closes below, taking the cube tables with it.
+    this.cubes.remove(id);
     if (!this.tablesWithKey(state.fingerprint.key).length) this.conversions.get(state.fingerprint.key)?.interrupt();
     await this.parquetJobs.get(state.fingerprint.key)?.promise.catch(() => undefined);
     // Queries still running on the instance are interrupted (their callers see an error) before it closes.
