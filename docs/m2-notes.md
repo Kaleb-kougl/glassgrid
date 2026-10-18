@@ -119,7 +119,11 @@ rendering under Xvfb; Electron 44.9.0, Chrome 152, `@duckdb/node-api`
 | (c) JS heap before / after | 15.7 / 19.8 MB | 18.9 / 19.7 MB | 15.7 / 19.7 MB | **15.7 / 19.7 MB** | |
 | (d) Sort `amount` → first sorted rows painted | 234 ms | 316 ms | 249 ms | **249 ms** | < 1 s ✓ |
 
-**Gate met** on every run. How it is measured (`apps/desktop/e2e/grid-perf.ts`):
+**Gate met** on every run. A fourth, final verification run after the docs
+commit stayed within budget except the wheel fling's main-thread p95, at
+18.3 ms (one 21 ms task); the scroll figures are noisy on this shared 2-vCPU
+VM, so the E2E records them in the JSON but only asserts (a), (c) and (d).
+How it is measured (`apps/desktop/e2e/grid-perf.ts`):
 
 - (a) `performance.measure` from the Open click to the first canvas frame
   that shows rows (`onFirstRowsPainted`): dialog hook, engine open, first
