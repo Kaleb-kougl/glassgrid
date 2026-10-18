@@ -1,0 +1,162 @@
+{
+  "formatVersion": 1,
+  "app": {
+    "name": "Glassgrid",
+    "version": "0.0.0"
+  },
+  "savedAt": "2026-10-18T00:00:00.000Z",
+  "data": {
+    "fileName": "sensor-readings-2025-09.parquet",
+    "absolutePath": "/samples/sensor-readings-2025-09.parquet",
+    "relativePath": "sensor-readings-2025-09.parquet",
+    "fingerprint": {
+      "sizeBytes": 8027894,
+      "mtimeMs": 1792281600000,
+      "headTailSha256": "ae0125bd271c90ba2f0eda46c817fc9f967b79ee0bd7b569d9dba5cc1e77db78",
+      "key": "5e0ec2e263712e7d598b201cfef7aa36"
+    }
+  },
+  "workspace": {
+    "columns": [
+      {
+        "name": "recorded_at",
+        "inferredType": "timestamp",
+        "typeOverride": null
+      },
+      {
+        "name": "sensor_id",
+        "inferredType": "text",
+        "typeOverride": null
+      },
+      {
+        "name": "site",
+        "inferredType": "text",
+        "typeOverride": null
+      },
+      {
+        "name": "temperature_c",
+        "inferredType": "float",
+        "typeOverride": null
+      },
+      {
+        "name": "humidity_pct",
+        "inferredType": "float",
+        "typeOverride": null
+      },
+      {
+        "name": "co2_ppm",
+        "inferredType": "integer",
+        "typeOverride": null
+      },
+      {
+        "name": "battery_pct",
+        "inferredType": "float",
+        "typeOverride": null
+      },
+      {
+        "name": "status",
+        "inferredType": "text",
+        "typeOverride": null
+      }
+    ],
+    "charts": [
+      {
+        "id": "chart_1",
+        "spec": {
+          "mark": "line",
+          "x": {
+            "column": "recorded_at",
+            "timeUnit": "hour"
+          },
+          "y": {
+            "column": "temperature_c",
+            "aggregate": "avg"
+          },
+          "color": {
+            "column": "site"
+          },
+          "filters": []
+        },
+        "title": "Temperature by site (hourly average)"
+      },
+      {
+        "id": "chart_2",
+        "spec": {
+          "mark": "histogram",
+          "x": {
+            "column": "temperature_c",
+            "bin": "auto"
+          },
+          "filters": []
+        },
+        "title": "Temperature (°C)"
+      },
+      {
+        "id": "chart_3",
+        "spec": {
+          "mark": "bar",
+          "x": {
+            "column": "status"
+          },
+          "filters": []
+        },
+        "title": "Readings by status"
+      },
+      {
+        "id": "chart_4",
+        "spec": {
+          "mark": "heatmap",
+          "x": {
+            "column": "temperature_c",
+            "bin": "auto"
+          },
+          "y": {
+            "column": "humidity_pct",
+            "bin": "auto"
+          },
+          "filters": []
+        },
+        "title": "Temperature vs humidity"
+      }
+    ],
+    "selections": {},
+    "userFilters": [],
+    "grid": {
+      "sort": [],
+      "columnOrder": [],
+      "columnWidths": []
+    },
+    "layout": {
+      "cards": [
+        {
+          "chartId": "chart_1",
+          "x": 0,
+          "y": 0,
+          "w": 1,
+          "h": 1
+        },
+        {
+          "chartId": "chart_2",
+          "x": 0,
+          "y": 1,
+          "w": 1,
+          "h": 1
+        },
+        {
+          "chartId": "chart_3",
+          "x": 0,
+          "y": 2,
+          "w": 1,
+          "h": 1
+        },
+        {
+          "chartId": "chart_4",
+          "x": 0,
+          "y": 3,
+          "w": 1,
+          "h": 1
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,174 @@
+{
+  "formatVersion": 1,
+  "app": {
+    "name": "Glassgrid",
+    "version": "0.0.0"
+  },
+  "savedAt": "2026-10-18T00:00:00.000Z",
+  "data": {
+    "fileName": "taxi-trips-2025h1.parquet",
+    "absolutePath": "/samples/taxi-trips-2025h1.parquet",
+    "relativePath": "taxi-trips-2025h1.parquet",
+    "fingerprint": {
+      "sizeBytes": 20760220,
+      "mtimeMs": 1792281600000,
+      "headTailSha256": "92287df431199278948129895b6c0d145d02eeceb763d5eda47450774a06bb19",
+      "key": "b3f8c70870935d1df61c9fb678b46bc0"
+    }
+  },
+  "workspace": {
+    "columns": [
+      {
+        "name": "pickup_at",
+        "inferredType": "timestamp",
+        "typeOverride": null
+      },
+      {
+        "name": "pickup_zone",
+        "inferredType": "text",
+        "typeOverride": null
+      },
+      {
+        "name": "dropoff_zone",
+        "inferredType": "text",
+        "typeOverride": null
+      },
+      {
+        "name": "passengers",
+        "inferredType": "integer",
+        "typeOverride": null
+      },
+      {
+        "name": "distance_km",
+        "inferredType": "float",
+        "typeOverride": null
+      },
+      {
+        "name": "duration_min",
+        "inferredType": "integer",
+        "typeOverride": null
+      },
+      {
+        "name": "fare",
+        "inferredType": "float",
+        "typeOverride": null
+      },
+      {
+        "name": "tip",
+        "inferredType": "float",
+        "typeOverride": null
+      },
+      {
+        "name": "payment_type",
+        "inferredType": "text",
+        "typeOverride": null
+      },
+      {
+        "name": "pickup_lat",
+        "inferredType": "float",
+        "typeOverride": null
+      },
+      {
+        "name": "pickup_lon",
+        "inferredType": "float",
+        "typeOverride": null
+      }
+    ],
+    "charts": [
+      {
+        "id": "chart_1",
+        "spec": {
+          "mark": "line",
+          "x": {
+            "column": "pickup_at",
+            "timeUnit": "day"
+          },
+          "y": {
+            "column": "pickup_at",
+            "aggregate": "count"
+          },
+          "filters": []
+        },
+        "title": "Trips per day"
+      },
+      {
+        "id": "chart_2",
+        "spec": {
+          "mark": "bar",
+          "x": {
+            "column": "pickup_zone"
+          },
+          "filters": []
+        },
+        "title": "Trips by pickup zone"
+      },
+      {
+        "id": "chart_3",
+        "spec": {
+          "mark": "histogram",
+          "x": {
+            "column": "distance_km",
+            "bin": "auto"
+          },
+          "filters": []
+        },
+        "title": "Trip distance (km)"
+      },
+      {
+        "id": "chart_4",
+        "spec": {
+          "mark": "heatmap",
+          "x": {
+            "column": "pickup_lon",
+            "bin": "auto"
+          },
+          "y": {
+            "column": "pickup_lat",
+            "bin": "auto"
+          },
+          "filters": []
+        },
+        "title": "Pickup locations"
+      }
+    ],
+    "selections": {},
+    "userFilters": [],
+    "grid": {
+      "sort": [],
+      "columnOrder": [],
+      "columnWidths": []
+    },
+    "layout": {
+      "cards": [
+        {
+          "chartId": "chart_1",
+          "x": 0,
+          "y": 0,
+          "w": 1,
+          "h": 1
+        },
+        {
+          "chartId": "chart_2",
+          "x": 0,
+          "y": 1,
+          "w": 1,
+          "h": 1
+        },
+        {
+          "chartId": "chart_3",
+          "x": 0,
+          "y": 2,
+          "w": 1,
+          "h": 1
+        },
+        {
+          "chartId": "chart_4",
+          "x": 0,
+          "y": 3,
+          "w": 1,
+          "h": 1
+        }
+      ]
+    }
+  }
+}

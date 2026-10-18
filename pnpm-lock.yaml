@@ -364,6 +364,9 @@ importers:
       '@duckdb/node-api':
         specifier: 1.5.6-r.1
         version: 1.5.6-r.1
+      '@glassgrid/core':
+        specifier: workspace:*
+        version: link:../../packages/core
     devDependencies:
       '@types/node':
         specifier: 24.19.2
