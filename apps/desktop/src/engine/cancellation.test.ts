@@ -55,9 +55,10 @@ describe('interrupt via AbortSignal', () => {
 
 describe('sort index builds', () => {
   it('are interrupted when their only view moves on to another query', async () => {
-    // Observe the outcome right away so the expected rejection is never "unhandled".
+    // A page past the top-K range waits for the index. Observe the outcome
+    // right away so the expected rejection is never "unhandled".
     const sorted = h.service
-      .rows(table, { offset: 0, limit: 100, sort: [{ column: 'amount', direction: 'desc' }] }, { viewId: 'grid' })
+      .rows(table, { offset: 100_000, limit: 100, sort: [{ column: 'amount', direction: 'desc' }] }, { viewId: 'grid' })
       .then(
         () => null,
         (error: unknown) => error,

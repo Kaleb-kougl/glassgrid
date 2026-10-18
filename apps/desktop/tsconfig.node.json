@@ -5,5 +5,7 @@
     "lib": ["ES2023"],
     "types": ["node"]
   },
-  "include": ["src/main", "src/engine", "electron.vite.config.ts", "vitest.config.mts"]
+  "include": ["src/main", "src/engine", "electron.vite.config.ts", "vitest.config.mts"],
+  // Imports the renderer's client (DOM types); checked by tsconfig.integration.json.
+  "exclude": ["src/engine/client-integration.test.ts"]
 }

@@ -17,6 +17,34 @@ export function simpleColumnType(duckdbType: string): ColumnType {
   return 'text';
 }
 
+/** DECIMAL width and scale used when a non-decimal column is overridden to `decimal`. */
+export const OVERRIDE_DECIMAL_TYPE = 'DECIMAL(38,6)';
+
+/**
+ * The DuckDB type a column is read as when overridden to `type`. A column
+ * already inferred as that logical type keeps its own DuckDB type (so an
+ * override that matches the inference is a no-op).
+ */
+export function overrideDuckdbType(type: ColumnType, inferredDuckdbType: string): string {
+  if (simpleColumnType(inferredDuckdbType) === type) return inferredDuckdbType;
+  switch (type) {
+    case 'integer':
+      return 'BIGINT';
+    case 'float':
+      return 'DOUBLE';
+    case 'decimal':
+      return OVERRIDE_DECIMAL_TYPE;
+    case 'boolean':
+      return 'BOOLEAN';
+    case 'date':
+      return 'DATE';
+    case 'timestamp':
+      return 'TIMESTAMP';
+    case 'text':
+      return 'VARCHAR';
+  }
+}
+
 const MAX_TEXT = 200;
 
 /** Convert a DuckDB value to a JSON-safe scalar for profiles (long text is truncated). */

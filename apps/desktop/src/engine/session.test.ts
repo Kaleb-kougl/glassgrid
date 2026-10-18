@@ -109,6 +109,39 @@ describe('EngineSession', () => {
     expect(await replyTo('c')).toMatchObject({ kind: 'arrow' });
   });
 
+  it('runs concurrent grid pages side by side: none supersedes another', async () => {
+    const { send, replyTo } = connect();
+    await h.service.clearCache('results');
+    const page = (requestId: string, offset: number, seq: number) =>
+      send({ kind: 'rows', requestId, viewId: 'canvas', seq, table, query: { offset, limit: 1000 }, concurrent: true });
+    page('p1', ROWS - 3000, 0);
+    page('p2', ROWS - 2000, 0);
+    page('p3', ROWS - 1000, 0);
+    // A non-concurrent request of the same view does not abort them either.
+    send({ kind: 'count', requestId: 'c', viewId: 'canvas', seq: 1, table });
+    for (const [id, first] of [
+      ['p1', ROWS - 2999],
+      ['p2', ROWS - 1999],
+      ['p3', ROWS - 999],
+    ] as const) {
+      const reply = await replyTo(id);
+      expect(reply.kind).toBe('arrow');
+      if (reply.kind === 'arrow') expect(Number(decode(reply.ipc).getChild('id')?.get(0))).toBe(first);
+    }
+    expect(await replyTo('c')).toMatchObject({ kind: 'count' });
+  });
+
+  it('cancels one concurrent page without touching the others', async () => {
+    const { send, replyTo } = connect();
+    await h.service.clearCache('results');
+    send({ kind: 'rows', requestId: 'keep', viewId: 'canvas2', seq: 0, table, query: { offset: ROWS - 5000, limit: 10 }, concurrent: true });
+    send({ kind: 'rows', requestId: 'drop', viewId: 'canvas2', seq: 0, table, query: { offset: ROWS - 6000, limit: 10 }, concurrent: true });
+    await settle(10);
+    send({ kind: 'cancel', requestId: 'k', target: 'drop' });
+    expect(await replyTo('drop')).toMatchObject({ kind: 'error', code: 'cancelled' });
+    expect(await replyTo('keep')).toMatchObject({ kind: 'arrow' });
+  });
+
   it('answers an explicit cancel right away and drops the late result', async () => {
     const { send, replyTo, sent } = connect();
     await h.service.clearCache('results');
