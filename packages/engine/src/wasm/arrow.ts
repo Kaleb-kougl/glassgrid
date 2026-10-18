@@ -4,10 +4,11 @@ import {
   Table,
   Type,
   Utf8,
+  makeBuilder,
   makeVector,
   tableFromIPC,
   tableToIPC,
-  vectorFromArray,
+  type Builder,
   type Data,
   type Field,
   type Vector,
@@ -90,7 +91,22 @@ function asText(vector: Vector, field: Field): Vector {
     const value = valueAt(vector, i);
     values.push(value === null ? null : renderText(value, field.type as DataType));
   }
-  return vectorFromArray(values, new Utf8());
+  return textVector(values);
+}
+
+/**
+ * A Utf8 vector from strings and nulls, built without code generation.
+ * Arrow's `vectorFromArray` (and any builder given `nullValues`) compiles
+ * its null check with `new Function`, which a Content-Security-Policy
+ * without `'unsafe-eval'` refuses; the web demo's header CSP applies to this
+ * worker. Same vector, plain closure (as `vectorFromValues` in @glassgrid/ui).
+ */
+export function textVector(values: readonly (string | null)[]): Vector<Utf8> {
+  // Without null values the builder keeps its prototype's `_isValid` and compiles nothing.
+  const builder: Builder<Utf8, null> = makeBuilder<Utf8, null>({ type: new Utf8(), nullValues: [] });
+  (builder as unknown as { _isValid: (value: unknown) => boolean })._isValid = (value) => value !== null && value !== undefined;
+  for (const value of values) builder.append(value);
+  return builder.finish().toVector();
 }
 
 // ---------------------------------------------------------------------------

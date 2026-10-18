@@ -12,6 +12,7 @@
  *   build needs cross-origin isolation and pthread workers, which the
  *   synchronous bindings do not support; see docs/m4-engine-portability.md.
  */
+import { config as zodConfig } from 'zod';
 import type { EngineResponse } from '@glassgrid/core';
 import { errorMessage } from '../errors';
 import { QueryService } from '../query-service';
@@ -31,6 +32,10 @@ interface BlockingModule {
   VoidLogger: new () => unknown;
   BROWSER_RUNTIME: unknown;
 }
+
+// The web demo's CSP refuses 'unsafe-eval' in this worker too: Zod's interpreted parsers, and no
+// `new Function` probe (which the browser would report as a violation even though Zod catches it).
+zodConfig({ jitless: true });
 
 export const WEB_OUT_OF_MEMORY_MESSAGE = 'This file is too large for the web demo. Open it in the Glassgrid desktop app';
 const DEFAULT_MAX_SOURCE_BYTES = 1024 ** 3;
@@ -80,7 +85,9 @@ async function start(init: WorkerInit): Promise<Started> {
     duckdb.BROWSER_RUNTIME,
   );
   await bindings.instantiate();
-  const opfs = await scope.navigator.storage?.getDirectory?.().catch(() => null) ?? null;
+  // The cache needs OPFS *and* sync access handles in workers (Chrome 102, Firefox 111, Safari 15.2);
+  // without either (older browsers, some private modes) the engine runs without a cache (`cache: 'none'`).
+  const opfs = hasSyncAccessHandles() ? ((await scope.navigator.storage?.getDirectory?.().catch(() => null)) ?? null) : null;
   const files = new BrowserFiles(bindings, opfs);
   const repository = init.extensionRepository;
   const driver = new WasmDriver({
@@ -114,6 +121,11 @@ async function start(init: WorkerInit): Promise<Started> {
     extensionErrors: driver.extensionErrors,
   });
   return { service, files, driver, init };
+}
+
+function hasSyncAccessHandles(): boolean {
+  const handle = (globalThis as { FileSystemFileHandle?: { prototype: object } }).FileSystemFileHandle;
+  return handle !== undefined && 'createSyncAccessHandle' in handle.prototype;
 }
 
 /** See CacheSelfTestSchema. */
