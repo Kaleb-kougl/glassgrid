@@ -28,7 +28,7 @@ export const SCATTER_WEBGL_THRESHOLD = 10_000;
  * lost. Brushes a rectangle.
  */
 export function ScatterChart(props: ScatterChartProps) {
-  const { table, tokens, label, xLabel, yLabel, colorLabel, height = DEFAULT_CHART_HEIGHT, selection, onBrush, formatValue, colorKeys, webglThreshold = SCATTER_WEBGL_THRESHOLD, radius = 2.5, testId } = props;
+  const { table, tokens, label, xLabel, yLabel, colorLabel, height = DEFAULT_CHART_HEIGHT, selection, onBrush, formatValue, colorKeys, webglThreshold = SCATTER_WEBGL_THRESHOLD, radius = 2.5, onDrawn, testId } = props;
   const data = useChartColumns(table, 'scatter', props.data);
   const colors = useSeriesColors(data, tokens, colorKeys);
   const overlay = useWebGLOverlay();
@@ -96,6 +96,7 @@ export function ScatterChart(props: ScatterChartProps) {
       perfName={useGL ? 'scatter-webgl' : 'scatter'}
       legend={data.seriesList.length > 0 ? <SeriesLegend series={data.seriesList} colors={colors} label={colorLabel} /> : undefined}
       dataTable={<ViewData data={data} mark="scatter" label={`${label} data`} xLabel={xLabel} yLabel={yLabel} colorLabel={colorLabel} maxRows={HIDDEN_TABLE_ROWS} formatValue={formatValue} />}
+      onDrawn={onDrawn}
       testId={testId}
     />
   );

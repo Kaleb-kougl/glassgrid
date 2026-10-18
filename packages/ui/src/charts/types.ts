@@ -34,6 +34,8 @@ export interface ChartCategory {
   readonly key: string;
   readonly label: string;
   readonly isNull: boolean;
+  /** The folded "Other" bar of a top-N bar chart (`x_other` TRUE): key `OTHER_SERIES_KEY`, label `Other`, value null. */
+  readonly isOther?: boolean;
   readonly value: FilterValue;
 }
 

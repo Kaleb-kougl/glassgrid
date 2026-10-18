@@ -16,7 +16,7 @@ export interface HistogramProps extends ChartCommonProps {
 
 /** Histogram over `x, x_end, y` bins; series stack within a bin. Brushes along x, snapped to bin edges. */
 export function Histogram(props: HistogramProps) {
-  const { table, tokens, label, xLabel, yLabel, colorLabel, height = DEFAULT_CHART_HEIGHT, selection, onBrush, formatValue, colorKeys, snap, testId } = props;
+  const { table, tokens, label, xLabel, yLabel, colorLabel, height = DEFAULT_CHART_HEIGHT, selection, onBrush, formatValue, colorKeys, snap, onDrawn, testId } = props;
   const data = useChartColumns(table, 'histogram', props.data);
   const colors = useSeriesColors(data, tokens, colorKeys);
   const build = useCallback(
@@ -35,6 +35,7 @@ export function Histogram(props: HistogramProps) {
       perfName="histogram"
       legend={data.seriesList.length > 0 ? <SeriesLegend series={data.seriesList} colors={colors} label={colorLabel} /> : undefined}
       dataTable={<ViewData data={data} mark="histogram" label={`${label} data`} xLabel={xLabel} yLabel={yLabel} colorLabel={colorLabel} maxRows={HIDDEN_TABLE_ROWS} formatValue={formatValue} />}
+      onDrawn={onDrawn}
       testId={testId}
     />
   );

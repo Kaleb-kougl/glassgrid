@@ -37,6 +37,11 @@ export interface ChartCommonProps {
   formatValue?: (value: number) => string;
   /** Series keys in palette order, to keep colours stable across re-queries. */
   colorKeys?: readonly string[];
+  /**
+   * Called after the chart's layers are rebuilt and painted for a new result,
+   * size or theme (synchronously, in the layout phase): the app's "drawn" mark.
+   */
+  onDrawn?: () => void;
   testId?: string;
 }
 

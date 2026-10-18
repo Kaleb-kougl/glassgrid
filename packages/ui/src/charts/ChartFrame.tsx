@@ -52,6 +52,8 @@ export interface ChartFrameProps {
   dataTable?: ReactNode;
   /** Name in benchmark timings. */
   perfName?: string;
+  /** Called after the layers were rebuilt and painted (new model or theme). */
+  onDrawn?: () => void;
   testId?: string;
 }
 
@@ -136,6 +138,7 @@ export function ChartFrame({
   legend,
   dataTable,
   perfName = 'chart',
+  onDrawn,
   testId,
 }: ChartFrameProps) {
   const plotRef = useRef<HTMLDivElement>(null);
@@ -177,9 +180,9 @@ export function ChartFrame({
   }, [model]);
 
   /** Latest render inputs for the stable paint function (selection changes repaint without rebuilding layers). */
-  const live = useRef({ model, brushAxes, propBrush, marksExternal, tokens, fonts, onFrame, perfName });
+  const live = useRef({ model, brushAxes, propBrush, marksExternal, tokens, fonts, onFrame, perfName, onDrawn });
   useLayoutEffect(() => {
-    live.current = { model, brushAxes, propBrush, marksExternal, tokens, fonts, onFrame, perfName };
+    live.current = { model, brushAxes, propBrush, marksExternal, tokens, fonts, onFrame, perfName, onDrawn };
   });
 
   const activeBrush = useCallback((): Brush | null => (draft.current ? draft.current.brush : live.current.propBrush), []);
@@ -257,6 +260,7 @@ export function ChartFrame({
     layers.current = { bg, marks };
     chartPerfHook()?.('layers', perfName, performance.now() - start);
     paintNow();
+    live.current.onDrawn?.();
   }, [model, tokens, fonts, marksExternal, paintNow, perfName]);
 
   useEffect(() => {

@@ -309,11 +309,15 @@ function orderRows(x: Float64Array, series: Uint8Array | null, seriesCount: numb
   return { order, seriesStart };
 }
 
-function categoriesOf(vector: Vector | null, field: Field | undefined, n: number): ChartCategory[] {
+function categoriesOf(vector: Vector | null, field: Field | undefined, n: number, other: Vector | null): ChartCategory[] {
   const kind = valueKind(field);
   const format = formatterFor(kind);
   const out: ChartCategory[] = [];
   for (let i = 0; i < n; i += 1) {
+    if (other?.get(i) === true) {
+      out.push({ key: OTHER_SERIES_KEY, label: 'Other', isNull: false, isOther: true, value: null });
+      continue;
+    }
     const raw: unknown = vector?.get(i);
     const value = filterValue(raw, kind);
     const label = format(raw);
@@ -335,7 +339,7 @@ export function chartColumnsFromArrow(table: Table, mark: ChartMark): ChartColum
   let x: Float64Array;
   if (mark === 'bar' || xKind === 'category') {
     xKind = 'category';
-    categories = categoriesOf(xVector, xField, n);
+    categories = categoriesOf(xVector, xField, n, column(table, 'x_other').vector);
     x = new Float64Array(n);
     for (let i = 0; i < n; i += 1) x[i] = i;
   } else {

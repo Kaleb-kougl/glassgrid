@@ -17,7 +17,7 @@ export interface LineChartProps extends ChartCommonProps {
  * NULL measures leave gaps. Brushes along x.
  */
 export function LineChart(props: LineChartProps) {
-  const { table, tokens, label, xLabel, yLabel, colorLabel, height = DEFAULT_CHART_HEIGHT, selection, onBrush, formatValue, colorKeys, testId } = props;
+  const { table, tokens, label, xLabel, yLabel, colorLabel, height = DEFAULT_CHART_HEIGHT, selection, onBrush, formatValue, colorKeys, onDrawn, testId } = props;
   const mark = props.mark ?? 'line';
   const data = useChartColumns(table, mark, props.data);
   const colors = useSeriesColors(data, tokens, colorKeys);
@@ -37,6 +37,7 @@ export function LineChart(props: LineChartProps) {
       perfName={mark}
       legend={data.seriesList.length > 0 ? <SeriesLegend series={data.seriesList} colors={colors} label={colorLabel} /> : undefined}
       dataTable={<ViewData data={data} mark={mark} label={`${label} data`} xLabel={xLabel} yLabel={yLabel} colorLabel={colorLabel} maxRows={HIDDEN_TABLE_ROWS} formatValue={formatValue} />}
+      onDrawn={onDrawn}
       testId={testId}
     />
   );

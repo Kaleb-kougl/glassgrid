@@ -46,6 +46,18 @@ describe('ChartFrame through LineChart', () => {
     expect(img.getAttribute('aria-describedby')).toBeNull();
   });
 
+  it('reports onDrawn once the layers are painted for new data, not for brush frames', () => {
+    const onDrawn = vi.fn();
+    const { rerender } = render(<LineChart table={lineTable} tokens={tokens} label="L" xLabel="x" yLabel="y" onBrush={() => undefined} onDrawn={onDrawn} testId="line" />);
+    expect(onDrawn).toHaveBeenCalledTimes(1);
+    rerender(<LineChart table={lineTable} tokens={tokens} label="L" xLabel="x" yLabel="y" selection={{ x: [1, 2] }} onBrush={() => undefined} onDrawn={onDrawn} testId="line" />);
+    recorder.flushFrames();
+    expect(onDrawn).toHaveBeenCalledTimes(1);
+    const next = new Table({ x: f64([0, 1]), y: f64([1, 2]) });
+    rerender(<LineChart table={next} tokens={tokens} label="L" xLabel="x" yLabel="y" onBrush={() => undefined} onDrawn={onDrawn} testId="line" />);
+    expect(onDrawn).toHaveBeenCalledTimes(2);
+  });
+
   it('composites marks dimmed outside the selection, with an outline and handles', () => {
     render(<LineChart table={lineTable} tokens={tokens} label="L" xLabel="x" yLabel="y" selection={{ x: [1, 3] }} onBrush={() => undefined} testId="line" />);
     recorder.flushFrames();

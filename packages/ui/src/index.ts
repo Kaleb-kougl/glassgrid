@@ -34,6 +34,7 @@ export {
   hitTestBars,
   drawBars,
   barDataFromArrow,
+  OTHER_BAR_KEY,
   type BarChartProps,
   type BarDatum,
   type BarData,

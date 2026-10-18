@@ -2,14 +2,14 @@ import type { Table } from 'apache-arrow';
 import { scaleBand, scaleLinear } from 'd3-scale';
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import type { FilterValue } from '@glassgrid/core';
-import { chartColumnsFromArrow } from '../charts/arrow.js';
+import { chartColumnsFromArrow, OTHER_SERIES_KEY } from '../charts/arrow.js';
 import { barPath, chartFonts, ellipsize, measuringContext, sizeCanvas, type ChartFonts } from '../charts/canvas.js';
 import { seriesColors } from '../charts/colors.js';
 import { formatAggregate } from '../charts/format.js';
 import { useFontsVersion } from '../charts/hooks.js';
 import { SeriesLegend } from '../charts/Legend.js';
 import { chartPerfHook } from '../charts/perf.js';
-import type { ChartSeries } from '../charts/types.js';
+import type { ChartColumns, ChartSeries } from '../charts/types.js';
 import type { ResolvedTokens } from '../tokens.js';
 import { Tooltip, type Point, type TooltipRow } from './Tooltip.js';
 
@@ -28,6 +28,8 @@ export interface BarDatum {
   /** Category label as shown; `null` categories pass `isNull`. */
   readonly label: string;
   readonly isNull?: boolean;
+  /** The folded "Other" bar of a top-N chart (`x_other`); its key is `OTHER_BAR_KEY`. */
+  readonly isOther?: boolean;
   /** The aggregate (the bar's total with segments), or null when the group has none (e.g. sum of only NULLs). */
   readonly value: number | null;
   /** The x value as an `in` filter value (set by `barDataFromArrow`). */
@@ -55,8 +57,13 @@ export interface BarChartProps {
   colorLabel?: string;
   /** Series keys in palette order, to keep colours stable across re-queries. */
   colorKeys?: readonly string[];
+  /** Called after the bars were painted for new data, size or theme. */
+  onDrawn?: () => void;
   testId?: string;
 }
+
+/** Key of the "Other" bar (`x_other` rows). Not valid JSON, so it never equals a value's key. */
+export const OTHER_BAR_KEY = OTHER_SERIES_KEY;
 
 /** Geometry shared by the design: 20px rows, 6px apart, an 84px label column. */
 export const BAR_ROW_HEIGHT = 20;
@@ -176,7 +183,7 @@ export function drawBars(ctx: CanvasRenderingContext2D, layout: BarLayout, data:
         x += w;
       });
     } else if (bar.width > 0) {
-      ctx.fillStyle = tokens.chart.mark;
+      ctx.fillStyle = d.isOther ? tokens.chart.other : tokens.chart.mark;
       ctx.beginPath();
       barPath(ctx, bar.x, bar.y, bar.width, bar.height, 2);
       ctx.fill();
@@ -218,25 +225,27 @@ export interface BarData {
 /**
  * Bar rows from the Arrow result. Without colour: one bar per row, in
  * result order (top N by measure). With colour: rows are grouped per x
- * (one segment per series, in series order), bars ordered by total.
+ * (one segment per series, in series order), bars ordered by total. Rows
+ * with `x_other` TRUE are the "Other" bar (`isOther`, key `OTHER_BAR_KEY`),
+ * kept last. Pass `data` (from `chartColumnsFromArrow(table, 'bar')`) to
+ * share one adaptation with "View data".
  */
-export function barDataFromArrow(table: Table): BarData {
-  const data = chartColumnsFromArrow(table, 'bar');
-  const categories = data.categories ?? [];
+export function barDataFromArrow(table: Table, data: ChartColumns = chartColumnsFromArrow(table, 'bar')): BarData {
+  const categories = (data.categories ?? []).map((c) => ({ ...c, isOther: c.isOther === true }));
   if (!data.series) {
     return {
       rows: categories.map((c, i) => {
         const v = data.y[i] ?? Number.NaN;
-        return { key: c.key, label: c.label, isNull: c.isNull, value: Number.isNaN(v) ? null : v, filterValue: c.value };
+        return { key: c.key, label: c.label, isNull: c.isNull, isOther: c.isOther, value: Number.isNaN(v) ? null : v, filterValue: c.value };
       }),
       series: [],
     };
   }
-  const groups = new Map<string, { label: string; isNull: boolean; value: FilterValue; segments: BarSegment[]; total: number; any: boolean; first: number }>();
+  const groups = new Map<string, { label: string; isNull: boolean; isOther: boolean; value: FilterValue; segments: BarSegment[]; total: number; any: boolean; first: number }>();
   categories.forEach((c, i) => {
     let group = groups.get(c.key);
     if (!group) {
-      group = { label: c.label, isNull: c.isNull, value: c.value, segments: [], total: 0, any: false, first: i };
+      group = { label: c.label, isNull: c.isNull, isOther: c.isOther, value: c.value, segments: [], total: 0, any: false, first: i };
       groups.set(c.key, group);
     }
     const v = data.y[i] ?? Number.NaN;
@@ -247,11 +256,12 @@ export function barDataFromArrow(table: Table): BarData {
     }
   });
   const rows = [...groups.entries()]
-    .sort(([, a], [, b]) => b.total - a.total || a.first - b.first)
+    .sort(([, a], [, b]) => Number(a.isOther) - Number(b.isOther) || b.total - a.total || a.first - b.first)
     .map(([key, g]): BarDatum => ({
       key,
       label: g.label,
       isNull: g.isNull,
+      isOther: g.isOther,
       value: g.any ? g.total : null,
       filterValue: g.value,
       segments: [...g.segments].sort((a, b) => a.series - b.series),
@@ -276,6 +286,7 @@ export function BarChart({
   series,
   colorLabel,
   colorKeys,
+  onDrawn,
   testId,
 }: BarChartProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -286,6 +297,10 @@ export function BarChart({
   const [keyboardFocus, setKeyboardFocus] = useState(false);
   const fontsVersion = useFontsVersion();
   const optionPrefix = useId();
+  const drawnRef = useRef(onDrawn);
+  useLayoutEffect(() => {
+    drawnRef.current = onDrawn;
+  });
   const fonts = useMemo(() => chartFonts(tokens), [tokens]);
   const colors = useMemo(() => (series && series.length > 0 ? seriesColors(series, tokens, colorKeys) : undefined), [series, tokens, colorKeys]);
 
@@ -325,6 +340,7 @@ export function BarChart({
     ctx.clearRect(0, 0, layout.width, layout.height);
     drawBars(ctx, layout, data, { selected, tokens, fonts, formatValue, colors, focusIndex: keyboardFocus ? activeIndex : -1 });
     chartPerfHook()?.('paint', 'bar', performance.now() - start);
+    drawnRef.current?.();
   }, [layout, data, selected, tokens, fonts, formatValue, colors, keyboardFocus, activeIndex]);
 
   const pointFromEvent = useCallback((event: { clientX: number; clientY: number }): Point | null => {

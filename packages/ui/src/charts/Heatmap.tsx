@@ -22,7 +22,7 @@ export interface HeatmapProps extends Omit<ChartCommonProps, 'colorLabel' | 'col
  * scatter fallback when the engine answers with binned cells.
  */
 export function Heatmap(props: HeatmapProps) {
-  const { table, tokens, label, xLabel, yLabel, countLabel = 'count(*)', height = DEFAULT_CHART_HEIGHT, selection, onBrush, formatValue, transform = 'sqrt', snap, testId } = props;
+  const { table, tokens, label, xLabel, yLabel, countLabel = 'count(*)', height = DEFAULT_CHART_HEIGHT, selection, onBrush, formatValue, transform = 'sqrt', snap, onDrawn, testId } = props;
   const data = useChartColumns(table, 'heatmap', props.data);
   const ramp = tokens.chart.sequential;
   const max = useMemo(() => maxCount(data.count), [data]);
@@ -43,6 +43,7 @@ export function Heatmap(props: HeatmapProps) {
       perfName="heatmap"
       legend={<RampLegend ramp={ramp} max={max} transform={transform} label={countLabel} formatValue={formatValue} />}
       dataTable={<ViewData data={data} mark="heatmap" label={`${label} data`} xLabel={xLabel} yLabel={yLabel} countLabel={countLabel} maxRows={HIDDEN_TABLE_ROWS} formatValue={formatValue} />}
+      onDrawn={onDrawn}
       testId={testId}
     />
   );

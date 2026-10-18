@@ -1,6 +1,6 @@
 import { Bool, Float64, Int64, Table, TimestampMicrosecond, Utf8, vectorFromArray } from 'apache-arrow';
 import { describe, expect, it, vi } from 'vitest';
-import { BAR_ROW_HEIGHT, barDataFromArrow, drawBars, layoutBars } from '../components/BarChart.js';
+import { BAR_ROW_HEIGHT, OTHER_BAR_KEY, barDataFromArrow, drawBars, layoutBars } from '../components/BarChart.js';
 import { resolvedTokens } from '../tokens.js';
 import { chartColumnsFromArrow } from './arrow.js';
 import { chartFonts } from './canvas.js';
@@ -306,5 +306,29 @@ describe('bar', () => {
     drawBars(ctx, layout, rows, { selected: new Set(), tokens, fonts, formatValue: String, colors: [blue ?? '', orange ?? '', tokens.chart.other] });
     const fills = ctx.calls.flatMap((c, i) => (c[0] === 'fill' ? [i] : []));
     expect(fills.map((i) => ctx.styleAt('fillStyle', i))).toEqual([blue, tokens.chart.other, blue, orange]);
+  });
+
+  it('reads the "Other" bar of a top-N result from x_other, last, in the neutral colour', () => {
+    const table = new Table({
+      x: vectorFromArray(['a', null, null], new Utf8()),
+      x_other: vectorFromArray([false, false, true], new Bool()),
+      y: f64([9, 2, 30]),
+    });
+    const data = chartColumnsFromArrow(table, 'bar');
+    expect(data.categories?.map((c) => [c.key, c.label, c.isOther === true])).toEqual([
+      ['"a"', 'a', false],
+      ['null', 'null', false],
+      [OTHER_BAR_KEY, 'Other', true],
+    ]);
+    const { rows } = barDataFromArrow(table, data);
+    expect(rows.map((r) => [r.label, r.isNull, r.isOther, r.value, r.filterValue])).toEqual([
+      ['a', false, false, 9, 'a'],
+      ['null', true, false, 2, null],
+      ['Other', false, true, 30, null],
+    ]);
+    const ctx = recordingContext();
+    drawBars(ctx, layoutBars(rows, 400, 40), rows, { selected: new Set(), tokens, fonts, formatValue: String });
+    const fills = ctx.calls.flatMap((c, i) => (c[0] === 'fill' ? [i] : []));
+    expect(fills.map((i) => ctx.styleAt('fillStyle', i))).toEqual([tokens.chart.mark, tokens.chart.mark, tokens.chart.other]);
   });
 });
