@@ -19,6 +19,18 @@ function relaxCspForDevServer(): Plugin {
   };
 }
 
+/**
+ * `GLASSGRID_RENDER_PERF=1` at build time compiles in the renderer's
+ * performance instrumentation (src/renderer/src/render-perf.ts: phase marks,
+ * React Profiler regions, a commit inspector) for `pnpm e2e:render`. It also
+ * swaps in React's profiling build (Profiler timings work in production
+ * only there) and leaves the bundle unminified so CPU profiles and
+ * component names are readable. Off by default: `__GG_RENDER_PERF__` is
+ * `false`, every instrumented branch is dead code and the bundle is the
+ * shipping one.
+ */
+const renderPerf = process.env['GLASSGRID_RENDER_PERF'] === '1';
+
 export default defineConfig({
   main: {
     build: {
@@ -46,7 +58,10 @@ export default defineConfig({
   renderer: {
     root: resolve(import.meta.dirname, 'src/renderer'),
     plugins: [react(), relaxCspForDevServer()],
+    define: { __GG_RENDER_PERF__: JSON.stringify(renderPerf) },
+    ...(renderPerf ? { resolve: { alias: [{ find: /^react-dom\/client$/, replacement: 'react-dom/profiling' }] } } : {}),
     build: {
+      ...(renderPerf ? { minify: false } : {}),
       // The CSP is `font-src 'self'`: fonts must ship as files, never as data: URIs.
       assetsInlineLimit: (file) => (/\.(woff2?|ttf|otf)$/.test(file) ? false : undefined),
       rolldownOptions: {

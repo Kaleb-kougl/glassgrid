@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ChartViewQuery, Mark, TableId } from '@glassgrid/core';
 import { isAbandoned, type EngineClient } from '../engine-client';
 import { AGGREGATE_MEASURE, type AggregateMeasureDetail } from '../perf';
+import { renderPerf } from '../render-perf-core';
 
 /** One chart aggregate as the card shows it. */
 export interface ChartResult {
@@ -70,11 +71,13 @@ export function useChartQuery(
     const { query: current, pixelWidth: width } = latest.current;
     const start = `${AGGREGATE_MEASURE}:start:${current.chartId}:${performance.now()}`;
     performance.mark(start);
+    if (__GG_RENDER_PERF__) renderPerf.query(current.engineViewId);
     engine
       .aggregate(tableId, { ...current.spec, pixelWidth: width }, { viewId: current.engineViewId, ...(current.crossfilter ? { crossfilter: current.crossfilter } : {}) })
       .then(
         (result) => {
           if (!live.current) return;
+          if (__GG_RENDER_PERF__) renderPerf.resolved(current.engineViewId);
           measure(start, { engineMs: result.engineMs, cached: result.cached, mark: result.mark, rows: result.table.numRows });
           const value: ChartResult = {
             key: requestKey,

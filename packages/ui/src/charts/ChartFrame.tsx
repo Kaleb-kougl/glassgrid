@@ -21,7 +21,7 @@ import { chartFonts, createLayer, devicePixelRatioNow, sizeCanvas, type ChartFon
 import { formatRange } from './format.js';
 import { useElementWidth, useFontsVersion } from './hooks.js';
 import type { ChartModel, DrawContext, HoverInfo } from './model.js';
-import { chartPerfHook } from './perf.js';
+import { chartPerfHook, timedChartWork } from './perf.js';
 import type { BrushHandler, IntervalSelection } from './types.js';
 
 export interface ChartFrameProps {
@@ -160,9 +160,9 @@ export function ChartFrame({
   const helpId = useId();
   const fonts = useMemo(() => chartFonts(tokens), [tokens]);
   const model = useMemo(
-    () => (width > 0 ? build(width, height, fonts) : null),
+    () => (width > 0 ? timedChartWork('model', perfName, () => build(width, height, fonts)) : null),
     // fontsVersion: re-measure tick labels once the webfonts are in.
-    [build, width, height, fonts, fontsVersion], // eslint-disable-line react-hooks/exhaustive-deps
+    [build, width, height, fonts, fontsVersion, perfName], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   const layers = useRef<{ bg: Layer | null; marks: Layer | null }>({ bg: null, marks: null });

@@ -128,3 +128,84 @@ export interface CrossfilterPrepareMeasureDetail {
   cubes: { status: string; rows?: number; reason?: string }[];
   engineMs: number;
 }
+
+// ---------------------------------------------------------------------------
+// Render-path instrumentation (`GLASSGRID_RENDER_PERF=1` builds only; see
+// render-perf.ts). The E2E render benchmark arms one interaction at a time
+// through `window.__ggRenderPerf` and reads back what happened between the
+// input event and the frame that showed the result.
+
+/** Prefix of the render-path marks: `glassgrid:<interaction>:<phase>`, e.g. `glassgrid:create:decoded`. */
+export const RENDER_PERF_MARK_PREFIX = 'glassgrid:';
+
+/** One timestamped step of an armed interaction (performance.now() time base). */
+export interface RenderPerfEvent {
+  t: number;
+  /**
+   * `input` (the DOM event's timeStamp), `dispatch` (the app calls the
+   * command), `notify` (store listeners called), `render` (first App render
+   * after the notify), `query` (a chart's aggregate effect ran), `request`
+   * (posted to the engine port), `reply` (port message received),
+   * `validated` (reply schema-checked), `decoded` (tableFromIPC done, `ms`),
+   * `resolved` (the chart's query promise settled), `data-render` (ChartView
+   * rendered a new result), `adapt` (chartColumnsFromArrow, `ms`), `model`
+   * (a chart model built, `ms`), `layers` / `paint` (canvas layers built,
+   * frame composited, `ms`), `drawn` (onDrawn), `commit-end`, `raf` (the
+   * next animation frame after a commit or draw), `presented` (a task after
+   * that frame's rendering).
+   */
+  type: string;
+  view?: string;
+  chartId?: string;
+  requestId?: string;
+  requestKind?: string;
+  /** A duration the source measured itself (decode, adapt, model, layers, paint). */
+  ms?: number;
+  bytes?: number;
+  /** Chart renderer name for model/layers/paint (`heatmap`, `bar`, …) or the input event type. */
+  name?: string;
+  engineMs?: number;
+  cached?: boolean;
+}
+
+/** Why a component rendered in a commit. `same-props` and `unstable-props` are wasted renders. */
+export type RenderCause = 'mount' | 'state' | 'context' | 'props' | 'same-props' | 'unstable-props';
+
+export interface RenderPerfComponentRender {
+  /** Component (function) name; the bundle is unminified in render-perf builds. */
+  name: string;
+  /** Innermost `<Profiler>` region around it (`TopBar`, `ColumnList`, `GridPanel`, `ChartsPanel`, `Chart:<mark>`, `App`). */
+  region: string;
+  cause: RenderCause;
+  /** Render with props equal by value (or only new callback identities) and no state/context change: React.memo plus stable props would skip it. */
+  wasted: boolean;
+  /** This component's own render time (React profiling build `selfBaseDuration`). */
+  selfMs: number;
+  /** Props whose identity changed (for `props` / `unstable-props`), at most 8. */
+  changed?: string[];
+}
+
+export interface RenderPerfCommit {
+  /** Commit phase start (Profiler `commitTime`). */
+  start: number;
+  /** Render phase start of the root Profiler, when it rendered. */
+  renderStart: number | null;
+  /** Render phase time of the whole tree (root Profiler `actualDuration`). */
+  renderMs: number;
+  /** End of the commit's layout phase (React DevTools hook `onCommitFiberRoot`). */
+  end: number;
+  /** Layout effects time (root Profiler `onCommit` effectDuration). */
+  layoutEffectsMs: number | null;
+  /** Render time per Profiler region (`actualDuration`). */
+  regions: Record<string, number>;
+  components: RenderPerfComponentRender[];
+  /** Time the commit inspector itself took (instrumentation overhead, after `end`). */
+  inspectMs: number;
+}
+
+export interface RenderPerfRecording {
+  kind: string;
+  armedAt: number;
+  events: RenderPerfEvent[];
+  commits: RenderPerfCommit[];
+}

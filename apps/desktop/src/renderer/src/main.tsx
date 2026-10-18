@@ -1,3 +1,5 @@
+// First: in render-perf builds this installs the commit inspector before react-dom loads (empty otherwise).
+import './render-perf-core';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import '@glassgrid/ui/fonts.css';
@@ -6,6 +8,7 @@ import '@glassgrid/ui/styles.css';
 import './app.css';
 import { App } from './App';
 import { EngineClient } from './engine-client';
+import { installRenderPerf, perfRegion } from './render-perf';
 import { readThemePreference, resolveTheme } from './theme';
 import { createAppWorkspace } from './workspace';
 
@@ -29,9 +32,10 @@ document.documentElement.dataset['ggTheme'] = resolveTheme(
 // engine ports or reset the undo history.
 const engine = new EngineClient(window.glassgrid);
 const workspace = createAppWorkspace();
+if (__GG_RENDER_PERF__) installRenderPerf(workspace.store);
 
 createRoot(root).render(
   <StrictMode>
-    <App engine={engine} bridge={window.glassgrid} workspace={workspace} />
+    {perfRegion('App', <App engine={engine} bridge={window.glassgrid} workspace={workspace} />)}
   </StrictMode>,
 );

@@ -30,6 +30,16 @@ import {
   type TableHandle,
   type TableId,
 } from '@glassgrid/core';
+import { renderPerf } from './render-perf-core';
+
+/** `tableFromIPC`, timed for the render-perf recording in render-perf builds. */
+function decode(reply: { requestId: string | null; ipc: Uint8Array }): Table {
+  if (!__GG_RENDER_PERF__) return tableFromIPC(reply.ipc);
+  const start = performance.now();
+  const table = tableFromIPC(reply.ipc);
+  if (reply.requestId !== null) renderPerf.decoded(reply.requestId, performance.now() - start);
+  return table;
+}
 
 export class EngineRequestError extends Error {
   constructor(
@@ -235,7 +245,7 @@ export class EngineClient {
   async rows(table: TableId, query: RowsQuery, options: FilteredQueryOptions = {}): Promise<RowsResult> {
     const body = { kind: 'rows' as const, table, query, ...this.filters(options) };
     const reply = await this.call(this.viewScoped(body, options), 'arrow', options);
-    return { table: tableFromIPC(reply.ipc), engineMs: reply.engineMs, cached: reply.cached };
+    return { table: decode(reply), engineMs: reply.engineMs, cached: reply.cached };
   }
 
   async count(table: TableId, options: FilteredQueryOptions & CrossfilterQueryOptions = {}): Promise<CountResult> {
@@ -276,7 +286,7 @@ export class EngineClient {
         waiters: 0,
         table,
         promise: this.call(body, 'arrow', { signal: controller.signal }).then((reply) => ({
-          table: tableFromIPC(reply.ipc),
+          table: decode(reply),
           engineMs: reply.engineMs,
           cached: reply.cached,
         })),
@@ -377,7 +387,7 @@ export class EngineClient {
     const body = { kind: 'aggregate' as const, table, spec: parsed, ...this.crossfilter(options) };
     const reply = await this.call(this.viewScoped(body, options), 'aggregate', options);
     return {
-      table: tableFromIPC(reply.ipc),
+      table: decode(reply),
       mark: reply.mark,
       fellBackToHeatmap: reply.fellBackToHeatmap,
       fromCube: reply.fromCube === true,
@@ -520,7 +530,9 @@ export class EngineClient {
       this.pending.set(requestId, { resolve, reject, viewId, seq, concurrent });
     });
     void this.connectedPort().then((port) => {
-      if (this.pending.has(requestId)) port.postMessage(request);
+      if (!this.pending.has(requestId)) return;
+      port.postMessage(request);
+      if (__GG_RENDER_PERF__) renderPerf.request({ requestId, kind: request.kind, ...(viewId === undefined ? {} : { viewId }) });
     });
     let reply: EngineReply;
     try {
@@ -560,6 +572,7 @@ export class EngineClient {
   }
 
   private onResponse(raw: unknown): void {
+    if (__GG_RENDER_PERF__) renderPerf.reply(raw);
     const parsed = EngineResponseSchema.safeParse(raw);
     if (!parsed.success) {
       console.error('[engine-client] dropped malformed response', parsed.error.issues);
@@ -588,6 +601,7 @@ export class EngineClient {
       return;
     }
 
+    if (__GG_RENDER_PERF__) renderPerf.validated(response.requestId);
     if (response.kind === 'error') {
       pending.reject(new EngineRequestError(response.code, response.message, response.path));
       return;

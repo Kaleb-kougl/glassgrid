@@ -53,6 +53,7 @@ import {
   type ProfileMeasureDetail,
   type SortToFirstRowsMeasureDetail,
 } from './perf';
+import { perfRegion, renderPerf } from './render-perf';
 import { useTheme } from './theme';
 import type { ChartResult } from './views/chart-data';
 import { ChartView } from './views/ChartView';
@@ -192,6 +193,7 @@ export function App({ engine, bridge, workspace }: AppProps) {
   const { store, registry } = workspace;
   const state = useSyncExternalStore(store.subscribe, store.getState);
   const history = useSyncExternalStore(store.subscribe, store.getHistory);
+  if (__GG_RENDER_PERF__) renderPerf.appRender(state.charts);
   const { theme, setPreference } = useTheme(bridge);
   const tokens = tokensFor(theme);
 
@@ -605,6 +607,7 @@ export function App({ engine, bridge, workspace }: AppProps) {
       performance.mark(start);
       const created: PendingCreate = { start, before: new Set(store.getState().charts.map((chart) => chart.id)), columns };
       pendingCreate.current = created;
+      if (__GG_RENDER_PERF__) renderPerf.dispatch();
       registry.dispatch('addChart', { columns }, { caller: 'user' }).catch((cause: unknown) => {
         if (pendingCreate.current === created) pendingCreate.current = null;
         performance.clearMarks(start);
@@ -616,6 +619,7 @@ export function App({ engine, bridge, workspace }: AppProps) {
 
   const onChartDrawn = useCallback(
     (chartId: string, result: ChartResult) => {
+      if (__GG_RENDER_PERF__) renderPerf.drawn(chartId);
       tracker.painted(`chart:${chartId}`, result.queryKey, { engineMs: result.engineMs, fromCube: result.fromCube, cached: result.cached });
       const created = pendingCreate.current;
       if (!created || created.before.has(chartId)) return;
@@ -687,6 +691,7 @@ export function App({ engine, bridge, workspace }: AppProps) {
       const before = store.getState();
       if (selection === null && !Object.hasOwn(before.selections, chartId)) return;
       setActive((current) => (current.view === chartId ? current : { ...current, view: chartId }));
+      if (__GG_RENDER_PERF__) renderPerf.dispatch();
       tracker.begin(chartId, viewKeys(viewQueries(before)));
       registry.dispatch('brush', { viewId: chartId, selection }, { caller: 'user' }).then(
         () => {
@@ -799,6 +804,7 @@ export function App({ engine, bridge, workspace }: AppProps) {
   };
 
   const onSelectionChange = (next: IndexSelection | null) => {
+    if (__GG_RENDER_PERF__) renderPerf.dispatch();
     dispatch('setSelection', { selection: fromIndexSelection(next, gridColumns) });
   };
 
@@ -820,7 +826,7 @@ export function App({ engine, bridge, workspace }: AppProps) {
       }}
       onDrop={onWindowDrop}
     >
-      <TopBar
+      {perfRegion('TopBar', <TopBar
         platform={bridge.platform}
         state={state}
         history={history}
@@ -830,7 +836,7 @@ export function App({ engine, bridge, workspace }: AppProps) {
         onUndo={() => dispatch('undo')}
         onRedo={() => dispatch('redo')}
         onStepTo={stepTo}
-      />
+      />)}
 
       <main className="workspace">
         {state.dataSource === null ? (
@@ -853,7 +859,7 @@ export function App({ engine, bridge, workspace }: AppProps) {
           </section>
         ) : (
           <>
-            <section className="panel columns" aria-label="Columns">
+            {perfRegion('ColumnList', <section className="panel columns" aria-label="Columns">
               <div className="panel__head">
                 <h2 className="panel__label">Columns</h2>
                 <span className="panel__count">{state.columns.length}</span>
@@ -885,9 +891,9 @@ export function App({ engine, bridge, workspace }: AppProps) {
                   );
                 })}
               </ul>
-            </section>
+            </section>)}
 
-            <section className="panel grid-panel" aria-label="Rows">
+            {perfRegion('GridPanel', <section className="panel grid-panel" aria-label="Rows">
               <div className="grid-panel__bar">
                 {(chips.length > 0 || !profiling) && (
                   <div className="grid-panel__filters">
@@ -963,9 +969,9 @@ export function App({ engine, bridge, workspace }: AppProps) {
                   />
                 </div>
               )}
-            </section>
+            </section>)}
 
-            <section
+            {perfRegion('ChartsPanel', <section
               className="panel charts"
               aria-label="Charts"
               data-over={chartsOver}
@@ -1021,7 +1027,7 @@ export function App({ engine, bridge, workspace }: AppProps) {
                 {queries.charts.map((query, index) => {
                   const chart = state.charts[index];
                   if (!chart) return null;
-                  return (
+                  return perfRegion(`Chart:${chart.spec.mark}`,
                   <ChartView
                     key={chart.id}
                     engine={engine}
@@ -1050,12 +1056,12 @@ export function App({ engine, bridge, workspace }: AppProps) {
                         action: { label: 'Undo', shortcut: mod('Z'), onClick: () => dispatch('undo') },
                       });
                     }}
-                  />
-                  );
+                  />,
+                  chart.id);
                 })}
               </div>
               </WebGLOverlayProvider>
-            </section>
+            </section>)}
           </>
         )}
       </main>

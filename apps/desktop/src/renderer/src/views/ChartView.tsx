@@ -37,6 +37,7 @@ import {
 } from '@glassgrid/ui';
 import { axisExpression, chartTitle, yExpression } from '../describe';
 import type { EngineClient } from '../engine-client';
+import { renderPerf } from '../render-perf-core';
 import { useChartQuery, type ChartResult } from './chart-data';
 import { brushInputOf, intervalOf, intervalSummary, selectedBarKeys, toggleBar } from './selection';
 
@@ -153,7 +154,12 @@ export function ChartView({
   // The result on screen: the latest, or the previous one while a new query runs (or failed).
   const result = data.status === 'ready' ? data.result : data.previous;
   const mark: Mark = result?.mark ?? spec.mark;
-  const adapted = useMemo(() => (result ? chartColumnsFromArrow(result.table, mark) : null), [result, mark]);
+  if (__GG_RENDER_PERF__ && result) renderPerf.chartResult(chart.id, result);
+  const adapted = useMemo(() => {
+    if (!result) return null;
+    if (__GG_RENDER_PERF__) return renderPerf.timed('adapt', chart.id, () => chartColumnsFromArrow(result.table, mark));
+    return chartColumnsFromArrow(result.table, mark);
+  }, [result, mark, chart.id]);
   const bars = useMemo(() => (result && adapted && mark === 'bar' ? barDataFromArrow(result.table, adapted) : null), [result, adapted, mark]);
 
   // Stable series colours per colour field across re-queries.

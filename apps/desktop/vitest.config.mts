@@ -7,6 +7,8 @@ import { defineConfig } from 'vitest/config';
  *   tests opt into jsdom with a `@vitest-environment jsdom` docblock.
  */
 export default defineConfig({
+  // The render-perf instrumentation is compiled out, as in an ordinary build (electron.vite.config.ts).
+  define: { __GG_RENDER_PERF__: 'false' },
   test: {
     include: ['src/engine/**/*.test.ts', 'src/renderer/**/*.test.{ts,tsx}'],
     environment: 'node',

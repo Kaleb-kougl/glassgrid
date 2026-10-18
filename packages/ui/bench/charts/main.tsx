@@ -66,7 +66,7 @@ setChartPerfHook((event, _chart, ms) => {
   if (firstRenderMs === null) firstRenderMs = performance.now() - mountStart;
   if (!recording) return;
   if (event === 'paint') paints.push(ms);
-  else layers.push(ms);
+  else if (event === 'layers') layers.push(ms);
 });
 
 function frameLoop(id: number) {
