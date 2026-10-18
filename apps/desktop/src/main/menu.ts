@@ -1,5 +1,5 @@
 import { app, BrowserWindow, Menu, nativeTheme, type MenuItemConstructorOptions } from 'electron';
-import { IpcChannel, type MenuCommand, type ThemePreference } from '@glassgrid/core';
+import { IpcChannel, type MenuCommand, type ThemePreference, type WorkspaceMenuCommand } from '@glassgrid/core';
 
 const THEME_LABELS: Record<ThemePreference, string> = { system: 'System', light: 'Light', dark: 'Dark' };
 
@@ -11,6 +11,12 @@ export function themeMenuId(theme: ThemePreference): string {
 function send(command: MenuCommand): void {
   const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
   if (win && !win.isDestroyed()) win.webContents.send(IpcChannel.menuCommand, command);
+}
+
+/** Workspace-file menu commands go on their own channel (the renderer dispatches the matching command). */
+function sendWorkspace(command: WorkspaceMenuCommand): void {
+  const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+  if (win && !win.isDestroyed()) win.webContents.send(IpcChannel.workspaceMenuCommand, command);
 }
 
 /**
@@ -26,6 +32,20 @@ export function installAppMenu(): void {
       label: 'File',
       submenu: [
         { id: 'open', label: 'Open CSV…', accelerator: 'CmdOrCtrl+O', click: () => send({ kind: 'open' }) },
+        {
+          id: 'open-workspace',
+          label: 'Open Workspace…',
+          accelerator: 'CmdOrCtrl+Shift+O',
+          click: () => sendWorkspace({ kind: 'openWorkspace' }),
+        },
+        { type: 'separator' },
+        { id: 'save-workspace', label: 'Save Workspace', accelerator: 'CmdOrCtrl+S', click: () => sendWorkspace({ kind: 'saveWorkspace' }) },
+        {
+          id: 'save-workspace-as',
+          label: 'Save Workspace As…',
+          accelerator: 'CmdOrCtrl+Shift+S',
+          click: () => sendWorkspace({ kind: 'saveWorkspaceAs' }),
+        },
         { type: 'separator' },
         isMac ? { role: 'close' } : { role: 'quit' },
       ],

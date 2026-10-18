@@ -80,6 +80,13 @@ export type WorkspaceMenuCommand =
   | { readonly kind: 'saveWorkspace' }
   | { readonly kind: 'saveWorkspaceAs' };
 
+/** Shape check for a pushed open request, without zod (the preload bundle stays small). */
+export function isExternalOpenRequest(value: unknown): value is ExternalOpenRequest {
+  if (typeof value !== 'object' || value === null) return false;
+  const request = value as { token?: unknown; fileName?: unknown };
+  return typeof request.token === 'string' && /^ot_[A-Za-z0-9-]{8,64}$/.test(request.token) && typeof request.fileName === 'string';
+}
+
 export function isWorkspaceMenuCommand(value: unknown): value is WorkspaceMenuCommand {
   if (typeof value !== 'object' || value === null) return false;
   const kind = (value as { kind?: unknown }).kind;
@@ -132,6 +139,8 @@ export interface GlassgridBridge {
   readonly clipboard: {
     writeText(text: string): Promise<void>;
   };
+  /** Workspace files: save, open, recent list, crash recovery and the close prompt. */
+  readonly workspace: WorkspaceBridge;
 }
 
 /**
