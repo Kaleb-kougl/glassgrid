@@ -2,27 +2,35 @@
   "name": "@glassgrid/web",
   "version": "0.0.0",
   "private": true,
-  "description": "Glassgrid in the browser (DuckDB-WASM, M4). For now: the component gallery, both themes side by side.",
+  "description": "Glassgrid in the browser: the shared app (@glassgrid/app) on the web platform, plus the component gallery at /gallery. DuckDB-WASM lands in M4 integration; until then a temporary in-memory stub engine.",
   "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json",
+    "test": "vitest run",
+    "size": "vite build && node scripts/size.ts",
+    "e2e": "vite build && playwright test"
   },
   "dependencies": {
     "@glassgrid/app": "workspace:*",
     "@glassgrid/core": "workspace:*",
     "@glassgrid/ui": "workspace:*",
+    "apache-arrow": "21.2.0",
     "react": "19.3.1",
     "react-dom": "19.3.1"
   },
   "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "@types/node": "24.19.2",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "6.1.2",
+    "jsdom": "30.1.1",
     "typescript": "6.0.3",
-    "vite": "8.3.4"
+    "vite": "8.3.4",
+    "vitest": "5.0.5"
   }
 }

@@ -74,7 +74,7 @@ export default defineConfig(
 
   // --- Runtime environments -------------------------------------------------
   {
-    files: ['apps/desktop/src/main/**', 'apps/desktop/src/engine/**', '**/*.config.ts', 'apps/desktop/e2e/**', 'tools/**', 'packages/ui/bench/*.ts'],
+    files: ['apps/desktop/src/main/**', 'apps/desktop/src/engine/**', '**/*.config.ts', 'apps/desktop/e2e/**', 'apps/web/e2e/**', 'apps/web/scripts/**', 'tools/**', 'packages/ui/bench/*.ts'],
     languageOptions: { globals: globals.node },
   },
   {
