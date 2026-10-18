@@ -7,9 +7,9 @@
 import { join } from 'node:path';
 import type { Table } from 'apache-arrow';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { AggregateResult, EngineReply, EngineRequest, EngineResponse, FilterInput, TableId } from '@glassgrid/core';
+import { compileChartQuery, type AggregateResult, type EngineReply, type EngineRequest, type EngineResponse, type FilterInput, type TableId } from '@glassgrid/core';
 import { EngineSession } from './session';
-import { CATEGORIES, columnValues, createHarness, decode, fixtureRow, writeFixtureCsv, type Harness } from './test-support';
+import { CATEGORIES, columnValues, createHarness, decode, fixtureRow, writeFixtureCsv, writeLines, type Harness } from './test-support';
 
 /** Large enough for several 1,000-row pages after filtering, small enough to stay fast. */
 const ROWS = 20_000;
@@ -18,6 +18,10 @@ const rows = Array.from({ length: ROWS }, (_, i) => fixtureRow(i));
 let h: Harness;
 let csvTable: TableId;
 let parquetTable: TableId;
+/** `at` (TIMESTAMP) on both sides of the epoch, with seconds; `v` a small number. */
+let stampsTable: TableId;
+const STAMPS_START = Date.UTC(1969, 11, 30, 21, 17, 3);
+const stamps = Array.from({ length: 3_000 }, (_, i) => STAMPS_START + i * 97_000);
 let session: EngineSession;
 const sent: EngineResponse[] = [];
 let nextId = 0;
@@ -35,6 +39,12 @@ beforeAll(async () => {
   await request({ kind: 'open', file: csv.file, parquet: 'never' });
   await request({ kind: 'open', file: parquet.file, parquet: 'never' });
   await h.service.ensureParquetCache(parquetTable);
+  const stampsPath = join(h.dir, 'stamps.csv');
+  await writeLines(stampsPath, 'at,v', stamps.map((ms, i) => `${new Date(ms).toISOString().replace('T', ' ').replace('.000Z', '')},${i % 7}`));
+  const stamped = h.register(stampsPath);
+  stampsTable = stamped.table;
+  await request({ kind: 'open', file: stamped.file, parquet: 'always' });
+  await h.service.ensureParquetCache(stampsTable);
 });
 
 afterAll(async () => {
@@ -278,6 +288,34 @@ describe('aggregate', () => {
   it('runs on the Parquet-backed view too', async () => {
     const result = await aggregate({ mark: 'bar', x: { column: 'category' } }, parquetTable);
     expect(numbers(result.table, 'y')).toEqual(CATEGORIES.map(() => ROWS / CATEGORIES.length));
+  });
+
+  it('hour and day buckets of a TIMESTAMP column (integer keys) match UTC buckets on both sides of the epoch', async () => {
+    // The engine's profile carries DuckDB types, so the compiler keys these buckets on integers.
+    const profile = await request({ kind: 'profile', table: stampsTable, ...view('profile') });
+    if (profile.kind !== 'profile') throw new Error(`Expected profile, got ${JSON.stringify(profile)}`);
+    expect(profile.columns.find((column) => column.name === 'at')).toMatchObject({ type: 'timestamp', duckdbType: 'TIMESTAMP' });
+    expect(compileChartQuery('"t"', { mark: 'line', x: { column: 'at', timeUnit: 'hour' } }, profile.columns).sql).toContain('// 3600000000');
+
+    for (const [unit, size] of [
+      ['hour', 3_600_000],
+      ['day', 86_400_000],
+    ] as const) {
+      const counts = new Map<number, number>();
+      for (const ms of stamps) counts.set(Math.floor(ms / size) * size, (counts.get(Math.floor(ms / size) * size) ?? 0) + 1);
+      const buckets = [...counts].sort((a, b) => a[0] - b[0]);
+      expect(buckets[0]?.[0]).toBeLessThan(0);
+
+      const histogram = await aggregate({ mark: 'histogram', x: { column: 'at', timeUnit: unit } }, stampsTable);
+      expect(numbers(histogram.table, 'x')).toEqual(buckets.map(([start]) => start));
+      expect(numbers(histogram.table, 'x_end')).toEqual(buckets.map(([start]) => start + size));
+      expect(numbers(histogram.table, 'y')).toEqual(buckets.map(([, n]) => n));
+
+      // Wide enough that M4 keeps every bucket.
+      const line = await aggregate({ mark: 'line', x: { column: 'at', timeUnit: unit }, pixelWidth: 16_384 }, stampsTable);
+      expect(numbers(line.table, 'x')).toEqual(buckets.map(([start]) => start));
+      expect(numbers(line.table, 'y')).toEqual(buckets.map(([, n]) => n));
+    }
   });
 
   it('maps compiler errors to bad_request with the offending path', async () => {

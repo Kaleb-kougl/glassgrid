@@ -303,6 +303,113 @@ exports[`compileChartQuery snapshots > scatter: raw points 2`] = `
 ]
 `;
 
+exports[`compileChartQuery: integer time keys and the combined heatmap cell key > heatmap: numeric x numeric (one cell key) 1`] = `
+"WITH __gg_base AS (
+  SELECT floor(CAST("amount" AS DOUBLE) / CAST($1 AS DOUBLE)) * 67108864 + floor(CAST("qty" AS DOUBLE) / CAST($2 AS DOUBLE)) AS gxy
+  FROM "v_sales"
+  WHERE "amount" IS NOT NULL
+    AND "qty" IS NOT NULL
+),
+__gg_cells AS (
+  SELECT round(gxy / 67108864) AS gx, gxy - round(gxy / 67108864) * 67108864 AS gy, CAST(count(*) AS DOUBLE) AS n
+  FROM __gg_base GROUP BY gxy
+)
+SELECT gx * CAST($1 AS DOUBLE) AS x, (gx + 1) * CAST($1 AS DOUBLE) AS x_end, gy * CAST($2 AS DOUBLE) AS y, (gy + 1) * CAST($2 AS DOUBLE) AS y_end, n AS count
+FROM __gg_cells
+ORDER BY gx, gy"
+`;
+
+exports[`compileChartQuery: integer time keys and the combined heatmap cell key > heatmap: numeric x numeric (one cell key) 2`] = `
+[
+  20,
+  1,
+]
+`;
+
+exports[`compileChartQuery: integer time keys and the combined heatmap cell key > histogram: hourly TIMESTAMP 1`] = `
+"WITH __gg_base AS (
+  SELECT CASE WHEN epoch_us("ts") >= 0 THEN epoch_us("ts") // 3600000000 ELSE coalesce((epoch_us("ts") + 1) // 3600000000 - 1, CASE WHEN "ts" > TIMESTAMP '1970-01-01' THEN 9223372036854775807 WHEN "ts" < TIMESTAMP '1970-01-01' THEN -9223372036854775807 END) END AS gx
+  FROM "v_sales"
+  WHERE "ts" IS NOT NULL
+)
+SELECT CASE WHEN gx = 9223372036854775807 THEN CAST('infinity' AS TIMESTAMP) WHEN gx = -9223372036854775807 THEN CAST('-infinity' AS TIMESTAMP) ELSE make_timestamp(gx * 3600000000) END AS x, (CASE WHEN gx = 9223372036854775807 THEN CAST('infinity' AS TIMESTAMP) WHEN gx = -9223372036854775807 THEN CAST('-infinity' AS TIMESTAMP) ELSE make_timestamp(gx * 3600000000) END) + INTERVAL 1 HOUR AS x_end, CAST(count(*) AS DOUBLE) AS y
+FROM __gg_base
+GROUP BY gx
+ORDER BY gx"
+`;
+
+exports[`compileChartQuery: integer time keys and the combined heatmap cell key > histogram: hourly TIMESTAMP 2`] = `[]`;
+
+exports[`compileChartQuery: integer time keys and the combined heatmap cell key > line: daily TIMESTAMP (DATE key) 1`] = `
+"WITH __gg_base AS (
+  SELECT CAST("ts" AS DATE) AS gx, "amount" AS gy
+  FROM "v_sales"
+  WHERE "ts" IS NOT NULL
+),
+__gg_agg AS (
+  SELECT CAST(gx AS TIMESTAMP) AS x, CAST(sum(gy) AS DOUBLE) AS y
+  FROM __gg_base GROUP BY gx
+),
+__gg_xn AS (SELECT *, epoch_us(x) AS xn FROM __gg_agg),
+__gg_px AS (
+  SELECT a.*, CASE WHEN b.hi = b.lo THEN 0 ELSE least(floor((a.xn - b.lo) / (b.hi - b.lo) * CAST($1 AS DOUBLE)), CAST($1 AS DOUBLE) - 1) END AS px
+  FROM __gg_xn AS a CROSS JOIN (SELECT min(xn) AS lo, max(xn) AS hi FROM __gg_xn) AS b
+),
+__gg_m4 AS (
+  SELECT *,
+    row_number() OVER (PARTITION BY px ORDER BY x ASC) AS r_first,
+    row_number() OVER (PARTITION BY px ORDER BY x DESC) AS r_last,
+    row_number() OVER (PARTITION BY px ORDER BY y ASC NULLS LAST, x ASC) AS r_min,
+    row_number() OVER (PARTITION BY px ORDER BY y DESC NULLS LAST, x ASC) AS r_max
+  FROM __gg_px
+)
+SELECT x, y
+FROM __gg_m4
+WHERE r_first = 1 OR r_last = 1 OR r_min = 1 OR r_max = 1
+ORDER BY x"
+`;
+
+exports[`compileChartQuery: integer time keys and the combined heatmap cell key > line: daily TIMESTAMP (DATE key) 2`] = `
+[
+  1000,
+]
+`;
+
+exports[`compileChartQuery: integer time keys and the combined heatmap cell key > line: hourly TIMESTAMP (integer hour key) 1`] = `
+"WITH __gg_base AS (
+  SELECT CASE WHEN epoch_us("ts") >= 0 THEN epoch_us("ts") // 3600000000 ELSE coalesce((epoch_us("ts") + 1) // 3600000000 - 1, CASE WHEN "ts" > TIMESTAMP '1970-01-01' THEN 9223372036854775807 WHEN "ts" < TIMESTAMP '1970-01-01' THEN -9223372036854775807 END) END AS gx
+  FROM "v_sales"
+  WHERE "ts" IS NOT NULL
+),
+__gg_agg AS (
+  SELECT CASE WHEN gx = 9223372036854775807 THEN CAST('infinity' AS TIMESTAMP) WHEN gx = -9223372036854775807 THEN CAST('-infinity' AS TIMESTAMP) ELSE make_timestamp(gx * 3600000000) END AS x, CAST(count(*) AS DOUBLE) AS y
+  FROM __gg_base GROUP BY gx
+),
+__gg_xn AS (SELECT *, epoch_us(x) AS xn FROM __gg_agg),
+__gg_px AS (
+  SELECT a.*, CASE WHEN b.hi = b.lo THEN 0 ELSE least(floor((a.xn - b.lo) / (b.hi - b.lo) * CAST($1 AS DOUBLE)), CAST($1 AS DOUBLE) - 1) END AS px
+  FROM __gg_xn AS a CROSS JOIN (SELECT min(xn) AS lo, max(xn) AS hi FROM __gg_xn) AS b
+),
+__gg_m4 AS (
+  SELECT *,
+    row_number() OVER (PARTITION BY px ORDER BY x ASC) AS r_first,
+    row_number() OVER (PARTITION BY px ORDER BY x DESC) AS r_last,
+    row_number() OVER (PARTITION BY px ORDER BY y ASC NULLS LAST, x ASC) AS r_min,
+    row_number() OVER (PARTITION BY px ORDER BY y DESC NULLS LAST, x ASC) AS r_max
+  FROM __gg_px
+)
+SELECT x, y
+FROM __gg_m4
+WHERE r_first = 1 OR r_last = 1 OR r_min = 1 OR r_max = 1
+ORDER BY x"
+`;
+
+exports[`compileChartQuery: integer time keys and the combined heatmap cell key > line: hourly TIMESTAMP (integer hour key) 2`] = `
+[
+  600,
+]
+`;
+
 exports[`compileRowsQuery / compileCountQuery > selects every column, sorts with a full tiebreak and pages with parameters 1`] = `
 "SELECT "category", "amount", "qty", "price", "created_on", "ts", "active", "we""ird name", "select", "日付 😀"
 FROM "v_sales"

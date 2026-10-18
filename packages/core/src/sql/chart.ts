@@ -48,11 +48,92 @@ const UNIT_SQL: Record<TimeUnit, string> = { hour: 'HOUR', day: 'DAY', month: 'M
  * Channel resolution
  * ------------------------------------------------------------------------ */
 
+/**
+ * How a time bucket is keyed while grouping (see `timeKeyFor`):
+ * - `trunc`: `date_trunc(unit, col)`, the bucket start itself;
+ * - `hour`: the hour number since the epoch, a BIGINT;
+ * - `day`: `CAST(col AS DATE)`, days since the epoch.
+ * The integer keys partition rows exactly as `date_trunc` does, and
+ * `axisStart` turns a key back into the bucket start `date_trunc` returns
+ * (same value, same type) on the aggregated rows only.
+ */
+type TimeKey = 'trunc' | 'hour' | 'day';
+
 /** How an x/y dimension becomes a group key. */
 type Axis =
   | { readonly kind: 'raw'; readonly column: CompileColumn }
-  | { readonly kind: 'time'; readonly column: CompileColumn; readonly unit: TimeUnit }
-  | { readonly kind: 'bin'; readonly column: CompileColumn; readonly width: string };
+  | { readonly kind: 'time'; readonly column: CompileColumn; readonly unit: TimeUnit; readonly key: TimeKey }
+  | { readonly kind: 'bin'; readonly column: CompileColumn; readonly width: string; readonly widthValue: number };
+
+const MICROS_PER_HOUR = '3600000000';
+/** Hour keys of +infinity / -infinity (`epoch_us` is NULL for them); finite keys stay within ±2^63 / 3.6e9. */
+const HOUR_KEY_POS_INF = '9223372036854775807';
+const HOUR_KEY_NEG_INF = '-9223372036854775807';
+
+/**
+ * The cheapest exact key for `unit` buckets of `column`. `date_trunc` costs
+ * about as much as the rest of a line chart's scan on 10M rows; integer keys
+ * cost a fraction. Only zone-less microsecond TIMESTAMP columns qualify:
+ * `date_trunc` on TIMESTAMPTZ follows the session time zone, on DATE it
+ * fails for ±infinity (which the DATE key would not), and an unknown type
+ * keeps `date_trunc`. Months stay `date_trunc`.
+ */
+function timeKeyFor(column: CompileColumn, unit: TimeUnit): TimeKey {
+  if (column.duckdbType?.trim().toUpperCase() !== 'TIMESTAMP') return 'trunc';
+  return unit === 'hour' ? 'hour' : unit === 'day' ? 'day' : 'trunc';
+}
+
+/** A time bucket's group key, computed from the table row. */
+function timeKey(axis: Extract<Axis, { kind: 'time' }>, ref: string): string {
+  switch (axis.key) {
+    case 'trunc':
+      return `date_trunc('${axis.unit}', ${ref})`;
+    case 'day':
+      // Days since the epoch, floored for times before 1970; ±infinity stay ±infinity.
+      return `CAST(${ref} AS DATE)`;
+    case 'hour': {
+      // floor(epoch_us / 3.6e9): BIGINT `//` truncates, so times before 1970 take the second branch.
+      // epoch_us(±infinity) is NULL: those rows get the sentinel keys; a NULL timestamp stays NULL.
+      const us = `epoch_us(${ref})`;
+      const sentinel = `CASE WHEN ${ref} > TIMESTAMP '1970-01-01' THEN ${HOUR_KEY_POS_INF} WHEN ${ref} < TIMESTAMP '1970-01-01' THEN ${HOUR_KEY_NEG_INF} END`;
+      return `CASE WHEN ${us} >= 0 THEN ${us} // ${MICROS_PER_HOUR} ELSE coalesce((${us} + 1) // ${MICROS_PER_HOUR} - 1, ${sentinel}) END`;
+    }
+  }
+}
+
+/** The bucket start (what `date_trunc` returns) of a time key. */
+function timeStart(axis: Extract<Axis, { kind: 'time' }>, key: string): string {
+  switch (axis.key) {
+    case 'trunc':
+      return key;
+    case 'day':
+      return `CAST(${key} AS TIMESTAMP)`;
+    case 'hour':
+      return (
+        `CASE WHEN ${key} = ${HOUR_KEY_POS_INF} THEN CAST('infinity' AS TIMESTAMP) ` +
+        `WHEN ${key} = ${HOUR_KEY_NEG_INF} THEN CAST('-infinity' AS TIMESTAMP) ` +
+        `ELSE make_timestamp(${key} * ${MICROS_PER_HOUR}) END`
+      );
+  }
+}
+
+/** Stride of the heatmap's combined cell key `gx * CELL_STRIDE + gy` (2^26). */
+const CELL_STRIDE = '67108864';
+/** Largest |bin index| the profile may allow on either heatmap axis for the combined key (2^24, half the room it has). */
+const CELL_KEY_LIMIT = 2 ** 24;
+
+/**
+ * Whether a heatmap axis's bin indexes fit the combined cell key: a numeric
+ * axis whose profiled min and max are finite and fall in bins within
+ * ±2^24. Any other axis (time, no profile, NaN or infinite extremes, huge
+ * magnitudes) keeps two group keys.
+ */
+function cellKeyFits(axis: Axis): boolean {
+  if (axis.kind !== 'bin') return false;
+  const { min, max } = axis.column;
+  if (typeof min !== 'number' || typeof max !== 'number') return false;
+  return [min, max].every((value) => Number.isFinite(value) && Math.abs(Math.floor(value / axis.widthValue)) <= CELL_KEY_LIMIT);
+}
 
 /** Expression computed from the table row (the group key). */
 function axisKey(axis: Axis): string {
@@ -61,7 +142,7 @@ function axisKey(axis: Axis): string {
     case 'raw':
       return ref;
     case 'time':
-      return `date_trunc('${axis.unit}', ${ref})`;
+      return timeKey(axis, ref);
     case 'bin':
       return `floor(CAST(${ref} AS DOUBLE) / ${axis.width})`;
   }
@@ -69,7 +150,14 @@ function axisKey(axis: Axis): string {
 
 /** Start of the group, given the group key expression. */
 function axisStart(axis: Axis, key: string): string {
-  return axis.kind === 'bin' ? `${key} * ${axis.width}` : key;
+  switch (axis.kind) {
+    case 'raw':
+      return key;
+    case 'time':
+      return timeStart(axis, key);
+    case 'bin':
+      return `${key} * ${axis.width}`;
+  }
 }
 
 /** Exclusive end of the group, given the group key expression. */
@@ -77,8 +165,10 @@ function axisEnd(axis: Axis, key: string): string {
   switch (axis.kind) {
     case 'raw':
       return key;
-    case 'time':
-      return `${key} + INTERVAL 1 ${UNIT_SQL[axis.unit]}`;
+    case 'time': {
+      const start = axisStart(axis, key);
+      return `${start === key ? key : `(${start})`} + INTERVAL 1 ${UNIT_SQL[axis.unit]}`;
+    }
     case 'bin':
       return `(${key} + 1) * ${axis.width}`;
   }
@@ -181,7 +271,12 @@ export class ChartCompiler {
     }
   }
 
-  timeAxis(field: Field, column: CompileColumn, path: string, strategy: TimeUnitStrategy): Axis {
+  /**
+   * A time-bucketed axis. `integerKeys` lets the bucket be grouped on an
+   * integer key (see `timeKeyFor`); marks whose SQL returns the group key
+   * itself (bar) keep `date_trunc`.
+   */
+  timeAxis(field: Field, column: CompileColumn, path: string, strategy: TimeUnitStrategy, integerKeys: boolean): Axis {
     if (typeof field.bin === 'number') {
       this.fail(
         'unsupported',
@@ -196,7 +291,8 @@ export class ChartCompiler {
         `${path}.timeUnit`,
       );
     }
-    return { kind: 'time', column, unit: field.timeUnit ?? autoTimeUnit(column.min, column.max, column.type, strategy) };
+    const unit = field.timeUnit ?? autoTimeUnit(column.min, column.max, column.type, strategy);
+    return { kind: 'time', column, unit, key: integerKeys ? timeKeyFor(column, unit) : 'trunc' };
   }
 
   noTimeUnitOnNumber(field: Field, column: CompileColumn, path: string): void {
@@ -210,14 +306,14 @@ export class ChartCompiler {
   }
 
   binAxis(column: CompileColumn, width: number): Axis {
-    return { kind: 'bin', column, width: this.params.double(width) };
+    return { kind: 'bin', column, width: this.params.double(width), widthValue: width };
   }
 
   /** A binned axis for histogram and heatmap: numeric bins or a time unit. */
   binnedAxis(field: Field, path: string, target: number, maxBins: number): Axis {
     const column = this.column(field, path);
     this.requirePositional(column, path);
-    if (isTemporalType(column.type)) return this.timeAxis(field, column, path, { mode: 'closest', target });
+    if (isTemporalType(column.type)) return this.timeAxis(field, column, path, { mode: 'closest', target }, true);
     this.noTimeUnitOnNumber(field, column, path);
     const min = typeof column.min === 'number' ? column.min : null;
     const max = typeof column.max === 'number' ? column.max : null;
@@ -481,7 +577,7 @@ export class ChartCompiler {
     let axis: Axis = { kind: 'raw', column };
     if (x.timeUnit !== undefined) {
       if (!isTemporalType(column.type)) this.noTimeUnitOnNumber(x, column, 'x');
-      axis = this.timeAxis(x, column, 'x', { mode: 'finest', max: LINE_AUTO_MAX_BUCKETS });
+      axis = this.timeAxis(x, column, 'x', { mode: 'finest', max: LINE_AUTO_MAX_BUCKETS }, false);
     }
     const measure = this.measure();
     const color = this.colorColumn();
@@ -550,6 +646,27 @@ export class ChartCompiler {
     const yAxis = this.binnedAxis(y, 'y', HEATMAP_TARGET_BINS, MAX_HEATMAP_BINS_PER_AXIS);
     this.colorColumn();
     this.limit();
+    const cells =
+      `${axisStart(xAxis, 'gx')} AS x, ${axisEnd(xAxis, 'gx')} AS x_end, ` +
+      `${axisStart(yAxis, 'gy')} AS y, ${axisEnd(yAxis, 'gy')} AS y_end`;
+    if (cellKeyFits(xAxis) && cellKeyFits(yAxis)) {
+      // One DOUBLE group key per cell, gx * 2^26 + gy, instead of two: grouping is the larger part of
+      // a heatmap's cost, and one key groups faster than two. The profile bounds |gx| and |gy| by
+      // 2^24; anything below 2^26 (gx) and 2^25 (gy) keeps the key an exact integer under 2^53 that
+      // decodes exactly (round: |gy / 2^26| < 1/2).
+      const { ctes, src } = this.baseCtes(
+        [[`${axisKey(xAxis)} * ${CELL_STRIDE} + ${axisKey(yAxis)}`, 'gxy']],
+        null,
+        [xAxis.column, yAxis.column],
+        null,
+        () => '',
+      );
+      ctes.push(
+        `__gg_cells AS (\n  SELECT round(gxy / ${CELL_STRIDE}) AS gx, gxy - round(gxy / ${CELL_STRIDE}) * ${CELL_STRIDE} AS gy, ` +
+          `${this.countAgg('')} AS n\n  FROM ${src} GROUP BY gxy\n)`,
+      );
+      return `WITH ${ctes.join(',\n')}\nSELECT ${cells}, n AS count\nFROM __gg_cells\nORDER BY gx, gy`;
+    }
     const { ctes, src } = this.baseCtes(
       [
         [axisKey(xAxis), 'gx'],
@@ -560,12 +677,7 @@ export class ChartCompiler {
       null,
       () => '',
     );
-    return (
-      `WITH ${ctes.join(',\n')}\n` +
-      `SELECT ${axisStart(xAxis, 'gx')} AS x, ${axisEnd(xAxis, 'gx')} AS x_end, ` +
-      `${axisStart(yAxis, 'gy')} AS y, ${axisEnd(yAxis, 'gy')} AS y_end, ${this.countAgg('')} AS count\n` +
-      `FROM ${src}\nGROUP BY gx, gy\nORDER BY gx, gy`
-    );
+    return `WITH ${ctes.join(',\n')}\nSELECT ${cells}, ${this.countAgg('')} AS count\nFROM ${src}\nGROUP BY gx, gy\nORDER BY gx, gy`;
   }
 
   scatterChannels(): { x: CompileColumn; y: CompileColumn } {
@@ -623,7 +735,7 @@ export class ChartCompiler {
     this.requirePositional(column, 'x');
     let axis: Axis;
     if (isTemporalType(column.type)) {
-      axis = this.timeAxis(x, column, 'x', { mode: 'finest', max: LINE_AUTO_MAX_BUCKETS });
+      axis = this.timeAxis(x, column, 'x', { mode: 'finest', max: LINE_AUTO_MAX_BUCKETS }, true);
     } else {
       this.noTimeUnitOnNumber(x, column, 'x');
       if (x.bin === undefined) {

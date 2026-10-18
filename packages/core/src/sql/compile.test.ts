@@ -236,6 +236,50 @@ describe('compileChartQuery snapshots', () => {
   });
 });
 
+describe('compileChartQuery: integer time keys and the combined heatmap cell key', () => {
+  // The engine's profile carries DuckDB types; with them, hour and day buckets group on integer keys.
+  const typed: CompileColumn[] = [
+    { name: 'ts', type: 'timestamp', min: '2024-01-01 00:00:00', max: '2024-01-31 23:59:59', duckdbType: 'TIMESTAMP' },
+    { name: 'tz', type: 'timestamp', min: '2024-01-01 00:00:00', max: '2024-01-31 23:59:59', duckdbType: 'TIMESTAMP WITH TIME ZONE' },
+    { name: 'day', type: 'date', min: '2023-01-01', max: '2024-06-30', duckdbType: 'DATE' },
+    { name: 'amount', type: 'float', min: 0, max: 1234.5, duckdbType: 'DOUBLE' },
+    { name: 'qty', type: 'integer', min: 1, max: 40, duckdbType: 'BIGINT' },
+    { name: 'far', type: 'float', min: 1e12, max: 1e12 + 100, duckdbType: 'DOUBLE' },
+  ];
+  const sqlOf = (spec: ChartSpecInput, opts?: { pixelWidth?: number }) => compileChartQuery(TABLE, spec, typed, opts).sql;
+
+  it.each<[string, ChartSpecInput, { pixelWidth?: number }?]>([
+    ['line: hourly TIMESTAMP (integer hour key)', { mark: 'line', x: { column: 'ts' } }, { pixelWidth: 600 }],
+    ['line: daily TIMESTAMP (DATE key)', { mark: 'line', x: { column: 'ts', timeUnit: 'day' }, y: { column: 'amount', aggregate: 'sum' } }],
+    ['histogram: hourly TIMESTAMP', { mark: 'histogram', x: { column: 'ts', timeUnit: 'hour' } }],
+    ['heatmap: numeric x numeric (one cell key)', { mark: 'heatmap', x: { column: 'amount' }, y: { column: 'qty' } }],
+  ])('%s', (_, spec, opts) => {
+    const compiled = compileChartQuery(TABLE, spec, typed, opts);
+    expect(compiled.sql).toMatchSnapshot();
+    expect(compiled.params).toMatchSnapshot();
+  });
+
+  it('keys hours and days on integers only for TIMESTAMP columns', () => {
+    expect(sqlOf({ mark: 'line', x: { column: 'ts', timeUnit: 'hour' } })).toContain('epoch_us("ts") // 3600000000');
+    expect(sqlOf({ mark: 'area', x: { column: 'ts', timeUnit: 'day' } })).toContain('CAST("ts" AS DATE) AS gx');
+    // Months, TIMESTAMPTZ (session time zone), DATE, unknown types and bar charts (x is the key itself) keep date_trunc.
+    expect(sqlOf({ mark: 'line', x: { column: 'day', timeUnit: 'day' } })).toContain(`date_trunc('day', "day") AS gx`);
+    expect(sqlOf({ mark: 'line', x: { column: 'ts', timeUnit: 'month' } })).toContain(`date_trunc('month', "ts") AS gx`);
+    expect(sqlOf({ mark: 'line', x: { column: 'tz', timeUnit: 'hour' } })).toContain(`date_trunc('hour', "tz") AS gx`);
+    expect(sqlOf({ mark: 'bar', x: { column: 'ts', timeUnit: 'hour' } })).toContain(`date_trunc('hour', "ts") AS gx`);
+    expect(compileChartQuery(TABLE, { mark: 'line', x: { column: 'ts', timeUnit: 'hour' } }, columns).sql).toContain(`date_trunc('hour', "ts") AS gx`);
+  });
+
+  it('uses one cell key only when the profile bounds both axes', () => {
+    expect(sqlOf({ mark: 'heatmap', x: { column: 'amount' }, y: { column: 'qty' } })).toContain('GROUP BY gxy');
+    // Bins beyond ±2^24 (or no numeric profile, or a time axis) keep two keys.
+    expect(sqlOf({ mark: 'heatmap', x: { column: 'far' }, y: { column: 'qty' } })).toContain('GROUP BY gx, gy');
+    expect(sqlOf({ mark: 'heatmap', x: { column: 'amount' }, y: { column: 'ts' } })).toContain('GROUP BY gx, gy');
+    const unprofiled = typed.map((column) => ({ ...column, min: null, max: null }));
+    expect(compileChartQuery(TABLE, { mark: 'heatmap', x: { column: 'amount', bin: 5 }, y: { column: 'qty', bin: 1 } }, unprofiled).sql).toContain('GROUP BY gx, gy');
+  });
+});
+
 describe('compileChartQuery validation', () => {
   const chart = (spec: ChartSpecInput, opts?: { pixelWidth?: number }) => () => compileChartQuery(TABLE, spec, columns, opts);
 

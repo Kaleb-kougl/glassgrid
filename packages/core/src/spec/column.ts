@@ -36,11 +36,19 @@ export type ColumnProfile = z.infer<typeof ColumnProfileSchema>;
 
 /**
  * The part of a profile the SQL compiler reads: name and type always, min and
- * max for automatic bin widths and time units. A full `ColumnProfile` fits.
+ * max for automatic bin widths and time units (and, for heatmaps, to prove a
+ * cheaper cell key exact). A full `ColumnProfile` fits, and so does the
+ * engine's `TableColumnProfile`.
+ *
+ * `duckdbType` (optional) is the column's DuckDB type as DESCRIBE prints it.
+ * When it is `TIMESTAMP`, hour and day buckets are grouped on an integer key
+ * instead of `date_trunc`, with identical results; any other or no value
+ * keeps `date_trunc`, which is right for every type.
  */
 export type CompileColumn = Pick<ColumnProfile, 'name' | 'type'> & {
   readonly min?: ProfileValue | undefined;
   readonly max?: ProfileValue | undefined;
+  readonly duckdbType?: string | undefined;
 };
 
 export const NUMERIC_TYPES: readonly ColumnType[] = ['integer', 'float', 'decimal'];
