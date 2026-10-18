@@ -1,20 +1,26 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent } from 'react';
 import {
+  changedSelectionView,
   CommandError,
+  crossfilterPlan,
   effectiveColumnType,
-  effectiveFilters,
   filterChips,
-  GRID_VIEW_ID,
   isNumericType,
+  stateColumns,
   tableIdForFile,
+  viewQueries,
+  type BrushSelectionInput,
   type ChartSpecInput,
   type ColumnState,
   type Filter,
   type FilterChip as FilterChipModel,
+  type FilterInput,
   type GlassgridBridge,
   type TableColumnProfile,
   type TableId,
   type UndoEntry,
+  type ViewQueries,
+  type WorkspaceState,
 } from '@glassgrid/core';
 import {
   Button,
@@ -26,6 +32,7 @@ import {
   isColumnDrag,
   Toast,
   tokensFor,
+  WebGLOverlayProvider,
   type GridSelection as IndexSelection,
   type ToastAction,
 } from '@glassgrid/ui';
@@ -33,17 +40,24 @@ import { openFileAction } from './actions/open-file';
 import { chartTitle, describeEntry } from './describe';
 import { isAbandoned, type EngineClient, type RowsResult } from './engine-client';
 import {
+  CHART_CREATE_MEASURE,
   COUNT_ROWS_MEASURE,
+  CROSSFILTER_PREPARE_MEASURE,
   OPEN_TO_FIRST_ROWS_MEASURE,
   PROFILE_MEASURE,
   SORT_TO_FIRST_ROWS_MEASURE,
+  type ChartCreateMeasureDetail,
   type CountRowsMeasureDetail,
+  type CrossfilterPrepareMeasureDetail,
   type OpenToFirstRowsMeasureDetail,
   type ProfileMeasureDetail,
   type SortToFirstRowsMeasureDetail,
 } from './perf';
 import { useTheme } from './theme';
+import type { ChartResult } from './views/chart-data';
 import { ChartView } from './views/ChartView';
+import { CrossfilterTracker } from './views/crossfilter-tracker';
+import { FilterEditor } from './views/FilterEditor';
 import {
   displayColumns,
   EngineGridSource,
@@ -60,7 +74,16 @@ export { describeEntry };
 export interface AppProps {
   engine: Pick<
     EngineClient,
-    'open' | 'pageFetcher' | 'profile' | 'count' | 'aggregate' | 'onEvent' | 'onRestarted' | 'setColumnTypes' | 'closeTable'
+    | 'open'
+    | 'pageFetcher'
+    | 'profile'
+    | 'count'
+    | 'aggregate'
+    | 'prepareCrossfilter'
+    | 'onEvent'
+    | 'onRestarted'
+    | 'setColumnTypes'
+    | 'closeTable'
   >;
   bridge: Pick<GlassgridBridge, 'openCsv' | 'openDroppedFile' | 'setTheme' | 'onMenuCommand' | 'platform' | 'clipboard'>;
   workspace: AppWorkspace;
@@ -72,6 +95,14 @@ interface PendingOpen {
   table: TableId;
   openEngineMs: number;
   usingParquetCache: boolean;
+}
+
+/** Started by a column dropped on the charts panel (or "+ New chart"); finished by the new chart drawn. */
+interface PendingCreate {
+  start: string;
+  /** Charts that existed before: the first other chart to draw is the new one. */
+  before: ReadonlySet<string>;
+  columns: string[];
 }
 
 /** Started by a header click; finished by the first rows of the sorted view painted. */
@@ -123,9 +154,25 @@ export function formatNulls(fraction: number): string {
   return `${percent.format(fraction)} null`;
 }
 
-/** A bar chart over `column`, the v1 default for a dropped column (other marks arrive in M3). */
+/** A bar chart over `column` (kept for callers that want a bar regardless of the column's type). */
 export function barSpecFor(column: string): ChartSpecInput {
   return { mark: 'bar', x: { column } };
+}
+
+/** Plot width in device pixels for line aggregates (M4 keeps four points per pixel column), from the charts list width. */
+export function chartPixelWidth(listWidth: number, dpr: number): number {
+  // Card padding and the y axis take about 80 CSS px of the list's width; round so small resizes do not re-query.
+  const px = Math.round((Math.max(100, listWidth - 80) * dpr) / 50) * 50;
+  return Math.min(16_384, Math.max(100, px));
+}
+
+/** Every view's query key, as the cross-filter timing names them (`chart:<id>`, `grid:count`, `grid:rows`). */
+export function viewKeys(queries: ViewQueries): Map<string, string> {
+  const keys = new Map<string, string>();
+  keys.set('grid:count', queries.grid.key);
+  keys.set('grid:rows', queries.grid.key);
+  for (const chart of queries.charts) keys.set(chart.engineViewId, chart.key);
+  return keys;
 }
 
 /** Which caller created each chart, from the history's `addChart` patches. */
@@ -152,7 +199,16 @@ export function App({ engine, bridge, workspace }: AppProps) {
   const [opening, setOpening] = useState(false);
   const [firstPageTable, setFirstPageTable] = useState<TableId | null>(null);
   const [profile, setProfile] = useState<{ table: TableId; rowCount: number; columns: TableColumnProfile[] } | null>(null);
-  const [count, setCount] = useState<{ table: TableId; key: string; rowCount: number } | null>(null);
+  /** The latest row count, with what the cross-filter timing needs (the grid key it answers, engine figures). */
+  const [count, setCount] = useState<{
+    table: TableId;
+    key: string;
+    rowCount: number;
+    gridKey: string;
+    engineMs: number;
+    fromCube: boolean;
+    cached: boolean;
+  } | null>(null);
   const [optimizing, setOptimizing] = useState<{ table: TableId; fraction: number | null } | null>(null);
   const [draggingColumn, setDraggingColumn] = useState<string | null>(null);
   const [fileOver, setFileOver] = useState(false);
@@ -182,9 +238,28 @@ export function App({ engine, bridge, workspace }: AppProps) {
   // ---------------------------------------------------------------------------
   // Views of the data source
 
-  // The grid queries with every selection but its own, plus every user filter (core's cross-filter model).
-  const gridFiltersKey = JSON.stringify(effectiveFilters(state, GRID_VIEW_ID));
+  // The view being brushed (the last whose selection changed, or the chart under the pointer): other
+  // views carry a cross-filter hint for its selection, so the engine can answer them from cubes.
+  const [active, setActive] = useState<{ selections: WorkspaceState['selections']; view: string | null }>({ selections: state.selections, view: null });
+  let activeView = active.view;
+  if (active.selections !== state.selections) {
+    activeView = changedSelectionView({ charts: state.charts, selections: active.selections }, state) ?? active.view;
+    setActive({ selections: state.selections, view: activeView });
+  }
+  // Every view's query inputs (core's cross-filter model): each queries with every selection but its own.
+  const queries = useMemo(
+    () => viewQueries({ charts: state.charts, columns: state.columns, selections: state.selections, userFilters: state.userFilters }, { activeView }),
+    [state.charts, state.columns, state.selections, state.userFilters, activeView],
+  );
+  const compileColumns = useMemo(() => stateColumns(state), [state]);
+  const gridFiltersKey = JSON.stringify(queries.grid.filters);
   const filters = useMemo(() => JSON.parse(gridFiltersKey) as Filter[], [gridFiltersKey]);
+  /** The grid count's cross-filter hint, read when the count is sent (not part of its key). */
+  const gridHint = useRef(queries.grid.crossfilter);
+  useLayoutEffect(() => {
+    gridHint.current = queries.grid.crossfilter;
+  });
+  const tracker = useMemo(() => new CrossfilterTracker(), []);
   // Bumped when the engine's data for the table changes under the same view (type overrides applied, engine restart).
   const [dataVersion, setDataVersion] = useState(0);
 
@@ -212,19 +287,24 @@ export function App({ engine, bridge, workspace }: AppProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [engine, tableId],
   );
+  /** The grid key (`viewQueries`) of the view the grid shows, for the cross-filter timing. */
+  const gridViewKey = useRef(queries.grid.key);
   useLayoutEffect(() => {
+    gridViewKey.current = queries.grid.key;
     grid?.update(view);
-  }, [grid, view]);
+  }, [grid, view, queries.grid.key]);
   useEffect(() => () => grid?.cancel(), [grid]);
 
   // The first page of a view: the open/sort measures read its engine time; the first one unlocks the profile and the count.
-  const firstPage = useRef<{ table: TableId; result: RowsResult } | null>(null);
+  const firstPage = useRef<{ table: TableId; result: RowsResult; gridKey: string } | null>(null);
   useLayoutEffect(() => {
     if (!grid) return;
     const table = grid.table;
     const offPage = grid.onFirstPage((result) => {
-      firstPage.current = { table, result };
+      firstPage.current = { table, result, gridKey: gridViewKey.current };
       setFirstPageTable(table);
+      // An empty view paints no rows: its first page is all there is to show.
+      if (result.table.numRows === 0) tracker.painted('grid:rows', gridViewKey.current, { engineMs: result.engineMs, fromCube: false, cached: result.cached });
     });
     const offErrors = grid.source.subscribe((change) => {
       if (change.kind === 'error' && !isAbandoned(change.error)) showToast({ tone: 'error', message: messageOf(change.error) });
@@ -233,11 +313,12 @@ export function App({ engine, bridge, workspace }: AppProps) {
       offPage();
       offErrors();
     };
-  }, [grid, showToast]);
+  }, [grid, showToast, tracker]);
 
   const pendingSort = useRef<PendingSort | null>(null);
   const onFirstRowsPainted = useCallback(() => {
     const page = firstPage.current;
+    if (page) tracker.painted('grid:rows', page.gridKey, { engineMs: page.result.engineMs, fromCube: false, cached: page.result.cached });
     const open = pendingOpen.current;
     if (open && open.table === page?.table) {
       pendingOpen.current = null;
@@ -258,7 +339,7 @@ export function App({ engine, bridge, workspace }: AppProps) {
         cached: page.result.cached,
       } satisfies SortToFirstRowsMeasureDetail);
     }
-  }, []);
+  }, [tracker]);
 
   // The previous table's DuckDB instance is freed when another file replaces it (and when the window goes away).
   const shownTable = useRef<TableId | null>(null);
@@ -425,7 +506,9 @@ export function App({ engine, bridge, workspace }: AppProps) {
     const run = { live: true };
     const start = `${COUNT_ROWS_MEASURE}:start:${countKey}`;
     performance.mark(start);
-    engine.count(tableId, { viewId: 'status', filters }).then(
+    const hint = gridHint.current;
+    const requestedFor = gridViewKey.current;
+    engine.count(tableId, { viewId: 'status', filters, ...(hint ? { crossfilter: hint } : {}) }).then(
       (result) => {
         if (!run.live) return;
         measure(COUNT_ROWS_MEASURE, start, {
@@ -433,7 +516,15 @@ export function App({ engine, bridge, workspace }: AppProps) {
           engineMs: result.engineMs,
           cached: result.cached,
         } satisfies CountRowsMeasureDetail);
-        setCount({ table: tableId, key: countKey, rowCount: result.rowCount });
+        setCount({
+          table: tableId,
+          key: countKey,
+          rowCount: result.rowCount,
+          gridKey: requestedFor,
+          engineMs: result.engineMs,
+          fromCube: result.fromCube === true,
+          cached: result.cached,
+        });
       },
       (cause: unknown) => {
         performance.clearMarks(start);
@@ -443,7 +534,14 @@ export function App({ engine, bridge, workspace }: AppProps) {
     return () => {
       run.live = false;
     };
+    // The hint and the grid key are read at request time (they follow filters).
   }, [engine, tableId, firstPageTable, countKey, filters, showToast]);
+
+  // The count is "painted" once the row-count text shows it (cross-filter timing).
+  useLayoutEffect(() => {
+    if (count?.key !== countKey) return;
+    tracker.painted('grid:count', count.gridKey, { engineMs: count.engineMs, fromCube: count.fromCube, cached: count.cached }, count.rowCount);
+  }, [count, countKey, tracker]);
 
   // "Optimizing file": the engine's background Parquet conversion of large CSVs.
   useEffect(
@@ -492,12 +590,124 @@ export function App({ engine, bridge, workspace }: AppProps) {
     retryOpen.current = open;
   }, [open]);
 
+  // ---------------------------------------------------------------------------
+  // Charts: creation (default chart rules), brushing and the cross-filter timing
+
+  const pendingCreate = useRef<PendingCreate | null>(null);
+  /** One or two columns become a chart by the default chart rules (`addChart { columns }`); timed to the chart drawn. */
   const addChartFor = useCallback(
-    (column: string) => {
-      dispatch('addChart', { spec: barSpecFor(column) });
+    (columns: string[]) => {
+      if (pendingCreate.current) performance.clearMarks(pendingCreate.current.start);
+      const start = `${CHART_CREATE_MEASURE}:start:${performance.now()}`;
+      performance.mark(start);
+      const created: PendingCreate = { start, before: new Set(store.getState().charts.map((chart) => chart.id)), columns };
+      pendingCreate.current = created;
+      registry.dispatch('addChart', { columns }, { caller: 'user' }).catch((cause: unknown) => {
+        if (pendingCreate.current === created) pendingCreate.current = null;
+        performance.clearMarks(start);
+        showToast({ tone: 'error', message: messageOf(cause) });
+      });
     },
-    [dispatch],
+    [registry, store, showToast],
   );
+
+  const onChartDrawn = useCallback(
+    (chartId: string, result: ChartResult) => {
+      tracker.painted(`chart:${chartId}`, result.queryKey, { engineMs: result.engineMs, fromCube: result.fromCube, cached: result.cached });
+      const created = pendingCreate.current;
+      if (!created || created.before.has(chartId)) return;
+      pendingCreate.current = null;
+      measure(CHART_CREATE_MEASURE, created.start, {
+        chartId,
+        mark: result.mark,
+        columns: created.columns,
+        engineMs: result.engineMs,
+        cached: result.cached,
+        rows: result.table.numRows,
+      } satisfies ChartCreateMeasureDetail);
+    },
+    [tracker],
+  );
+
+  // The plot width line aggregates are computed for (one for the panel: cards share its width).
+  const chartsListRef = useRef<HTMLDivElement>(null);
+  const [pixelWidth, setPixelWidth] = useState(1_000);
+  useLayoutEffect(() => {
+    const list = chartsListRef.current;
+    if (!list) return;
+    const measureWidth = () => setPixelWidth(chartPixelWidth(list.clientWidth, window.devicePixelRatio || 1));
+    measureWidth();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measureWidth);
+    observer.observe(list);
+    return () => observer.disconnect();
+  }, [state.dataSource]);
+  const latestPixelWidth = useRef(pixelWidth);
+  useLayoutEffect(() => {
+    latestPixelWidth.current = pixelWidth;
+  });
+
+  /**
+   * Pointer down on a chart: it becomes the active view, and the engine starts building the cubes the
+   * other views need for a brush on its axis (fire and forget; equal requests share one cube).
+   */
+  const onBrushStart = useCallback(
+    (chartId: string) => {
+      setActive((current) => (current.view === chartId ? current : { ...current, view: chartId }));
+      const table = tableId;
+      const current = store.getState();
+      const plan = table === null ? null : crossfilterPlan(current, chartId);
+      if (table === null || !plan) return;
+      const width = latestPixelWidth.current;
+      const targets = plan.targets.map((target) => (target.kind === 'aggregate' ? { kind: 'aggregate' as const, spec: { ...target.spec, pixelWidth: width } } : { kind: 'count' as const, filters: target.filters }));
+      const start = `${CROSSFILTER_PREPARE_MEASURE}:start:${performance.now()}`;
+      performance.mark(start);
+      engine.prepareCrossfilter(table, { dimension: plan.dimension, targets }).then(
+        (result) => {
+          const bin = plan.dimension.bin;
+          measure(CROSSFILTER_PREPARE_MEASURE, start, {
+            source: chartId,
+            dimension: `${plan.dimension.column} ${bin.kind === 'width' ? `width ${bin.width}` : bin.kind === 'time' ? bin.unit : 'values'}`,
+            cubes: result.cubes.map((cube) => ({ ...cube })),
+            engineMs: result.engineMs,
+          } satisfies CrossfilterPrepareMeasureDetail);
+        },
+        () => performance.clearMarks(start),
+      );
+    },
+    [engine, store, tableId, setActive],
+  );
+
+  /** A brush released or a bar toggled: one `brush` command (one undo entry); timed until every other view painted. */
+  const onBrushEnd = useCallback(
+    (chartId: string, selection: BrushSelectionInput | null) => {
+      const before = store.getState();
+      if (selection === null && !Object.hasOwn(before.selections, chartId)) return;
+      setActive((current) => (current.view === chartId ? current : { ...current, view: chartId }));
+      tracker.begin(chartId, viewKeys(viewQueries(before)));
+      registry.dispatch('brush', { viewId: chartId, selection }, { caller: 'user' }).then(
+        () => {
+          const after = viewQueries(store.getState());
+          tracker.arm(viewKeys(after), after.grid.filters);
+        },
+        (cause: unknown) => {
+          tracker.cancel();
+          showToast({ tone: 'error', message: messageOf(cause) });
+        },
+      );
+    },
+    [registry, store, tracker, showToast, setActive],
+  );
+
+  /** A column dropped (or Enter on it): with two columns selected in the grid and the dropped one among them, both. */
+  const columnsForChart = (column: string): string[] => {
+    if (selectedColumns.length === 2 && selectedColumns.includes(column)) return [column, ...selectedColumns.filter((name) => name !== column)];
+    return [column];
+  };
+
+  const addFilter = useCallback(async (filter: FilterInput) => {
+    await registry.dispatch('addFilter', { filter }, { caller: 'user' });
+  }, [registry]);
 
 
   // Removing a chip dispatches the command the model names for it, which also clears the brush it came from.
@@ -665,7 +875,7 @@ export function App({ engine, bridge, workspace }: AppProps) {
                       profiling={profiling}
                       selected={selectedColumns.includes(column.name)}
                       onTypeChange={(type) => dispatch('setColumnType', { column: column.name, type })}
-                      onActivate={() => addChartFor(column.name)}
+                      onActivate={() => addChartFor(columnsForChart(column.name))}
                       testId={`column-${column.name}`}
                     />
                   );
@@ -675,25 +885,26 @@ export function App({ engine, bridge, workspace }: AppProps) {
 
             <section className="panel grid-panel" aria-label="Rows">
               <div className="grid-panel__bar">
-                {chips.length > 0 ? (
+                {(chips.length > 0 || !profiling) && (
                   <div className="grid-panel__filters">
-                    <div className="grid-panel__chips" role="list" aria-label="Active filters">
-                      {chips.map((chip) => (
-                        <div role="listitem" key={chip.id}>
-                          <FilterChip
-                            column={chip.column}
-                            condition={chip.condition}
-                            onRemove={() => removeFilter(chip)}
-                            testId={`filter-${chip.column}`}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                    <Button variant="ghost" size="sm" disabled title="The filter editor arrives with M3; click a bar to filter for now.">
-                      + Filter
-                    </Button>
+                    {chips.length > 0 && (
+                      <div className="grid-panel__chips" role="list" aria-label="Active filters">
+                        {chips.map((chip) => (
+                          <div role="listitem" key={chip.id}>
+                            <FilterChip
+                              column={chip.column}
+                              condition={chip.condition}
+                              onRemove={() => removeFilter(chip)}
+                              testId={`filter-${chip.column}`}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <FilterEditor columns={state.columns} {...(selectedColumns[0] === undefined ? {} : { initialColumn: selectedColumns[0] })} onSubmit={addFilter} />
                   </div>
-                ) : retyping !== null && retyping.table === tableId && retyping.key === overridesKey ? (
+                )}
+                {retyping !== null && retyping.table === tableId && retyping.key === overridesKey ? (
                   <span className="grid-panel__note" data-testid="retyping">
                     {retyping.message}
                   </span>
@@ -768,7 +979,7 @@ export function App({ engine, bridge, workspace }: AppProps) {
                 const column = draggedColumn(event.dataTransfer);
                 if (column === null) return;
                 event.preventDefault();
-                addChartFor(column);
+                addChartFor(columnsForChart(column));
               }}
             >
               <div className="panel__head">
@@ -779,15 +990,20 @@ export function App({ engine, bridge, workspace }: AppProps) {
                   variant="ghost"
                   className="gg-button--accent-text"
                   onClick={() => {
+                    if (selectedColumns.length >= 1 && selectedColumns.length <= 2) {
+                      addChartFor(selectedColumns);
+                      return;
+                    }
                     const column = newChartColumn();
-                    if (column) addChartFor(column.name);
+                    if (column) addChartFor([column.name]);
                   }}
                   data-testid="new-chart"
                 >
                   + New chart
                 </Button>
               </div>
-              <div className="charts__list gg-scroll">
+              <WebGLOverlayProvider className="charts__viewport" testId="charts-viewport">
+              <div className="charts__list gg-scroll" ref={chartsListRef}>
                 {state.charts.length === 0 && (
                   <div className="charts__drop" data-testid="charts-drop">
                     <strong>Drag a column here to start a chart</strong>
@@ -798,20 +1014,29 @@ export function App({ engine, bridge, workspace }: AppProps) {
                     </span>
                   </div>
                 )}
-                {state.charts.map((chart) => (
+                {queries.charts.map((query, index) => {
+                  const chart = state.charts[index];
+                  if (!chart) return null;
+                  return (
                   <ChartView
                     key={chart.id}
                     engine={engine}
                     tableId={tableId}
                     dataVersion={dataVersion}
                     chart={chart}
-                    selection={state.selections[chart.id]?.clauses[0]?.filter}
-                    crossFilters={effectiveFilters(state, chart.id)}
+                    query={query}
+                    selection={state.selections[chart.id]}
+                    chips={chips.filter((chip) => chip.viewId === chart.id)}
                     columns={state.columns}
+                    compileColumns={compileColumns}
+                    pixelWidth={pixelWidth}
                     tokens={tokens}
                     addedBy={callers.get(chart.id) ?? 'user'}
                     draggingColumn={draggingColumn}
                     dispatch={dispatch}
+                    onBrushStart={onBrushStart}
+                    onBrushEnd={onBrushEnd}
+                    onDrawn={onChartDrawn}
                     onRemove={() => {
                       dispatch('removeChart', { chartId: chart.id });
                       showToast({
@@ -821,8 +1046,10 @@ export function App({ engine, bridge, workspace }: AppProps) {
                       });
                     }}
                   />
-                ))}
+                  );
+                })}
               </div>
+              </WebGLOverlayProvider>
             </section>
           </>
         )}

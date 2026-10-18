@@ -1,4 +1,4 @@
-import type { ChartSpec, ChartState, Field, Filter, FilterValue, UndoEntry, WorkspaceState, YField } from '@glassgrid/core';
+import { resolveAxis, type ChartSpec, type ChartState, type CubeColumn, type Field, type Filter, type FilterValue, type UndoEntry, type WorkspaceState, type YField } from '@glassgrid/core';
 
 /*
  * Words for state: shelf expressions, filter conditions, chart titles and
@@ -20,13 +20,50 @@ export function yExpression(y: YField | undefined): string {
   return `${y.aggregate ?? 'count'}(${fieldExpression(y)})`;
 }
 
+/**
+ * A positional field as the chart draws it: automatic time units and bin
+ * widths resolved from the profile the way the compiler resolves them
+ * (`hour(pickup_at)`, `bin(trip_distance, 0.5)`). Unchanged when the channel
+ * is not binned or the profile is not known yet.
+ */
+export function resolvedField(spec: ChartSpec, channel: 'x' | 'y', columns: readonly CubeColumn[]): Field | undefined {
+  const field: Field | undefined = channel === 'x' ? spec.x : spec.y;
+  if (!field) return undefined;
+  const axis = resolveAxis(spec, channel, columns);
+  if (axis?.kind === 'time' && field.timeUnit === undefined) return { ...field, timeUnit: axis.unit, bin: undefined };
+  if (axis?.kind === 'width' && field.bin === 'auto') return { ...field, bin: axis.width };
+  return field;
+}
+
+/** The X shelf (and the y shelf of heatmaps and scatter plots) as drawn: `hour(pickup_at)`, `bin(trip_distance, 0.5)`. */
+export function axisExpression(spec: ChartSpec, channel: 'x' | 'y', columns: readonly CubeColumn[]): string {
+  const field = resolvedField(spec, channel, columns);
+  return field ? fieldExpression(field) : 'count(*)';
+}
+
 const AGGREGATE_NOUNS = { count: 'Count', sum: 'Sum', avg: 'Average', min: 'Minimum', max: 'Maximum' } as const;
 
-/** Title for a card without one, e.g. "Rows by category" or "Sum of amount by category". */
-export function defaultChartTitle(spec: Pick<ChartSpec, 'x' | 'y'>): string {
-  const by = fieldExpression(spec.x);
-  if (!spec.y) return `Rows by ${by}`;
-  return `${AGGREGATE_NOUNS[spec.y.aggregate ?? 'count']} of ${spec.y.column} by ${by}`;
+/**
+ * Title for a card without one: "Rows by category", "Sum of fare_amount over
+ * pickup_at", "Distribution of trip_distance", "Rows by trip_distance and
+ * fare_amount", "fare_amount against trip_distance".
+ */
+export function defaultChartTitle(spec: Pick<ChartSpec, 'x' | 'y'> & { mark?: ChartSpec['mark'] }): string {
+  const x = spec.x.column;
+  const measure = spec.y ? `${AGGREGATE_NOUNS[spec.y.aggregate ?? 'count']} of ${spec.y.column}` : 'Rows';
+  switch (spec.mark) {
+    case 'line':
+    case 'area':
+      return `${measure} over ${x}`;
+    case 'histogram':
+      return spec.y ? `${measure} by ${x}` : `Distribution of ${x}`;
+    case 'heatmap':
+      return spec.y ? `Rows by ${x} and ${spec.y.column}` : `Rows by ${x}`;
+    case 'scatter':
+      return spec.y ? `${spec.y.column} against ${x}` : `Rows by ${x}`;
+    default:
+      return `${measure} by ${fieldExpression(spec.x)}`;
+  }
 }
 
 export function chartTitle(chart: Pick<ChartState, 'spec' | 'title'>): string {

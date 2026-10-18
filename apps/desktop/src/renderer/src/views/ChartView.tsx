@@ -1,17 +1,44 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
+  compileChartQuery,
+  effectiveColumnType,
   isNumericType,
   isTemporalType,
+  specForMark,
   type Aggregate,
+  type BrushSelectionInput,
+  type ChartSpec,
   type ChartState,
+  type ChartViewQuery,
   type ColumnState,
-  type Filter,
+  type ColumnType,
+  type CubeColumn,
+  type FilterChip,
+  type Mark,
+  type Selection,
   type TableId,
 } from '@glassgrid/core';
-import { BarChart, ChartCard, ShelfChip, formatAggregate, type MenuEntry, type ResolvedTokens } from '@glassgrid/ui';
-import { chartTitle, fieldExpression, yExpression } from '../describe';
+import {
+  AreaChart,
+  BarChart,
+  barDataFromArrow,
+  chartColumnsFromArrow,
+  ChartCard,
+  Heatmap,
+  Histogram,
+  LineChart,
+  ScatterChart,
+  ShelfChip,
+  ViewData,
+  type ChartColumns,
+  type IntervalSelection,
+  type MenuEntry,
+  type ResolvedTokens,
+} from '@glassgrid/ui';
+import { axisExpression, chartTitle, yExpression } from '../describe';
 import type { EngineClient } from '../engine-client';
-import { useChartData, valueKey, type BarRow } from './chart-data';
+import { useChartQuery, type ChartResult } from './chart-data';
+import { brushInputOf, intervalOf, intervalSummary, selectedBarKeys, toggleBar } from './selection';
 
 export interface ChartViewProps {
   engine: Pick<EngineClient, 'aggregate'>;
@@ -19,11 +46,17 @@ export interface ChartViewProps {
   /** Bumped when the engine's data changed under the same spec (type overrides, engine restart). */
   dataVersion: number;
   chart: ChartState;
+  /** The chart's query inputs from `viewQueries`: its spec with every other view's selection, key and cube hint. */
+  query: ChartViewQuery;
   /** This chart's own selection, if any. */
-  selection: Filter | undefined;
-  /** Every other view's selection (cross-filtering excludes the chart's own). */
-  crossFilters: readonly Filter[];
+  selection: Selection | undefined;
+  /** The filter chips of this chart's selection (header summary). */
+  chips: readonly FilterChip[];
   columns: readonly ColumnState[];
+  /** The workspace's columns as the compiler sees them (resolved bins, valid marks). */
+  compileColumns: readonly CubeColumn[];
+  /** Plot width in device pixels sent with line and area aggregates (M4). */
+  pixelWidth: number;
   tokens: ResolvedTokens;
   /** Caller of the latest change to this chart, for the "by AI" label. */
   addedBy: 'user' | 'ai';
@@ -31,109 +64,276 @@ export interface ChartViewProps {
   draggingColumn: string | null;
   dispatch: (name: string, input: unknown) => void;
   onRemove: () => void;
+  /** Pointer down on the plot: a brush or click may follow (build the cross-filter cubes now). */
+  onBrushStart: (chartId: string) => void;
+  /** A brush released or a bar toggled: the `brush` command's selection, or null to clear. */
+  onBrushEnd: (chartId: string, selection: BrushSelectionInput | null) => void;
+  /** The chart drew `result` on its canvas. */
+  onDrawn: (chartId: string, result: ChartResult) => void;
 }
 
 const AGGREGATES: readonly Aggregate[] = ['count', 'sum', 'avg', 'min', 'max'];
 
-function aggregateAllowed(aggregate: Aggregate, column: ColumnState | undefined): boolean {
-  if (!column) return aggregate === 'count';
-  if (aggregate === 'sum' || aggregate === 'avg') return isNumericType(column.inferredType);
-  if (aggregate === 'min' || aggregate === 'max') return isNumericType(column.inferredType) || isTemporalType(column.inferredType);
+const MARKS: readonly { mark: Mark; label: string }[] = [
+  { mark: 'bar', label: 'Bar chart' },
+  { mark: 'line', label: 'Line chart' },
+  { mark: 'area', label: 'Area chart' },
+  { mark: 'histogram', label: 'Histogram' },
+  { mark: 'heatmap', label: 'Heatmap' },
+  { mark: 'scatter', label: 'Scatter plot' },
+];
+
+function aggregateAllowed(aggregate: Aggregate, type: ColumnType | null): boolean {
+  if (type === null) return aggregate === 'count';
+  if (aggregate === 'sum' || aggregate === 'avg') return isNumericType(type);
+  if (aggregate === 'min' || aggregate === 'max') return isNumericType(type) || isTemporalType(type);
   return true;
 }
 
-/** One chart card wired to the store: shelves, bar chart, selection and menu. */
+/** Whether the chart can switch to `mark` (the shelves `setMark` would derive compile). */
+function markAllowed(spec: ChartSpec, mark: Mark, columns: readonly CubeColumn[]): boolean {
+  if (spec.mark === mark) return true;
+  try {
+    compileChartQuery('"t"', specForMark(spec, mark, columns), columns);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Positional marks with a second axis on y. */
+function twoAxes(mark: Mark): boolean {
+  return mark === 'heatmap' || mark === 'scatter';
+}
+
+/** Series keys in palette order: the first result's, with series first seen later appended (colours stay put while filters change). */
+function mergeColorKeys(previous: readonly string[], data: ChartColumns): string[] {
+  const keys = [...previous];
+  for (const series of data.seriesList) if (!keys.includes(series.key)) keys.push(series.key);
+  return keys;
+}
+
+/** One chart card wired to the store: shelves, the mark's renderer, brushing and clicks, menu and "View data". */
 export function ChartView({
   engine,
   tableId,
   dataVersion,
   chart,
+  query,
   selection,
-  crossFilters,
+  chips,
   columns,
+  compileColumns,
+  pixelWidth,
   tokens,
   addedBy,
   draggingColumn,
   dispatch,
   onRemove,
+  onBrushStart,
+  onBrushEnd,
+  onDrawn,
 }: ChartViewProps) {
   const { spec } = chart;
-  const data = useChartData(engine, tableId, chart.id, spec, crossFilters, dataVersion);
+  const data = useChartQuery(engine, tableId, query, pixelWidth, dataVersion);
   const [viewData, setViewData] = useState(false);
   const title = chartTitle(chart);
   const testId = `chart-${chart.id}`;
-
-  const selectedValues = useMemo(
-    () => (selection?.kind === 'in' && selection.column === spec.x.column ? selection.values : []),
-    [selection, spec.x.column],
+  const typeOf = useCallback(
+    (name: string | undefined): ColumnType | null => {
+      const column = name === undefined ? undefined : columns.find((candidate) => candidate.name === name);
+      return column ? effectiveColumnType(column) : null;
+    },
+    [columns],
   );
-  const selectedKeys = useMemo(() => new Set(selectedValues.map(valueKey)), [selectedValues]);
 
-  const rows: readonly BarRow[] = data.status === 'ready' ? data.rows : data.status === 'loading' ? (data.previous ?? []) : [];
+  // The result on screen: the latest, or the previous one while a new query runs (or failed).
+  const result = data.status === 'ready' ? data.result : data.previous;
+  const mark: Mark = result?.mark ?? spec.mark;
+  const adapted = useMemo(() => (result ? chartColumnsFromArrow(result.table, mark) : null), [result, mark]);
+  const bars = useMemo(() => (result && adapted && mark === 'bar' ? barDataFromArrow(result.table, adapted) : null), [result, adapted, mark]);
 
-  const toggle = (row: BarRow) => {
-    const without = selectedValues.filter((value) => valueKey(value) !== row.key);
-    const values = without.length === selectedValues.length ? [...selectedValues, row.filterValue] : without;
-    if (values.length === 0) dispatch('clearFilter', { viewId: chart.id });
-    else dispatch('brush', { viewId: chart.id, selection: { type: 'points', values } });
+  // Stable series colours per colour field across re-queries.
+  const colorColumn = spec.color?.column ?? null;
+  const [colors, setColors] = useState<{ column: string | null; data: ChartColumns | null; keys: string[] }>({ column: colorColumn, data: null, keys: [] });
+  let colorKeys = colors.keys;
+  if (adapted && (colors.data !== adapted || colors.column !== colorColumn)) {
+    colorKeys = mergeColorKeys(colors.column === colorColumn ? colors.keys : [], adapted);
+    setColors({ column: colorColumn, data: adapted, keys: colorKeys });
+  }
+
+  // A brush being dragged: shown in the header, updated at most once per frame.
+  const [draft, setDraft] = useState<IntervalSelection | null>(null);
+  const draftFrame = useRef<{ id: number | null; value: IntervalSelection | null }>({ id: null, value: null });
+  useEffect(
+    () => () => {
+      if (draftFrame.current.id !== null) cancelAnimationFrame(draftFrame.current.id);
+    },
+    [],
+  );
+  const onBrush = useCallback(
+    (next: IntervalSelection | null, phase: 'move' | 'end') => {
+      const frame = draftFrame.current;
+      if (phase === 'move') {
+        frame.value = next;
+        if (frame.id === null) {
+          frame.id = requestAnimationFrame(() => {
+            frame.id = null;
+            setDraft(frame.value);
+          });
+        }
+        return;
+      }
+      if (frame.id !== null) cancelAnimationFrame(frame.id);
+      frame.id = null;
+      setDraft(null);
+      onBrushEnd(chart.id, next ? brushInputOf(next) : null);
+    },
+    [chart.id, onBrushEnd],
+  );
+
+  const interval = useMemo(() => intervalOf(selection), [selection]);
+  const selectedKeys = useMemo(() => selectedBarKeys(selection, spec.x.column, bars?.rows ?? []), [selection, spec.x.column, bars]);
+
+  const drawn = useCallback(() => {
+    if (result) onDrawn(chart.id, result);
+  }, [chart.id, result, onDrawn]);
+
+  // Labels: positional fields as drawn (auto bins and time units resolved), measures as `sum(fare_amount)`.
+  const fellBack = result?.fellBackToHeatmap === true;
+  const xLabel = fellBack ? spec.x.column : axisExpression(spec, 'x', compileColumns);
+  const yLabel = fellBack ? (spec.y?.column ?? 'y') : twoAxes(spec.mark) ? axisExpression(spec, 'y', compileColumns) : yExpression(spec.y);
+  const colorLabel = spec.color?.column;
+
+  let body: ReactNode = null;
+  if (result && adapted) {
+    const common = { table: result.table, data: adapted, tokens, label: title, xLabel, yLabel, onDrawn: drawn, testId: `${testId}-chart` };
+    switch (mark) {
+      case 'bar':
+        body = bars && (
+          <BarChart
+            data={bars.rows}
+            series={bars.series}
+            selected={selectedKeys}
+            onToggle={(bar) => onBrushEnd(chart.id, toggleBar(selectedKeys, bars.rows, bar))}
+            tokens={tokens}
+            valueLabel={yLabel}
+            label={`${title}: bar chart of ${yLabel} by ${xLabel}`}
+            {...(colorLabel === undefined ? {} : { colorLabel })}
+            colorKeys={colorKeys}
+            onDrawn={drawn}
+            testId={`${testId}-bars`}
+          />
+        );
+        break;
+      case 'line':
+        body = <LineChart {...common} colorLabel={colorLabel} colorKeys={colorKeys} selection={interval} onBrush={onBrush} />;
+        break;
+      case 'area':
+        body = <AreaChart {...common} colorLabel={colorLabel} colorKeys={colorKeys} selection={interval} onBrush={onBrush} />;
+        break;
+      case 'histogram':
+        body = <Histogram {...common} colorLabel={colorLabel} colorKeys={colorKeys} selection={interval} onBrush={onBrush} />;
+        break;
+      case 'heatmap':
+        body = <Heatmap {...common} selection={interval} onBrush={onBrush} />;
+        break;
+      case 'scatter':
+        body = <ScatterChart {...common} colorLabel={colorLabel} colorKeys={colorKeys} selection={interval} onBrush={onBrush} />;
+        break;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Shelves
+
+  const binned = spec.mark === 'histogram' || spec.mark === 'heatmap';
+  const setShelf = (shelf: 'x' | 'y' | 'color', field: unknown) => dispatch('setShelf', { chartId: chart.id, shelf, field });
+  const dropOnX = (column: string) => setShelf('x', binned ? { column, bin: 'auto' } : { column });
+  const dropOnY = (column: string) => {
+    if (spec.mark === 'heatmap') setShelf('y', { column, bin: 'auto' });
+    else if (spec.mark === 'scatter') setShelf('y', { column });
+    else {
+      const type = typeOf(column);
+      setShelf('y', { column, aggregate: type !== null && isNumericType(type) ? 'sum' : 'count' });
+    }
+  };
+  const dropOnColor = (column: string) => setShelf('color', { column });
+  // A column dropped on the card itself: numbers go to Y, dates to X, categories split by colour (heatmaps colour by count).
+  const dropOnCard = (column: string) => {
+    const type = typeOf(column);
+    if (type !== null && isTemporalType(type)) dropOnX(column);
+    else if ((type !== null && isNumericType(type)) || spec.mark === 'heatmap') dropOnY(column);
+    else dropOnColor(column);
   };
 
-  const yColumn = spec.y ? columns.find((column) => column.name === spec.y?.column) : undefined;
+  const yType = typeOf(spec.y?.column);
   const countRows: MenuEntry = {
     kind: 'radio',
     id: 'rows',
     label: 'count(*)',
     checked: !spec.y,
-    onSelect: () => dispatch('setShelf', { chartId: chart.id, shelf: 'y', field: null }),
+    onSelect: () => setShelf('y', null),
   };
-  const yMenu: MenuEntry[] = spec.y
-    ? [
-        ...AGGREGATES.filter((aggregate) => aggregateAllowed(aggregate, yColumn)).map(
-          (aggregate): MenuEntry => ({
-            kind: 'radio',
-            id: aggregate,
-            label: `${aggregate}(${spec.y?.column ?? ''})`,
-            checked: spec.y?.aggregate === aggregate,
-            onSelect: () => dispatch('setShelf', { chartId: chart.id, shelf: 'y', field: { column: spec.y?.column, aggregate } }),
-          }),
-        ),
-        countRows,
-      ]
-    : [countRows];
-
-  const dropOnY = (column: string) => {
-    const target = columns.find((candidate) => candidate.name === column);
-    const aggregate: Aggregate = target && isNumericType(target.inferredType) ? 'sum' : 'count';
-    dispatch('setShelf', { chartId: chart.id, shelf: 'y', field: { column, aggregate } });
-  };
+  const yMenu: MenuEntry[] | undefined = twoAxes(spec.mark)
+    ? undefined
+    : spec.y
+      ? [
+          ...AGGREGATES.filter((aggregate) => aggregateAllowed(aggregate, yType)).map(
+            (aggregate): MenuEntry => ({
+              kind: 'radio',
+              id: aggregate,
+              label: `${aggregate}(${spec.y?.column ?? ''})`,
+              checked: spec.y?.aggregate === aggregate,
+              onSelect: () => setShelf('y', { column: spec.y?.column, aggregate }),
+            }),
+          ),
+          countRows,
+        ]
+      : [countRows];
 
   const shelves = (
     <div className="gg-shelves">
-      <ShelfChip
-        shelf="X"
-        value={fieldExpression(spec.x)}
-        addedBy={addedBy}
-        onDropColumn={(column) => dispatch('setShelf', { chartId: chart.id, shelf: 'x', field: { column } })}
-        pendingColumn={draggingColumn}
-        testId={`${testId}-shelf-x`}
-      />
+      <ShelfChip shelf="X" value={xLabel} addedBy={addedBy} onDropColumn={dropOnX} pendingColumn={draggingColumn} testId={`${testId}-shelf-x`} />
       <ShelfChip
         shelf="Y"
-        value={yExpression(spec.y)}
+        value={twoAxes(spec.mark) ? (spec.y ? yLabel : undefined) : yExpression(spec.y)}
         addedBy={addedBy}
-        menu={yMenu}
-        menuLabel="Y aggregate"
+        {...(yMenu ? { menu: yMenu, menuLabel: 'Y aggregate' } : {})}
         onDropColumn={dropOnY}
         pendingColumn={draggingColumn}
-        onRemove={spec.y ? () => dispatch('setShelf', { chartId: chart.id, shelf: 'y', field: null }) : undefined}
+        onRemove={spec.y && !twoAxes(spec.mark) ? () => setShelf('y', null) : undefined}
         testId={`${testId}-shelf-y`}
       />
-      <ShelfChip shelf="Color" title="Splitting bars by colour arrives with the M3 chart layer." testId={`${testId}-shelf-color`} />
+      {spec.mark === 'heatmap' ? (
+        <ShelfChip shelf="Color" title="Heatmap cells are coloured by their row count." testId={`${testId}-shelf-color`} />
+      ) : (
+        <ShelfChip
+          shelf="Color"
+          {...(colorLabel === undefined ? {} : { value: colorLabel })}
+          addedBy={addedBy}
+          onDropColumn={dropOnColor}
+          pendingColumn={draggingColumn}
+          {...(colorLabel === undefined ? {} : { onRemove: () => setShelf('color', null) })}
+          testId={`${testId}-shelf-color`}
+        />
+      )}
     </div>
   );
 
+  // ---------------------------------------------------------------------------
+  // Header: this chart's own selection (the brush being dragged, else its chips)
+
+  const ownSelection =
+    draft !== null
+      ? intervalSummary(draft, typeOf(spec.x.column), typeOf(spec.y?.column))
+      : spec.mark === 'bar' && selectedKeys.size > 0
+        ? `${selectedKeys.size} selected`
+        : chips.length > 0
+          ? chips.map((chip) => chip.condition).join(' × ')
+          : null;
+
   const status = data.status === 'loading' ? 'loading' : data.status === 'error' ? 'error' : 'ready';
-  const valueLabel = yExpression(spec.y);
 
   return (
     <ChartCard
@@ -141,55 +341,57 @@ export function ChartView({
       title={title}
       attribution={addedBy === 'ai' ? 'ai' : undefined}
       onRename={(next) => dispatch('renameChart', { chartId: chart.id, title: next })}
-      selection={selectedValues.length > 0 ? { summary: `${selectedValues.length} selected`, onClear: () => dispatch('clearFilter', { viewId: chart.id }) } : undefined}
+      selection={ownSelection === null ? undefined : { summary: ownSelection, onClear: () => dispatch('clearFilter', { viewId: chart.id }) }}
       menu={[
         ...(chart.title !== undefined
           ? [{ id: 'reset-title', label: 'Reset title', onSelect: () => dispatch('renameChart', { chartId: chart.id, title: null }) } satisfies MenuEntry]
           : []),
+        { kind: 'separator', id: 'marks-start' },
+        ...MARKS.map(
+          ({ mark: option, label }): MenuEntry => ({
+            kind: 'radio',
+            id: `mark-${option}`,
+            label,
+            checked: spec.mark === option,
+            disabled: !markAllowed(spec, option, compileColumns),
+            onSelect: () => dispatch('setMark', { chartId: chart.id, mark: option }),
+          }),
+        ),
+        { kind: 'separator', id: 'marks-end' },
         { id: 'remove', label: 'Remove chart', tone: 'danger', onSelect: onRemove },
       ]}
       shelves={shelves}
       status={status}
       error={data.status === 'error' ? { message: data.message, ...(data.path ? { detail: data.path } : {}) } : undefined}
-      rowsLabel={data.status === 'ready' ? `${data.rows.length} ${data.rows.length === 1 ? 'row' : 'rows'}` : '–'}
-      onDropColumn={(column) => dispatch('setShelf', { chartId: chart.id, shelf: 'x', field: { column } })}
+      rowsLabel={result ? `${result.table.numRows.toLocaleString('en-US')} ${result.table.numRows === 1 ? 'row' : 'rows'}` : '–'}
+      onDropColumn={dropOnCard}
       viewData={{
         on: viewData,
         onToggle: setViewData,
-        table: (
-          <table aria-label={`${title} data`}>
-            <thead>
-              <tr>
-                <th scope="col">{fieldExpression(spec.x)}</th>
-                <th scope="col" style={{ textAlign: 'right' }}>
-                  {valueLabel}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.key} aria-selected={selectedKeys.has(row.key)}>
-                  <td>{row.label}</td>
-                  <td className="gg-num">{row.value === null ? '–' : formatAggregate(row.value)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ),
+        table: adapted ? (
+          <ViewData
+            data={adapted}
+            mark={mark}
+            label={`${title} data`}
+            xLabel={xLabel}
+            yLabel={yLabel}
+            {...(colorLabel === undefined || mark === 'heatmap' ? {} : { colorLabel })}
+            testId={`${testId}-data`}
+          />
+        ) : null,
       }}
     >
-      <BarChart
-        data={rows}
-        selected={selectedKeys}
-        onToggle={(datum) => {
-          const row = rows.find((candidate) => candidate.key === datum.key);
-          if (row) toggle(row);
+      {/* A press on the plot may start a brush or click: build the cross-filter cubes while the pointer moves. */}
+      <div
+        className="chart-view__plot"
+        data-mark={mark}
+        onPointerDownCapture={(event) => {
+          if (event.button === 0) onBrushStart(chart.id);
         }}
-        tokens={tokens}
-        valueLabel={valueLabel}
-        label={`${title}: bar chart of ${valueLabel} by ${fieldExpression(spec.x)}`}
-        testId={`${testId}-bars`}
-      />
+      >
+        {body}
+      </div>
     </ChartCard>
   );
 }
+

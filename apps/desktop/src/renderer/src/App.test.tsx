@@ -31,6 +31,23 @@ interface PageView {
   filters?: readonly FilterInput[];
 }
 
+/** Result rows shaped like the compiler's for each mark. */
+function aggregateTable(mark: string) {
+  const f64 = (values: number[]) => Float64Array.from(values);
+  switch (mark) {
+    case 'histogram':
+      return tableFromArrays({ x: f64([0, 1, 2]), x_end: f64([1, 2, 3]), y: f64([5, 3, 1]) });
+    case 'line':
+    case 'area':
+    case 'scatter':
+      return tableFromArrays({ x: f64([0, 1, 2, 3]), y: f64([4, 6, 5, 7]) });
+    case 'heatmap':
+      return tableFromArrays({ x: f64([0, 1]), x_end: f64([1, 2]), y: f64([0, 0]), y_end: f64([1, 1]), count: f64([3, 4]) });
+    default:
+      return tableFromArrays({ x: ['alpha', 'bravo'], y: Float64Array.from([7, 5]) });
+  }
+}
+
 function fakeEngine() {
   const timing = { engineMs: 1, cached: false };
   const restartListeners = new Set<() => void>();
@@ -69,14 +86,16 @@ function fakeEngine() {
     count: vi.fn((_table: string, options: { filters?: readonly unknown[] } = {}) =>
       Promise.resolve({ rowCount: options.filters?.length ? 1 : 2, ...timing }),
     ),
-    aggregate: vi.fn(() =>
+    aggregate: vi.fn((_table: string, spec: { mark: string }, _options?: unknown) =>
       Promise.resolve({
-        table: tableFromArrays({ x: ['alpha', 'bravo'], y: Float64Array.from([7, 5]) }),
-        mark: 'bar' as const,
+        table: aggregateTable(spec.mark),
+        mark: spec.mark as 'bar',
         fellBackToHeatmap: false,
+        fromCube: false,
         ...timing,
       }),
     ),
+    prepareCrossfilter: vi.fn(() => Promise.resolve({ cubes: [], engineMs: 1 })),
     onEvent: vi.fn(() => () => undefined),
   } satisfies AppProps['engine'] & Record<string, unknown>;
 }
@@ -181,7 +200,8 @@ beforeEach(() => {
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(() => nullContext());
   // jsdom does no layout: give the grid's scroller a viewport.
   vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(function (this: HTMLElement) {
-    return this.classList.contains('gg-cgrid__scroller') ? 800 : 0;
+    // ...and the chart plots a width, so brushable charts build their models.
+    return this.classList.contains('gg-cgrid__scroller') ? 800 : this.classList.contains('gg-chart__plot') ? 300 : 0;
   });
   vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(function (this: HTMLElement) {
     return this.classList.contains('gg-cgrid__scroller') ? 400 : 0;
@@ -379,7 +399,13 @@ describe('App', () => {
     fireEvent.keyDown(row, { key: 'Enter' });
     const chartId = workspace.store.getState().charts[0]?.id ?? '';
     expect(chartId).toBe('chart_2');
-    expect(engine.aggregate).toHaveBeenCalledWith(tableId, { mark: 'bar', x: { column: 'category' }, filters: [] }, { viewId: 'chart:chart_2' });
+    // The default chart rules: category has 12,345 distinct values, so the top 20 bars plus "Other".
+    expect(engine.aggregate).toHaveBeenCalledWith(
+      tableId,
+      { mark: 'bar', x: { column: 'category' }, filters: [], limit: 20, other: true, pixelWidth: 100 },
+      { viewId: 'chart:chart_2' },
+    );
+    expect(workspace.store.getHistory().past.at(-1)?.input).toEqual({ columns: ['category'] });
 
     const bars = await screen.findByRole('listbox', { name: /Rows by category/ });
     await waitFor(() => expect(within(bars).getAllByRole('option')).toHaveLength(2));
@@ -393,7 +419,9 @@ describe('App', () => {
     const chip = screen.getByTestId('filter-category');
     expect(chip.textContent).toBe('category= alpha×');
     const filters = [{ kind: 'in', column: 'category', values: ['alpha'] }];
-    await waitFor(() => expect(engine.count).toHaveBeenLastCalledWith(tableId, { viewId: 'status', filters }));
+    // The clicked chart is the active view: the count carries a cube hint for its selection.
+    const crossfilter = { filter: 0, dimension: { column: 'category', bin: { kind: 'value' } } };
+    await waitFor(() => expect(engine.count).toHaveBeenLastCalledWith(tableId, { viewId: 'status', filters, crossfilter }));
     expect(engine.pageFetcher).toHaveBeenLastCalledWith(tableId, { viewId: 'grid', sort: [], filters });
     await waitFor(() => expect(engine.pages.at(-1)?.view.filters).toEqual(filters));
     await waitFor(() => expect(screen.getByTestId('row-count').textContent).toBe('1 of 2 rows'));
@@ -449,5 +477,120 @@ describe('App', () => {
     menu({ kind: 'open' });
     expect(bridge.openCsv).toHaveBeenCalledOnce();
     expect(await screen.findByTestId('file-name')).toBeDefined();
+  });
+
+  it('charts a number as a histogram, prepares cubes on pointer down and cross-filters the other chart on a brush', async () => {
+    const { engine, workspace } = await openFile();
+    for (const name of ['category', 'amount']) {
+      const row = screen.getByTestId(`column-${name}`);
+      row.focus();
+      fireEvent.keyDown(row, { key: 'Enter' });
+    }
+    const [bar, histogram] = workspace.store.getState().charts;
+    expect(histogram?.spec).toEqual({ mark: 'histogram', x: { column: 'amount', bin: 'auto' }, filters: [] });
+    const plot = await screen.findByRole('img', { name: /Distribution of amount\. Histogram of count\(\*\) by bin\(amount, 1\)/ });
+    expect(screen.getByTestId(`chart-${histogram?.id ?? ''}-shelf-x`).textContent).toContain('bin(amount, 1)');
+
+    // Pointer down: the engine builds the cubes for a brush on amount's bins (the bar chart and the count).
+    fireEvent.pointerDown(plot.closest('.chart-view__plot') as HTMLElement, { button: 0 });
+    expect(engine.prepareCrossfilter).toHaveBeenCalledWith(tableId, {
+      dimension: { column: 'amount', bin: { kind: 'width', width: 1 } },
+      targets: [
+        { kind: 'aggregate', spec: { ...bar?.spec, pixelWidth: 100 } },
+        { kind: 'count', filters: [] },
+      ],
+    });
+
+    // Enter on the focused plot creates a brush (the middle fifth), snapped by the brush command to whole bins.
+    const barCalls = () => engine.aggregate.mock.calls.filter((call) => (call[2] as { viewId?: string } | undefined)?.viewId === `chart:${bar?.id ?? ''}`);
+    const before = barCalls().length;
+    fireEvent.keyDown(plot, { key: 'Enter' });
+    await waitFor(() => expect(workspace.store.getState().selections[histogram?.id ?? '']).toBeDefined());
+    expect(workspace.store.getHistory().past.at(-1)?.name).toBe('brush');
+    const filter = workspace.store.getState().selections[histogram?.id ?? '']?.clauses[0]?.filter;
+    expect(filter).toMatchObject({ kind: 'range', column: 'amount', minInclusive: true, maxInclusive: false });
+    // The bar chart re-queries with the brush, answered from the cube the hint names.
+    await waitFor(() => expect(barCalls().length).toBe(before + 1));
+    expect(barCalls().at(-1)?.[1]).toMatchObject({ filters: [filter] });
+    expect(barCalls().at(-1)?.[2]).toEqual({
+      viewId: `chart:${bar?.id ?? ''}`,
+      crossfilter: { filter: 0, dimension: { column: 'amount', bin: { kind: 'width', width: 1 } } },
+    });
+    expect(screen.getByTestId('filter-amount').textContent).toMatch(/^amount\d/);
+    await waitFor(() => expect(screen.getByTestId('row-count').textContent).toBe('1 of 2 rows'));
+
+    // Undo restores the unfiltered views.
+    fireEvent.click(screen.getByTestId('undo'));
+    expect(workspace.store.getState().selections).toEqual({});
+    await waitFor(() => expect(screen.getByTestId('row-count').textContent).toBe('2 rows'));
+  });
+
+  it('switches marks from the card menu with setMark and disables marks the columns cannot make', async () => {
+    const { workspace } = await openFile();
+    const row = screen.getByTestId('column-amount');
+    row.focus();
+    fireEvent.keyDown(row, { key: 'Enter' });
+    const chart = workspace.store.getState().charts[0];
+    await screen.findByRole('img', { name: /Histogram/ });
+    const card = screen.getByTestId(`chart-${chart?.id ?? ''}`);
+    fireEvent.click(within(card).getByRole('button', { name: 'Chart actions' }));
+    const heatmap = await screen.findByRole('menuitemradio', { name: /^Heatmap/ });
+    expect(heatmap.hasAttribute('disabled')).toBe(true);
+    expect(screen.getByRole('menuitemradio', { name: /^Histogram/ }).getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /^Line chart/ }));
+    expect(workspace.store.getState().charts[0]?.spec.mark).toBe('line');
+    expect(workspace.store.getHistory().past.at(-1)?.name).toBe('setMark');
+    await screen.findByRole('img', { name: /Line chart of count\(\*\)/ });
+
+    // The colour shelf takes a dropped column; the legend lists its series.
+    const color = screen.getByTestId(`chart-${chart?.id ?? ''}-shelf-color`);
+    fireEvent.drop(color, { dataTransfer: { types: ['application/x-glassgrid-column'], getData: () => 'category' } });
+    await waitFor(() => expect(workspace.store.getState().charts[0]?.spec.color).toEqual({ column: 'category' }));
+  });
+
+  it('charts two columns selected in the grid together with the default rules', async () => {
+    const { workspace } = await openFile();
+    await act(() =>
+      workspace.registry.dispatch('setSelection', { selection: { anchor: { row: 0, column: 'id' }, focus: { row: 1, column: 'amount' } } }, { caller: 'user' }),
+    );
+    // id..amount covers three columns: "+ New chart" charts the first.
+    fireEvent.click(screen.getByTestId('new-chart'));
+    expect(workspace.store.getHistory().past.at(-1)?.input).toEqual({ columns: ['id'] });
+    await act(() =>
+      workspace.registry.dispatch('reorderColumn', { column: 'amount', toIndex: 1 }, { caller: 'user' }),
+    );
+    await act(() =>
+      workspace.registry.dispatch('setSelection', { selection: { anchor: { row: 0, column: 'id' }, focus: { row: 1, column: 'amount' } } }, { caller: 'user' }),
+    );
+    const row = screen.getByTestId('column-amount');
+    row.focus();
+    fireEvent.keyDown(row, { key: 'Enter' });
+    expect(workspace.store.getHistory().past.at(-1)?.input).toEqual({ columns: ['amount', 'id'] });
+    expect(workspace.store.getState().charts.at(-1)?.spec).toMatchObject({ mark: 'heatmap', x: { column: 'amount', bin: 'auto' }, y: { column: 'id', bin: 'auto' } });
+    await screen.findByRole('img', { name: /Heatmap of bin\(amount, 1\) by bin\(id, 1\)/ });
+  });
+
+  it('adds a filter from the "+ Filter" editor, validating the values first', async () => {
+    const { engine, workspace } = await openFile();
+    fireEvent.click(screen.getByTestId('add-filter'));
+    const dialog = await screen.findByRole('dialog', { name: 'Add a filter' });
+    fireEvent.change(within(dialog).getByTestId('filter-editor-column'), { target: { value: 'amount' } });
+    expect(within(dialog).getByTestId<HTMLSelectElement>('filter-editor-operator').value).toBe('between');
+    fireEvent.change(within(dialog).getByTestId('filter-editor-min'), { target: { value: '1' } });
+    fireEvent.change(within(dialog).getByTestId('filter-editor-max'), { target: { value: 'lots' } });
+    fireEvent.click(within(dialog).getByTestId('filter-editor-submit'));
+    expect(within(dialog).getByRole('alert').textContent).toBe('“lots” is not a number');
+    expect(within(dialog).getByTestId('filter-editor-max').getAttribute('aria-invalid')).toBe('true');
+    expect(workspace.store.getState().userFilters).toEqual([]);
+
+    fireEvent.change(within(dialog).getByTestId('filter-editor-max'), { target: { value: '1.75' } });
+    fireEvent.click(within(dialog).getByTestId('filter-editor-submit'));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    const filter = { kind: 'range', column: 'amount', min: 1, max: 1.75, minInclusive: true, maxInclusive: true };
+    expect(workspace.store.getState().userFilters).toEqual([{ id: expect.stringMatching(/^filter_/) as unknown, filter }]);
+    expect(screen.getByTestId('filter-amount').textContent).toBe('amount1.00 – 1.75×');
+    await waitFor(() => expect(engine.count).toHaveBeenLastCalledWith(tableId, { viewId: 'status', filters: [filter] }));
+    fireEvent.click(within(screen.getByTestId('filter-amount')).getByRole('button', { name: 'Remove filter on amount' }));
+    expect(workspace.store.getState().userFilters).toEqual([]);
   });
 });

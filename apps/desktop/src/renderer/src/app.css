@@ -243,6 +243,14 @@ body {
   outline-offset: calc(-1 * var(--gg-focus-width));
 }
 
+/* The WebGL overlay (dense scatters) covers this wrapper around the scrolling list. */
+.charts__viewport {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .charts__list {
   flex: 1;
   min-height: 0;
@@ -351,4 +359,68 @@ body {
   color: var(--gg-accent-text);
   font: var(--gg-type-heading-md);
   pointer-events: none;
+}
+
+/* --- "+ Filter" editor ----------------------------------------------------- */
+
+.filter-editor {
+  width: 280px;
+  padding: 12px;
+}
+
+.filter-editor form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.filter-editor__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.filter-editor__label {
+  font: var(--gg-type-ui-xs);
+  color: var(--gg-text-secondary);
+}
+
+.filter-editor__input {
+  height: 28px;
+  box-sizing: border-box;
+  padding: 0 8px;
+  border: var(--gg-border-width) solid var(--gg-border);
+  border-radius: var(--gg-radius-control);
+  background: var(--gg-panel-bg);
+  color: var(--gg-text-primary);
+  font: var(--gg-type-ui-md);
+  min-width: 0;
+}
+
+.filter-editor__input:focus-visible {
+  outline: var(--gg-focus-width) solid var(--gg-focus);
+  outline-offset: var(--gg-focus-offset);
+}
+
+.filter-editor__input[aria-invalid='true'] {
+  border-color: var(--gg-danger);
+}
+
+.filter-editor__pair {
+  display: flex;
+  gap: 8px;
+}
+
+.filter-editor__error {
+  margin: 0;
+  font: var(--gg-type-ui-sm);
+  color: var(--gg-danger);
+}
+
+.filter-editor__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }

@@ -69,3 +69,62 @@ export interface AggregateMeasureDetail {
   mark: string;
   rows: number;
 }
+
+/**
+ * performance.measure name for "chart create": a column dropped on the
+ * charts panel (or "+ New chart", Enter on a column) -> the new card's chart
+ * drawn on its canvas (aggregate, Arrow decode, adaptation, layers, paint).
+ */
+export const CHART_CREATE_MEASURE = 'glassgrid:chart-create';
+
+export interface ChartCreateMeasureDetail {
+  chartId: string;
+  /** Mark of the drawn chart (`heatmap` when a scatter fell back). */
+  mark: string;
+  /** Columns dropped. */
+  columns: string[];
+  engineMs: number;
+  cached: boolean;
+  rows: number;
+}
+
+/**
+ * performance.measure name for one cross-filter update: a brush released (or
+ * a bar clicked) -> the last other view painted with the new filters (every
+ * other chart drawn, the grid's count shown and its first rows painted).
+ */
+export const CROSSFILTER_MEASURE = 'glassgrid:crossfilter';
+
+export interface CrossfilterViewTiming {
+  /** `chart:<id>`, `grid:count` or `grid:rows`. */
+  view: string;
+  /** Brush end -> this view painted. */
+  ms: number;
+  engineMs: number;
+  /** Answered from a cross-filter cube. */
+  fromCube: boolean;
+  cached: boolean;
+}
+
+export interface CrossfilterMeasureDetail {
+  /** The brushed (or clicked) chart. */
+  source: string;
+  /** The grid's filters after the commit (every selection and user filter). */
+  filters: unknown[];
+  /** The grid's row count under them. */
+  rowCount: number | null;
+  views: CrossfilterViewTiming[];
+}
+
+/**
+ * performance.measure name for a brush start (pointer down on a chart) ->
+ * the cross-filter cubes for the other views built (`prepareCrossfilter`).
+ */
+export const CROSSFILTER_PREPARE_MEASURE = 'glassgrid:crossfilter-prepare';
+
+export interface CrossfilterPrepareMeasureDetail {
+  source: string;
+  dimension: string;
+  cubes: { status: string; rows?: number; reason?: string }[];
+  engineMs: number;
+}

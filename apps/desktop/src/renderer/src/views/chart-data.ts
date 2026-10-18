@@ -1,23 +1,37 @@
-import { useEffect, useState } from 'react';
-import type { ChartSpec, Filter, TableId } from '@glassgrid/core';
-import { filterValue, formatterFor, valueKind, type BarDatum } from '@glassgrid/ui';
+import type { Table } from 'apache-arrow';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type { ChartViewQuery, Mark, TableId } from '@glassgrid/core';
 import { isAbandoned, type EngineClient } from '../engine-client';
 import { AGGREGATE_MEASURE, type AggregateMeasureDetail } from '../perf';
-import type { FilterValue } from '@glassgrid/core';
 
-export interface BarRow extends BarDatum {
-  /** The x value as an `in` filter value. */
-  readonly filterValue: FilterValue;
+/** One chart aggregate as the card shows it. */
+export interface ChartResult {
+  /** The request key it answers (see `chartRequestKey`). */
+  readonly key: string;
+  /** `viewQueries` key of the query (for the cross-filter timing). */
+  readonly queryKey: string;
+  readonly table: Table;
+  /** The mark the rows are shaped for (`heatmap` when a scatter fell back). */
+  readonly mark: Mark;
+  readonly fellBackToHeatmap: boolean;
+  readonly fromCube: boolean;
+  readonly engineMs: number;
+  readonly cached: boolean;
 }
 
 export type ChartData =
-  | { readonly status: 'loading'; readonly previous: readonly BarRow[] | null }
-  | { readonly status: 'ready'; readonly rows: readonly BarRow[]; readonly engineMs: number; readonly cached: boolean }
-  | { readonly status: 'error'; readonly message: string; readonly path: string | undefined };
+  | { readonly status: 'loading'; readonly previous: ChartResult | null }
+  | { readonly status: 'ready'; readonly result: ChartResult }
+  | { readonly status: 'error'; readonly message: string; readonly path: string | undefined; readonly previous: ChartResult | null };
 
-/** JSON identity of a filter value, used as the bar's key and to match selections. */
-export function valueKey(value: FilterValue): string {
-  return JSON.stringify(value);
+/** Marks whose query depends on the plot width (M4 per pixel column, automatic numeric bins). */
+export function usesPixelWidth(mark: Mark): boolean {
+  return mark === 'line' || mark === 'area';
+}
+
+/** What a chart card's aggregate depends on: table, the query's inputs, plot width (lines) and data version. */
+export function chartRequestKey(tableId: TableId | null, query: Pick<ChartViewQuery, 'key' | 'spec'>, pixelWidth: number, dataVersion: number): string {
+  return JSON.stringify([tableId, query.key, usesPixelWidth(query.spec.mark) ? pixelWidth : null, dataVersion]);
 }
 
 function measure(start: string, detail: AggregateMeasureDetail): void {
@@ -29,70 +43,69 @@ function measure(start: string, detail: AggregateMeasureDetail): void {
 }
 
 /**
- * Runs one chart card's aggregate (`viewId: chart:<id>`) whenever its spec,
- * the cross-filters from other views or the table change, so a newer request
- * supersedes the stale one.
+ * Runs one chart card's aggregate whenever its inputs change: the spec with
+ * every other view's selection (`viewQueries`), the plot width for lines and
+ * the data version. Requests are view scoped (`chart:<id>`), so a newer one
+ * supersedes a stale one in the engine; a late reply of a superseded request
+ * is ignored here. The cross-filter hint is sent as it is at request time
+ * but is not part of the key (it never changes the answer).
  */
-export function useChartData(
+export function useChartQuery(
   engine: Pick<EngineClient, 'aggregate'>,
   tableId: TableId | null,
-  chartId: string,
-  spec: ChartSpec,
-  crossFilters: readonly Filter[],
-  dataVersion = 0,
+  query: ChartViewQuery,
+  pixelWidth: number,
+  dataVersion: number,
 ): ChartData {
-  const requestKey = JSON.stringify([tableId, spec, crossFilters, dataVersion]);
+  const requestKey = chartRequestKey(tableId, query, pixelWidth, dataVersion);
   const [data, setData] = useState<{ key: string; value: ChartData } | null>(null);
+  const latest = useRef({ query, pixelWidth });
+  useLayoutEffect(() => {
+    latest.current = { query, pixelWidth };
+  });
 
   useEffect(() => {
     if (tableId === null) return;
     const live = { current: true };
-    const start = `${AGGREGATE_MEASURE}:start:${chartId}:${performance.now()}`;
+    const { query: current, pixelWidth: width } = latest.current;
+    const start = `${AGGREGATE_MEASURE}:start:${current.chartId}:${performance.now()}`;
     performance.mark(start);
     engine
-      .aggregate(tableId, { ...spec, filters: [...spec.filters, ...crossFilters] }, { viewId: `chart:${chartId}` })
+      .aggregate(tableId, { ...current.spec, pixelWidth: width }, { viewId: current.engineViewId, ...(current.crossfilter ? { crossfilter: current.crossfilter } : {}) })
       .then(
         (result) => {
           if (!live.current) return;
           measure(start, { engineMs: result.engineMs, cached: result.cached, mark: result.mark, rows: result.table.numRows });
-          const fields = result.table.schema.fields;
-          const xIndex = fields.findIndex((field) => field.name === 'x');
-          const yIndex = fields.findIndex((field) => field.name === 'y');
-          const xVector = result.table.getChildAt(xIndex);
-          const yVector = result.table.getChildAt(yIndex);
-          const kind = valueKind(fields[xIndex]);
-          const format = formatterFor(kind);
-          const rows: BarRow[] = [];
-          for (let i = 0; i < result.table.numRows; i += 1) {
-            const raw: unknown = xVector?.get(i);
-            const fv = filterValue(raw, kind);
-            const y: unknown = yVector?.get(i);
-            const label = format(raw);
-            rows.push({
-              key: valueKey(fv),
-              label: label ?? 'null',
-              isNull: label === null,
-              value: typeof y === 'number' ? y : typeof y === 'bigint' ? Number(y) : null,
-              filterValue: fv,
-            });
-          }
-          setData({ key: requestKey, value: { status: 'ready', rows, engineMs: result.engineMs, cached: result.cached } });
+          const value: ChartResult = {
+            key: requestKey,
+            queryKey: current.key,
+            table: result.table,
+            mark: result.mark,
+            fellBackToHeatmap: result.fellBackToHeatmap,
+            fromCube: result.fromCube === true,
+            engineMs: result.engineMs,
+            cached: result.cached,
+          };
+          setData({ key: requestKey, value: { status: 'ready', result: value } });
         },
         (error: unknown) => {
           performance.clearMarks(start);
           if (!live.current || isAbandoned(error)) return;
           const message = error instanceof Error ? error.message : String(error);
           const path = typeof error === 'object' && error !== null && 'path' in error ? (error as { path?: string }).path : undefined;
-          setData({ key: requestKey, value: { status: 'error', message, path } });
+          setData((before) => ({ key: requestKey, value: { status: 'error', message, path, previous: before ? lastResult(before.value) : null } }));
         },
       );
     return () => {
       live.current = false;
     };
-    // requestKey captures spec, crossFilters, tableId and dataVersion by value.
-  }, [engine, chartId, requestKey]);
+    // requestKey captures the table, the query's inputs, the plot width (lines) and the data version.
+  }, [engine, tableId, requestKey]);
 
   if (data?.key === requestKey) return data.value;
-  const previous = data?.value.status === 'ready' ? data.value.rows : null;
-  return { status: 'loading', previous };
+  return { status: 'loading', previous: data ? lastResult(data.value) : null };
+}
+
+function lastResult(data: ChartData): ChartResult | null {
+  return data.status === 'ready' ? data.result : data.previous;
 }
