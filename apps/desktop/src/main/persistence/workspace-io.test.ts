@@ -83,11 +83,13 @@ describe('relinking', () => {
 });
 
 describe('fingerprint comparison', () => {
-  it('reports exactly what differs, ignoring the cache key', () => {
+  it('reports exactly what differs, ignoring the cache key and sub-2 s mtime shifts', () => {
     expect(compareFingerprints(fingerprint, { ...fingerprint, key: 'c'.repeat(32) })).toBeNull();
-    expect(compareFingerprints(fingerprint, { ...fingerprint, mtimeMs: 2_000 })).toEqual({
+    // A copy that kept its timestamp to the file system's precision still matches.
+    expect(compareFingerprints(fingerprint, { ...fingerprint, mtimeMs: 2_999 })).toBeNull();
+    expect(compareFingerprints(fingerprint, { ...fingerprint, mtimeMs: 3_000 })).toEqual({
       sizeBytes: null,
-      mtimeMs: { expected: 1_000, actual: 2_000 },
+      mtimeMs: { expected: 1_000, actual: 3_000 },
       contentChanged: false,
     });
     expect(compareFingerprints(fingerprint, { ...fingerprint, sizeBytes: 11, headTailSha256: 'f'.repeat(64) })).toEqual({

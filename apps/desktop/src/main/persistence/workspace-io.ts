@@ -120,10 +120,21 @@ export async function findDataFile(
   return null;
 }
 
-/** How `actual` differs from the saved fingerprint, or null when it matches. The cache `key` is not compared. */
+/**
+ * Modification times closer than this count as equal: copying a file
+ * between file systems (FAT and zip archives keep 2 s, HFS+ 1 s, others
+ * round sub-millisecond parts differently) shifts a preserved mtime slightly.
+ */
+export const MTIME_TOLERANCE_MS = 2_000;
+
+/**
+ * How `actual` differs from the saved fingerprint, or null when it matches.
+ * The cache `key` is not compared (it also encodes the exact mtime); mtimes
+ * within `MTIME_TOLERANCE_MS` match.
+ */
 export function compareFingerprints(expected: Fingerprint, actual: Fingerprint): FingerprintMismatch | null {
   const sizeBytes = expected.sizeBytes === actual.sizeBytes ? null : { expected: expected.sizeBytes, actual: actual.sizeBytes };
-  const mtimeMs = expected.mtimeMs === actual.mtimeMs ? null : { expected: expected.mtimeMs, actual: actual.mtimeMs };
+  const mtimeMs = Math.abs(expected.mtimeMs - actual.mtimeMs) < MTIME_TOLERANCE_MS ? null : { expected: expected.mtimeMs, actual: actual.mtimeMs };
   const contentChanged = expected.headTailSha256 !== actual.headTailSha256;
   return sizeBytes === null && mtimeMs === null && !contentChanged ? null : { sizeBytes, mtimeMs, contentChanged };
 }
