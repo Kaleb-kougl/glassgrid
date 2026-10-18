@@ -5,6 +5,7 @@ import type { ChartFonts } from '../canvas.js';
 import { formatAggregate, formatAxisValue, timeResolution } from '../format.js';
 import { nearestSorted } from '../hit.js';
 import type { ChartModel, DrawContext, HoverInfo } from '../model.js';
+import { prepared } from '../prep.js';
 import { extent, measureDomain } from '../scales.js';
 import type { ChartColumns } from '../types.js';
 
@@ -21,6 +22,99 @@ export interface LineModelOptions {
 /** Hover reaches this far (CSS px) from the nearest point along x. */
 const HOVER_REACH = 24;
 
+/** A series with at least this many rows per CSS px of plot width draws as a column envelope. */
+export const DENSE_ROWS_PER_PX = 0.5;
+
+/**
+ * Draws a dense polyline (M4 output: up to 4 rows per pixel column) as
+ * the filled envelope of what each device-pixel column covers: per column,
+ * the y range every segment crosses inside it, widened by half the line
+ * width (more for slanted segments, so the visible thickness stays even).
+ * Every column shows exactly the min…max of the data in it, which is what
+ * makes M4 pixel-faithful, and one polygon fill rasterizes far faster than
+ * stroking thousands of tiny round-joined segments. NULLs break the line.
+ * Returns the number of polygons filled.
+ */
+export function fillLineEnvelope(
+  ctx: CanvasRenderingContext2D,
+  rows: ArrayLike<number>,
+  px: (i: number) => number,
+  py: (i: number) => number,
+  defined: (i: number) => boolean,
+  lineWidth: number,
+  dpr: number,
+  plotLeft: number,
+  plotWidth: number,
+): number {
+  const left = plotLeft - lineWidth;
+  const cols = Math.ceil((plotWidth + 2 * lineWidth) * dpr) + 1;
+  const top = new Float64Array(cols).fill(Infinity);
+  const bottom = new Float64Array(cols).fill(-Infinity);
+  const half = lineWidth / 2;
+  const mark = (c: number, y0: number, y1: number) => {
+    if (c < 0 || c >= cols) return;
+    if (y0 < (top[c] ?? Infinity)) top[c] = y0;
+    if (y1 > (bottom[c] ?? -Infinity)) bottom[c] = y1;
+  };
+  const column = (x: number) => Math.floor((x - left) * dpr);
+  for (let k = 0; k < rows.length; k += 1) {
+    const i = rows[k] ?? 0;
+    if (!defined(i)) continue;
+    const xa = px(i);
+    const ya = py(i);
+    const j = k + 1 < rows.length ? (rows[k + 1] ?? 0) : -1;
+    if (j < 0 || !defined(j)) {
+      // End of a run (or an isolated point): its own column.
+      mark(column(xa), ya - half, ya + half);
+      continue;
+    }
+    const xb = px(j);
+    const yb = py(j);
+    const dx = xb - xa;
+    const slope = dx > 1e-9 ? (yb - ya) / dx : 0;
+    const ca = column(xa);
+    const cb = column(xb);
+    if (ca === cb || dx <= 1e-9) {
+      // Inside one column the data's own extent is the span: never overshoot it.
+      mark(ca, Math.min(ya, yb) - half, Math.max(ya, yb) + half);
+      continue;
+    }
+    // Across columns, thicken slanted segments a little so diagonals do not look thinner than flats.
+    const h = half * Math.min(Math.sqrt(1 + slope * slope), Math.SQRT2);
+    for (let c = Math.max(0, ca); c <= Math.min(cols - 1, cb); c += 1) {
+      const x0 = Math.max(xa, left + c / dpr);
+      const x1 = Math.min(xb, left + (c + 1) / dpr);
+      const y0 = ya + slope * (x0 - xa);
+      const y1 = ya + slope * (x1 - xa);
+      mark(c, Math.min(y0, y1) - h, Math.max(y0, y1) + h);
+    }
+  }
+  let polygons = 0;
+  ctx.beginPath();
+  let c = 0;
+  while (c < cols) {
+    if ((top[c] ?? Infinity) === Infinity) {
+      c += 1;
+      continue;
+    }
+    const start = c;
+    while (c < cols && (top[c] ?? Infinity) !== Infinity) c += 1;
+    const end = c - 1;
+    const xc = (k: number) => left + (k + 0.5) / dpr;
+    // Upper edge left to right (from the run's left pixel edge), lower edge back.
+    ctx.moveTo(left + start / dpr, top[start] ?? 0);
+    for (let k = start; k <= end; k += 1) ctx.lineTo(xc(k), top[k] ?? 0);
+    ctx.lineTo(left + (end + 1) / dpr, top[end] ?? 0);
+    ctx.lineTo(left + (end + 1) / dpr, bottom[end] ?? 0);
+    for (let k = end; k >= start; k -= 1) ctx.lineTo(xc(k), bottom[k] ?? 0);
+    ctx.lineTo(left + start / dpr, bottom[start] ?? 0);
+    ctx.closePath();
+    polygons += 1;
+  }
+  ctx.fill();
+  return polygons;
+}
+
 /**
  * Line / area: one polyline per series through every row in x order. M4
  * output (first, last, min and max per pixel column) is drawn as is, so the
@@ -28,14 +122,18 @@ const HOVER_REACH = 24;
  */
 export function buildLineModel(data: ChartColumns, width: number, height: number, fonts: ChartFonts, options: LineModelOptions): ChartModel {
   const xKind = data.xKind === 'time' ? 'time' : 'number';
-  const xExtent = extent(data.x) ?? [0, 1];
-  const axes = layoutAxes(width, height, { kind: xKind, domain: xExtent }, { kind: 'number', domain: measureDomain(data.y, 5) }, fonts);
+  const prep = prepared(data, 'line', () => ({
+    xExtent: extent(data.x) ?? ([0, 1] as [number, number]),
+    yDomain: measureDomain(data.y, 5),
+    resolution: xKind === 'time' ? timeResolution(data.x) : ('millisecond' as const),
+  }));
+  const axes = layoutAxes(width, height, { kind: xKind, domain: prep.xExtent }, { kind: 'number', domain: prep.yDomain }, fonts);
   const { x: xs, y: ys } = axes;
   const { plot } = axes.layout;
   const { x, y, order, seriesStart } = data;
   const groups = seriesStart.length - 1;
   const format = options.formatValue ?? formatAggregate;
-  const resolution = xKind === 'time' ? timeResolution(x) : 'millisecond';
+  const { resolution } = prep;
   const baseline = ys.toPx(Math.max(ys.domain[0], Math.min(ys.domain[1], 0)));
   const colorOf = (s: number) => options.colors[s] ?? options.colors[0] ?? '#000';
 
@@ -60,6 +158,11 @@ export function buildLineModel(data: ChartColumns, width: number, height: number
         d3Area<number>().x(px).y0(baseline).y1(py).defined(defined).context(ctx)(rows);
         ctx.fill();
         ctx.globalAlpha = 1;
+      }
+      if (rows.length >= plot.width * DENSE_ROWS_PER_PX) {
+        ctx.fillStyle = color;
+        fillLineEnvelope(ctx, rows, px, py, defined, lineW, dc.dpr, plot.left, plot.width);
+        continue;
       }
       ctx.strokeStyle = color;
       ctx.lineWidth = lineW;

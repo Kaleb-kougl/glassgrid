@@ -128,6 +128,27 @@ function numbers(table: Table, name: string): Float64Array | null {
   return out;
 }
 
+/** A BOOLEAN column as 0/1 bytes (NULL → 0), straight from the bit-packed buffers. */
+function readFlags(vector: Vector | null, n: number): Uint8Array {
+  const out = new Uint8Array(n);
+  if (!vector) return out;
+  let offset = 0;
+  for (const data of vector.data as Data[]) {
+    const bits: unknown = data.values;
+    if (DataType.isBool(data.type) && bits instanceof Uint8Array) {
+      for (let i = 0; i < data.length; i += 1) {
+        const bit = data.offset + i;
+        out[offset + i] = isValid(data, i) && ((bits[bit >> 3] ?? 0) & (1 << (bit & 7))) !== 0 ? 1 : 0;
+      }
+    } else {
+      const chunk = vector.slice(offset, offset + data.length);
+      for (let i = 0; i < data.length; i += 1) out[offset + i] = chunk.get(i) === true ? 1 : 0;
+    }
+    offset += data.length;
+  }
+  return out;
+}
+
 interface SeriesSlot {
   value: unknown;
   /** Comparable identity of `value` (JSON for objects such as decimal words). */
@@ -174,18 +195,25 @@ function readSeries(table: Table, measure: Float64Array, countRows: boolean): { 
   let otherSlot = -1;
   let nullSlot = -1;
   let offset = 0;
-  const otherChunk = (start: number, len: number) => other?.slice(start, start + len) ?? null;
+  const others = readFlags(other, n);
+  /** Slot of a UTF-8 value, comparing bytes against the (at most 9) slots seen so far. */
+  const utf8Slot = (bytes: Uint8Array, start: number, end: number): number => {
+    for (let s = 0; s < slots.length; s += 1) {
+      const slotBytes = slots[s]?.bytes;
+      if (slotBytes && bytesEqual(slotBytes, bytes, start, end)) return s;
+    }
+    return -1;
+  };
   for (const data of color.data as Data[]) {
     const len = data.length;
     const type: unknown = data.type;
-    const others = otherChunk(offset, len);
     const isUtf8 = DataType.isUtf8(type) && data.valueOffsets instanceof Int32Array && data.values instanceof Uint8Array;
     const isDict = DataType.isDictionary(type) && ArrayBuffer.isView(data.values) && data.dictionary;
     const dictSlots = new Map<number, number>();
     const chunk = isUtf8 || isDict ? null : color.slice(offset, offset + len);
     for (let i = 0; i < len; i += 1) {
       let slot: number;
-      if (others?.get(i) === true) {
+      if (others[offset + i] === 1) {
         if (otherSlot < 0) otherSlot = add({ value: null, id: null, bytes: null, isOther: true, isNull: false, rows: 0, total: 0 });
         slot = otherSlot;
       } else if (!isValid(data, i)) {
@@ -196,7 +224,7 @@ function readSeries(table: Table, measure: Float64Array, countRows: boolean): { 
         const bytes = data.values;
         const start = offsets[i] ?? 0;
         const end = offsets[i + 1] ?? start;
-        slot = slots.findIndex((s) => s.bytes !== null && bytesEqual(s.bytes, bytes, start, end));
+        slot = utf8Slot(bytes, start, end);
         if (slot < 0) {
           const text = new TextDecoder().decode(bytes.subarray(start, end));
           slot = add({ value: text, id: text, bytes: bytes.slice(start, end), isOther: false, isNull: false, rows: 0, total: 0 });
@@ -251,8 +279,8 @@ function rankSeries(slots: readonly SeriesSlot[], labels: readonly string[]): Ui
   return remap;
 }
 
-/** Row indices grouped by series and sorted by x within each (stable). */
-function orderRows(x: Float64Array, series: Uint8Array | null, seriesCount: number): { order: Uint32Array; seriesStart: Uint32Array } {
+/** Row indices grouped by series and (with `sortByX`) sorted by x within each (stable). */
+function orderRows(x: Float64Array, series: Uint8Array | null, seriesCount: number, sortByX: boolean): { order: Uint32Array; seriesStart: Uint32Array } {
   const n = x.length;
   const groups = Math.max(1, seriesCount);
   const seriesStart = new Uint32Array(groups + 1);
@@ -266,7 +294,7 @@ function orderRows(x: Float64Array, series: Uint8Array | null, seriesCount: numb
     order[cursor[s] ?? 0] = i;
     cursor[s] = (cursor[s] ?? 0) + 1;
   }
-  for (let s = 0; s < groups; s += 1) {
+  for (let s = 0; s < groups && sortByX; s += 1) {
     const start = seriesStart[s] ?? 0;
     const end = seriesStart[s + 1] ?? start;
     let sorted = true;
@@ -345,7 +373,9 @@ export function chartColumnsFromArrow(table: Table, mark: ChartMark): ChartColum
     });
     seriesList.sort((a, b) => a.index - b.index);
   }
-  const { order, seriesStart } = orderRows(x, series, seriesList.length);
+  // Lines, areas and histograms walk rows in x order; scatter, heatmap and bar keep result order.
+  const sortByX = mark === 'line' || mark === 'area' || mark === 'histogram';
+  const { order, seriesStart } = orderRows(x, series, seriesList.length, sortByX);
   return {
     length: n,
     x,

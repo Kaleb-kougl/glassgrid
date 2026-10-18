@@ -32,8 +32,10 @@ export function ScatterChart(props: ScatterChartProps) {
   const data = useChartColumns(table, 'scatter', props.data);
   const colors = useSeriesColors(data, tokens, colorKeys);
   const overlay = useWebGLOverlay();
-  const [glAvailable, setGlAvailable] = useState(false);
-  const useGL = overlay !== null && glAvailable && data.length > webglThreshold;
+  /** Whether the overlay can draw: null until it says (dense charts then draw nothing rather than a million canvas points). */
+  const [glAvailable, setGlAvailable] = useState<boolean | null>(null);
+  const dense = overlay !== null && data.length > webglThreshold;
+  const useGL = dense && glAvailable === true;
 
   const client = useMemo(() => (overlay ? new ScatterGLClient(overlay, setGlAvailable) : null), [overlay]);
 
@@ -88,7 +90,7 @@ export function ScatterChart(props: ScatterChartProps) {
       onBrush={onBrush}
       xLabel={xLabel}
       yLabel={yLabel}
-      marksExternal={useGL}
+      marksExternal={dense && glAvailable !== false}
       onFrame={onFrame}
       onCanvas={onCanvas}
       perfName={useGL ? 'scatter-webgl' : 'scatter'}

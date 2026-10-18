@@ -88,6 +88,14 @@ export const browserEnvironment: OverlayEnvironment = {
   devicePixelRatio: () => window.devicePixelRatio || 1,
 };
 
+/** How dense scatters draw: instanced quads (GPUs), or plain points (software rasterizers, where instancing is ~17× slower). */
+export type ScatterStrategy = 'instanced' | 'points';
+
+/** Software WebGL implementations (no GPU): SwiftShader, llvmpipe, WARP. */
+export function isSoftwareRenderer(renderer: string): boolean {
+  return /swiftshader|llvmpipe|softpipe|software|basic render/i.test(renderer);
+}
+
 export interface FrameStats {
   /** Clients drawn in the last frame (visible ones). */
   readonly drawn: number;
@@ -112,9 +120,30 @@ export class WebGLOverlayManager {
   private clipRect: (() => RectLike | null) | null = null;
   lastFrame: FrameStats = { drawn: 0, ms: 0 };
   private readonly env: OverlayEnvironment;
+  /** `auto` picks `points` on software renderers and `instanced` otherwise. */
+  scatterStrategyOption: 'auto' | ScatterStrategy = 'auto';
 
   constructor(env: OverlayEnvironment = browserEnvironment) {
     this.env = env;
+  }
+
+  /** The WebGL renderer string (unmasked when the browser allows), or '' without a context. */
+  get renderer(): string {
+    const gl = this.context;
+    if (!gl) return '';
+    const info = gl.getExtension('WEBGL_debug_renderer_info');
+    const value: unknown = gl.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER);
+    return typeof value === 'string' ? value : '';
+  }
+
+  setScatterStrategy(option: 'auto' | ScatterStrategy): void {
+    this.scatterStrategyOption = option;
+    this.invalidate();
+  }
+
+  get scatterStrategy(): ScatterStrategy {
+    if (this.scatterStrategyOption !== 'auto') return this.scatterStrategyOption;
+    return isSoftwareRenderer(this.renderer) ? 'points' : 'instanced';
   }
 
   private readonly onLost = (event: Event) => {

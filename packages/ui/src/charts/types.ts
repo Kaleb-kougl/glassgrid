@@ -65,9 +65,9 @@ export interface ChartColumns {
   /** Bar x categories in result order (`xKind: 'category'`). */
   readonly categories: readonly ChartCategory[] | null;
   /**
-   * Row indices grouped by series (series order), each group sorted by x
-   * ascending (ties keep result order). Lines, areas and histograms draw in
-   * this order; `seriesStart[s]..seriesStart[s + 1]` is series s.
+   * Row indices grouped by series (series order); for line, area and
+   * histogram each group is sorted by x ascending (ties keep result order),
+   * other marks keep result order. `seriesStart[s]..seriesStart[s + 1]` is series s.
    */
   readonly order: Uint32Array;
   readonly seriesStart: Uint32Array;

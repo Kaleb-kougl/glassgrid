@@ -35,6 +35,7 @@ export default defineConfig(
     '**/e2e-results/',
     // Benchmark build output and results.
     '**/bench/.out/',
+    '**/bench/.out-charts/',
     '**/bench/results/',
     // Claude Design export (gitignored reference material).
     'design/',
@@ -81,7 +82,7 @@ export default defineConfig(
     languageOptions: { globals: { ...globals.browser, process: 'readonly' } },
   },
   {
-    files: ['apps/desktop/src/renderer/**', 'apps/web/src/**', 'packages/ui/src/**', 'packages/ui/bench/grid/**'],
+    files: ['apps/desktop/src/renderer/**', 'apps/web/src/**', 'packages/ui/src/**', 'packages/ui/bench/grid/**', 'packages/ui/bench/charts/**'],
     languageOptions: { globals: globals.browser },
   },
   {

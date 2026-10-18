@@ -20,7 +20,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.lib.json && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.bench.json",
     "test": "vitest run",
     "tokens": "node tokens/generate.js",
-    "bench:grid": "node bench/run-grid-bench.ts"
+    "bench:grid": "node bench/run-grid-bench.ts",
+    "bench:charts": "node bench/run-charts-bench.ts"
   },
   "peerDependencies": {
     "react": "^19.0.0"

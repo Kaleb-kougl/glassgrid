@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { WebGLOverlayManager, type OverlayEnvironment } from './overlay.js';
+import { WebGLOverlayManager, type OverlayEnvironment, type ScatterStrategy } from './overlay.js';
 
 const OverlayContext = createContext<WebGLOverlayManager | null>(null);
 
@@ -14,6 +14,11 @@ export interface WebGLOverlayProviderProps {
   style?: CSSProperties;
   /** Test seam: context factory, frame scheduler and DPR. */
   environment?: OverlayEnvironment;
+  /**
+   * How dense scatters draw: `auto` (default) uses instanced quads on GPUs and
+   * plain points on software renderers (SwiftShader), where instancing is slow.
+   */
+  scatterStrategy?: 'auto' | ScatterStrategy;
   /** Receives the manager (benchmarks read `lastFrame`). */
   onManager?: (manager: WebGLOverlayManager) => void;
   testId?: string;
@@ -25,7 +30,7 @@ export interface WebGLOverlayProviderProps {
  * covers the wrapper, ignores the pointer and sits between the charts'
  * own canvases (z-index 1) and their brush overlays (z-index 2).
  */
-export function WebGLOverlayProvider({ children, className, style, environment, onManager, testId }: WebGLOverlayProviderProps) {
+export function WebGLOverlayProvider({ children, className, style, environment, scatterStrategy = 'auto', onManager, testId }: WebGLOverlayProviderProps) {
   const [manager] = useState(() => new WebGLOverlayManager(environment));
   const rootRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -49,6 +54,10 @@ export function WebGLOverlayProvider({ children, className, style, environment, 
       manager.detach();
     };
   }, [manager, onManager]);
+
+  useEffect(() => {
+    manager.setScatterStrategy(scatterStrategy);
+  }, [manager, scatterStrategy]);
 
   useEffect(() => () => manager.detach(), [manager]);
 

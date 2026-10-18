@@ -8,6 +8,7 @@ import { seriesColors } from '../charts/colors.js';
 import { formatAggregate } from '../charts/format.js';
 import { useFontsVersion } from '../charts/hooks.js';
 import { SeriesLegend } from '../charts/Legend.js';
+import { chartPerfHook } from '../charts/perf.js';
 import type { ChartSeries } from '../charts/types.js';
 import type { ResolvedTokens } from '../tokens.js';
 import { Tooltip, type Point, type TooltipRow } from './Tooltip.js';
@@ -317,11 +318,13 @@ export function BarChart({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || layout.width <= 0) return;
+    const start = performance.now();
     const ctx = sizeCanvas(canvas, layout.width, Math.max(1, layout.height), window.devicePixelRatio || 1);
     if (!ctx) return;
     canvas.style.height = `${layout.height}px`;
     ctx.clearRect(0, 0, layout.width, layout.height);
     drawBars(ctx, layout, data, { selected, tokens, fonts, formatValue, colors, focusIndex: keyboardFocus ? activeIndex : -1 });
+    chartPerfHook()?.('paint', 'bar', performance.now() - start);
   }, [layout, data, selected, tokens, fonts, formatValue, colors, keyboardFocus, activeIndex]);
 
   const pointFromEvent = useCallback((event: { clientX: number; clientY: number }): Point | null => {

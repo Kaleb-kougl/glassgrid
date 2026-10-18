@@ -1,12 +1,12 @@
 import { Bool, Float64, Int64, Table, TimestampMicrosecond, Utf8, vectorFromArray } from 'apache-arrow';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { BAR_ROW_HEIGHT, barDataFromArrow, drawBars, layoutBars } from '../components/BarChart.js';
 import { resolvedTokens } from '../tokens.js';
 import { chartColumnsFromArrow } from './arrow.js';
 import { chartFonts } from './canvas.js';
-import { HEATMAP_STEPS, buildHeatmapModel } from './marks/heatmap.js';
+import { HEATMAP_STEPS, buildHeatmapModel, regularGrid } from './marks/heatmap.js';
 import { buildHistogramModel } from './marks/histogram.js';
-import { buildLineModel } from './marks/line.js';
+import { buildLineModel, fillLineEnvelope } from './marks/line.js';
 import { CANVAS_CIRCLE_LIMIT, buildScatterModel } from './marks/scatter.js';
 import type { DrawContext } from './model.js';
 import { recordingContext } from './test-utils.js';
@@ -68,6 +68,32 @@ describe('line / area', () => {
     model.drawMarks(ctx, dc);
     expect(ctx.named('moveTo')).toHaveLength(1);
     expect(ctx.named('lineTo').map((c) => c[2])).toEqual([1, 9, 4, 6].map((v) => model.axes.y.toPx(v)));
+  });
+
+  it('draws dense series (M4 output) as one filled column envelope per run, not thousands of joins', () => {
+    const n = 2000;
+    const dense = chartColumnsFromArrow(new Table({ x: f64(Array.from({ length: n }, (_, i) => i / 4)), y: f64(Array.from({ length: n }, (_, i) => (i % 7 === 0 ? null : Math.sin(i / 40)))) }), 'line');
+    const model = buildLineModel(dense, 400, 160, fonts, { mark: 'line', yLabel: 'v', colors });
+    const ctx = recordingContext();
+    model.drawMarks(ctx, dc);
+    expect(ctx.named('stroke')).toHaveLength(0);
+    expect(ctx.named('fill')).toHaveLength(1);
+    expect(ctx.named('closePath').length).toBeGreaterThan(0);
+  });
+
+  it('envelopes cover exactly the y range each pixel column crosses, widened by half the line width', () => {
+    const ctx = recordingContext();
+    // One vertical M4 column at x=10.2: first 5, min 1, max 9, last 4 — then a NULL, then a lone point.
+    const xs = [10.2, 10.4, 10.6, 10.8, 11, 30.5];
+    const ys = [5, 1, 9, 4, Number.NaN, 7];
+    const polygons = fillLineEnvelope(ctx, [0, 1, 2, 3, 4, 5], (i) => xs[i] ?? 0, (i) => ys[i] ?? 0, (i) => !Number.isNaN(ys[i] ?? Number.NaN), 2, 1, 0, 100);
+    expect(polygons).toBe(2);
+    const points = [...ctx.named('moveTo'), ...ctx.named('lineTo')].map((c) => [c[1], c[2]] as [number, number]);
+    const ysAt = (x0: number, x1: number) => points.filter(([x]) => x >= x0 && x <= x1).map(([, y]) => y);
+    expect(Math.min(...ysAt(9, 12))).toBe(0); // min 1 − 1
+    expect(Math.max(...ysAt(9, 12))).toBe(10); // max 9 + 1
+    expect(Math.min(...ysAt(29, 32))).toBe(6);
+    expect(Math.max(...ysAt(29, 32))).toBe(8);
   });
 
   it('fills areas down to zero under the stroke', () => {
@@ -164,6 +190,39 @@ describe('heatmap', () => {
     expect(fills.length).toBeLessThanOrEqual(HEATMAP_STEPS);
     // The largest count takes the ramp's last stop.
     expect(ctx.styleAt('fillStyle', fills[fills.length - 1] ?? 0)).toBe(tokens.chart.sequential[tokens.chart.sequential.length - 1]);
+  });
+
+  it('draws a regular grid as one nearest-neighbour bitmap, one pixel per cell', () => {
+    class FakeImageData {
+      readonly data: Uint8ClampedArray;
+      readonly width: number;
+      readonly height: number;
+      constructor(data: Uint8ClampedArray, width: number, height: number) {
+        this.data = data;
+        this.width = width;
+        this.height = height;
+      }
+    }
+    vi.stubGlobal('ImageData', FakeImageData);
+    try {
+      const model = buildHeatmapModel(data, 300, 200, fonts, { xLabel: 'a', yLabel: 'b', ramp: tokens.chart.sequential });
+      const ctx = recordingContext();
+      model.drawMarks(ctx, dc);
+      expect(ctx.named('rect')).toHaveLength(0);
+      const images = ctx.named('drawImage');
+      expect(images).toHaveLength(1);
+      const at = ctx.calls.findIndex((c) => c[0] === 'drawImage');
+      expect(ctx.styleAt('imageSmoothingEnabled', at)).toBe(false);
+      const [, cells, x, , w] = images[0] ?? [];
+      expect((cells as HTMLCanvasElement).width).toBe(2);
+      expect(x).toBeCloseTo(model.axes.x.toPx(0), 9);
+      expect(Number(w)).toBeCloseTo(model.axes.x.toPx(2) - model.axes.x.toPx(0), 9);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expect(regularGrid(Float64Array.from([0, 10, 30]))).toEqual({ origin: 0, step: 10, count: 3 });
+    expect(regularGrid(Float64Array.from([0, 10, 25]))).toBeNull();
+    expect(regularGrid(Float64Array.from([Date.UTC(2023, 0, 1), Date.UTC(2023, 1, 1), Date.UTC(2023, 2, 1)]))).toBeNull();
   });
 
   it('hit-tests cells by bin', () => {

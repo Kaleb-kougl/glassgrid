@@ -1,14 +1,18 @@
 import { parseColor } from '../colors.js';
 import type { ChartColumns } from '../types.js';
 import type { PlotRect } from '../axes.js';
-import type { GLViewport, OverlayClient, RectLike, WebGLOverlayManager } from './overlay.js';
+import type { GLViewport, OverlayClient, RectLike, ScatterStrategy, WebGLOverlayManager } from './overlay.js';
 
 /*
- * Instanced scatter renderer: one draw call for all points. A unit quad
- * (4 vertices) is instanced once per point; each instance carries its
- * position (float32, relative to an origin so epoch-ms times keep their
- * precision) and its colour (RGBA8). Domain, brush and opacity are
- * uniforms, so panning a brush redraws without touching the buffers.
+ * Scatter renderer: one draw call for all points. A unit quad (4 vertices)
+ * is instanced once per point; each instance carries its position (float32,
+ * relative to an origin so epoch-ms times keep their precision) and its
+ * colour (RGBA8). Domain, brush and opacity are uniforms, so panning a
+ * brush redraws without touching the buffers.
+ *
+ * Software rasterizers (SwiftShader on a GPU-less machine) run instanced
+ * draws about 17× slower than plain ones, so there the same buffers feed
+ * one non-instanced `POINTS` draw instead (`ScatterStrategy`).
  */
 
 const VERTEX = `#version 300 es
@@ -48,6 +52,40 @@ void main() {
   outColor = v_color * cover;
 }`;
 
+const POINTS_VERTEX = `#version 300 es
+layout(location = 1) in vec2 a_pos;
+layout(location = 2) in vec4 a_color;
+uniform vec4 u_domain;
+uniform vec2 u_viewport;
+uniform float u_radius;
+uniform vec4 u_brush;
+uniform int u_brushOn;
+uniform float u_dim;
+uniform float u_alpha;
+out vec4 v_color;
+void main() {
+  vec2 t = (a_pos - u_domain.xz) / (u_domain.yw - u_domain.xz);
+  gl_Position = vec4(t * 2.0 - 1.0, 0.0, 1.0);
+  gl_PointSize = 2.0 * (u_radius + 1.0);
+  bool inside = true;
+  if (u_brushOn >= 1) inside = a_pos.x >= u_brush.x && a_pos.x <= u_brush.y;
+  if (u_brushOn == 2) inside = inside && a_pos.y >= u_brush.z && a_pos.y <= u_brush.w;
+  float a = a_color.a * u_alpha * (inside ? 1.0 : u_dim);
+  v_color = vec4(a_color.rgb * a, a);
+}`;
+
+const POINTS_FRAGMENT = `#version 300 es
+precision highp float;
+in vec4 v_color;
+uniform float u_radius;
+out vec4 outColor;
+void main() {
+  vec2 local = (gl_PointCoord - 0.5) * 2.0 * (u_radius + 1.0);
+  float cover = clamp(u_radius + 0.5 - length(local), 0.0, 1.0);
+  if (cover <= 0.0) discard;
+  outColor = v_color * cover;
+}`;
+
 export interface ScatterProgram {
   readonly program: WebGLProgram;
   readonly quad: WebGLBuffer;
@@ -63,10 +101,10 @@ function compile(gl: WebGL2RenderingContext, type: number, source: string): WebG
   return shader;
 }
 
-export function createScatterProgram(gl: WebGL2RenderingContext): ScatterProgram {
+export function createScatterProgram(gl: WebGL2RenderingContext, strategy: ScatterStrategy = 'instanced'): ScatterProgram {
   const program = gl.createProgram();
-  gl.attachShader(program, compile(gl, gl.VERTEX_SHADER, VERTEX));
-  gl.attachShader(program, compile(gl, gl.FRAGMENT_SHADER, FRAGMENT));
+  gl.attachShader(program, compile(gl, gl.VERTEX_SHADER, strategy === 'points' ? POINTS_VERTEX : VERTEX));
+  gl.attachShader(program, compile(gl, gl.FRAGMENT_SHADER, strategy === 'points' ? POINTS_FRAGMENT : FRAGMENT));
   gl.linkProgram(program);
   if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(`WebGL program: ${gl.getProgramInfoLog(program) ?? 'link failed'}`);
   const quad = gl.createBuffer();
@@ -144,6 +182,7 @@ export class ScatterGLClient implements OverlayClient {
   private positionBuffer: WebGLBuffer | null = null;
   private colorBuffer: WebGLBuffer | null = null;
   private uploaded: ScatterInstances | null = null;
+  private uploadedStrategy: ScatterStrategy | null = null;
   private readonly manager: WebGLOverlayManager;
   private readonly onAvailability: (available: boolean) => void;
   private element: Element | null = null;
@@ -194,9 +233,11 @@ export class ScatterGLClient implements OverlayClient {
     this.positionBuffer = null;
     this.colorBuffer = null;
     this.uploaded = null;
+    this.uploadedStrategy = null;
   }
 
-  private upload(gl: WebGL2RenderingContext, program: ScatterProgram, instances: ScatterInstances): void {
+  private upload(gl: WebGL2RenderingContext, program: ScatterProgram, instances: ScatterInstances, strategy: ScatterStrategy): void {
+    const divisor = strategy === 'instanced' ? 1 : 0;
     if (this.gl !== gl) {
       this.contextLost();
       this.gl = gl;
@@ -205,31 +246,37 @@ export class ScatterGLClient implements OverlayClient {
     this.positionBuffer ??= gl.createBuffer();
     this.colorBuffer ??= gl.createBuffer();
     gl.bindVertexArray(this.vao);
-    gl.bindBuffer(gl.ARRAY_BUFFER, program.quad);
-    gl.enableVertexAttribArray(0);
-    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-    gl.vertexAttribDivisor(0, 0);
+    if (strategy === 'instanced') {
+      gl.bindBuffer(gl.ARRAY_BUFFER, program.quad);
+      gl.enableVertexAttribArray(0);
+      gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+      gl.vertexAttribDivisor(0, 0);
+    } else {
+      gl.disableVertexAttribArray(0);
+    }
     gl.bindBuffer(gl.ARRAY_BUFFER, this.positionBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, instances.positions, gl.STATIC_DRAW);
     gl.enableVertexAttribArray(1);
     gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
-    gl.vertexAttribDivisor(1, 1);
+    gl.vertexAttribDivisor(1, divisor);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.colorBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, instances.colors, gl.STATIC_DRAW);
     gl.enableVertexAttribArray(2);
     gl.vertexAttribPointer(2, 4, gl.UNSIGNED_BYTE, true, 0, 0);
-    gl.vertexAttribDivisor(2, 1);
+    gl.vertexAttribDivisor(2, divisor);
     gl.bindVertexArray(null);
     this.uploaded = instances;
+    this.uploadedStrategy = strategy;
   }
 
   draw(gl: WebGL2RenderingContext, viewport: GLViewport): void {
     const instances = this.instances;
     const view = this.view;
     if (!instances || !view || instances.count === 0) return;
-    const program = this.manager.resource('scatter-program', createScatterProgram);
+    const strategy = this.manager.scatterStrategy;
+    const program = this.manager.resource(`scatter-program:${strategy}`, (context) => createScatterProgram(context, strategy));
     if (!program) return;
-    if (this.uploaded !== instances || this.gl !== gl) this.upload(gl, program, instances);
+    if (this.uploaded !== instances || this.gl !== gl || this.uploadedStrategy !== strategy) this.upload(gl, program, instances, strategy);
     const dpr = viewport.width / Math.max(1, this.getRect()?.width ?? viewport.width);
     const [ox, oy] = instances.origin;
     const { uniforms } = program;
@@ -248,7 +295,8 @@ export class ScatterGLClient implements OverlayClient {
       gl.uniform1i(uniforms.brushOn, 0);
     }
     gl.bindVertexArray(this.vao);
-    gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, instances.count);
+    if (strategy === 'instanced') gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, instances.count);
+    else gl.drawArrays(gl.POINTS, 0, instances.count);
     gl.bindVertexArray(null);
     this.draws += 1;
   }

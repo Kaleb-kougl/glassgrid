@@ -1,0 +1,17 @@
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+  background: var(--gg-ground);
+}
+
+.bench-panel {
+  padding: 24px;
+}
+
+.bench-card {
+  background: var(--gg-card-bg);
+  border: var(--gg-border-width) solid var(--gg-border-subtle);
+  border-radius: var(--gg-radius-card);
+}

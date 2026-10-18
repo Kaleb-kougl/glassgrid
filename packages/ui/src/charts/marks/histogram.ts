@@ -5,6 +5,7 @@ import type { ChartFonts } from '../canvas.js';
 import { formatAggregate, formatRange, timeResolution } from '../format.js';
 import { binAt, buildBinIndex, uniqueSorted, type BinIndex } from '../hit.js';
 import type { ChartModel, DrawContext, HoverInfo } from '../model.js';
+import { prepared } from '../prep.js';
 import { measureDomain } from '../scales.js';
 import type { ChartColumns } from '../types.js';
 
@@ -57,18 +58,24 @@ export function stackBins(data: ChartColumns, bins: BinIndex): { lo: Float64Arra
 export function buildHistogramModel(data: ChartColumns, width: number, height: number, fonts: ChartFonts, options: HistogramModelOptions): ChartModel {
   const xKind = data.xKind === 'time' ? 'time' : 'number';
   const xEnd = data.xEnd ?? data.x;
-  const bins = buildBinIndex(data.x, xEnd, data.order);
-  const { lo, hi } = stackBins(data, bins);
+  const { bins, lo, hi, edges, resolution } = prepared(data, 'histogram', () => {
+    const index = buildBinIndex(data.x, xEnd, data.order);
+    const sortedEdges = uniqueSorted(data.x, xEnd);
+    return {
+      bins: index,
+      ...stackBins(data, index),
+      edges: sortedEdges,
+      resolution: xKind === 'time' ? timeResolution(sortedEdges) : ('millisecond' as const),
+    };
+  });
   const n = bins.starts.length;
   const xDomain: [number, number] = n > 0 ? [bins.starts[0] ?? 0, bins.ends[n - 1] ?? 1] : [0, 1];
   const axes = layoutAxes(width, height, { kind: xKind, domain: xDomain }, { kind: 'number', domain: measureDomain(hi, 5, lo) }, fonts);
   const { x: xs, y: ys } = axes;
   const { plot } = axes.layout;
   const format = options.formatValue ?? formatAggregate;
-  const resolution = xKind === 'time' ? timeResolution(uniqueSorted(data.x, xEnd)) : 'millisecond';
   const groups = Math.max(1, data.seriesList.length);
   const colorOf = (s: number) => options.colors[s] ?? options.colors[0] ?? '#000';
-  const edges = uniqueSorted(data.x, xEnd);
 
   const binRect = (b: number) => {
     const a = xs.toPx(bins.starts[b] ?? 0);

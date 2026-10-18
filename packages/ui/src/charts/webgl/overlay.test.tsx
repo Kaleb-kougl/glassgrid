@@ -5,7 +5,7 @@ import { resolvedTokens } from '../../tokens.js';
 import { chartColumnsFromArrow } from '../arrow.js';
 import { ScatterChart } from '../ScatterChart.js';
 import { installCanvasRecorder, mockClientSize } from '../test-utils.js';
-import { WebGLOverlayManager, computeViewport, type OverlayClient, type OverlayEnvironment } from './overlay.js';
+import { WebGLOverlayManager, computeViewport, isSoftwareRenderer, type OverlayClient, type OverlayEnvironment } from './overlay.js';
 import { ScatterGLClient, scatterInstances } from './scatter.js';
 import { WebGLOverlayProvider } from './WebGLOverlayProvider.js';
 
@@ -26,6 +26,7 @@ function fakeGL() {
     FLOAT: 0x1406,
     UNSIGNED_BYTE: 0x1401,
     TRIANGLE_STRIP: 5,
+    POINTS: 0,
     VERTEX_SHADER: 0x8b31,
     FRAGMENT_SHADER: 0x8b30,
     COMPILE_STATUS: 0x8b81,
@@ -231,6 +232,21 @@ describe('ScatterGLClient', () => {
     expect(gl.calls.filter((c) => c[0] === 'bufferData').length).toBe(uploads);
     expect(gl.calls.filter((c) => c[0] === 'uniform1i').at(-1)?.[2]).toBe(0);
     expect(scatter.draws).toBe(2);
+
+    // Software renderers: the same buffers, one non-instanced POINTS draw (re-uploaded without divisors).
+    manager.setScatterStrategy('points');
+    flush();
+    expect(gl.calls.filter((c) => c[0] === 'drawArrays').at(-1)).toEqual(['drawArrays', gl.POINTS, 0, 3]);
+    expect(gl.calls.filter((c) => c[0] === 'vertexAttribDivisor').slice(-2)).toEqual([
+      ['vertexAttribDivisor', 1, 0],
+      ['vertexAttribDivisor', 2, 0],
+    ]);
+  });
+
+  it('detects software renderers', () => {
+    expect(isSoftwareRenderer('ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)')).toBe(true);
+    expect(isSoftwareRenderer('llvmpipe (LLVM 15.0.7, 256 bits)')).toBe(true);
+    expect(isSoftwareRenderer('ANGLE (Apple, ANGLE Metal Renderer: Apple M2, Unspecified Version)')).toBe(false);
   });
 });
 

@@ -115,11 +115,13 @@ export function syntheticHistogramTable({ bins = 50, width = 0.5, series = 1, se
 
 export interface SyntheticHeatmapOptions {
   bins?: number;
+  /** Every cell non-empty (a full bins × bins grid), as a worst case. */
+  dense?: boolean;
   seed?: number;
 }
 
 /** A heatmap result: `x, x_end, y, y_end` DOUBLE, `count` BIGINT, two gaussian clusters, empty cells omitted. */
-export function syntheticHeatmapTable({ bins = 100, seed = 5 }: SyntheticHeatmapOptions = {}): Table {
+export function syntheticHeatmapTable({ bins = 100, dense = false, seed = 5 }: SyntheticHeatmapOptions = {}): Table {
   const random = prng(seed);
   const x: number[] = [];
   const y: number[] = [];
@@ -130,7 +132,7 @@ export function syntheticHeatmapTable({ bins = 100, seed = 5 }: SyntheticHeatmap
       const v = j / bins;
       const a = Math.exp(-(((u - 0.3) ** 2) / 0.02 + ((v - 0.35) ** 2) / 0.03)) * 9000;
       const b = Math.exp(-(((u - 0.7) ** 2) / 0.01 + ((v - 0.7) ** 2) / 0.01)) * 4000;
-      const c = Math.round((a + b) * (0.7 + random() * 0.6) + (random() < 0.3 ? random() * 20 : 0));
+      const c = Math.round((a + b) * (0.7 + random() * 0.6) + (dense ? 1 : 0) + (random() < 0.3 ? random() * 20 : 0));
       if (c <= 0) continue;
       x.push(i);
       y.push(j * 2);

@@ -53,7 +53,7 @@ const bars = barDataFromArrow(tables.bar);
 
 function describe(selection: IntervalSelection | null, kind: 'number' | 'time'): string | null {
   if (!selection) return null;
-  const n = (v: number | string) => (kind === 'time' ? parseTimeBound(v) : Number(v));
+  const n = (v: number | string) => (kind === 'time' ? parseTimeBound(v) : Math.round(Number(v) * 100) / 100);
   const x = formatRange(n(selection.x[0]), n(selection.x[1]), kind, kind === 'time' ? 'day' : 'millisecond');
   return selection.y ? `${x} × ${formatRange(n(selection.y[0]), n(selection.y[1]), 'number')}` : x;
 }
