@@ -1,0 +1,413 @@
+{
+  "benchmark": "m3-exit-gate-medians",
+  "milestone": "M3",
+  "rows": 10000000,
+  "runs": 3,
+  "recordedAt": [
+    "2026-10-18T15:15:07.971Z",
+    "2026-10-18T15:18:49.120Z",
+    "2026-10-18T15:22:26.948Z"
+  ],
+  "machine": {
+    "platform": "linux",
+    "arch": "x64",
+    "cpuModel": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "cpuCount": 2,
+    "totalMemBytes": 8419655680,
+    "ci": false
+  },
+  "versions": {
+    "electron": "44.9.0",
+    "chrome": "152.0.7977.167",
+    "node": "24.22.0",
+    "duckdbNodeApi": "1.5.6-r.1"
+  },
+  "exitGate": {
+    "name": "chart create (drop -> drawn) p50/p95 < 250 ms per mark; cross-filter (brush end -> last view painted) p95 < 100 ms over 20 brushes; 4 charts + grid",
+    "source": "parquet",
+    "chartCreate": {
+      "perMark": {
+        "line": {
+          "p50Ms": {
+            "values": [
+              244.5,
+              239.2,
+              247.7
+            ],
+            "median": 244.5
+          },
+          "p95Ms": {
+            "values": [
+              288.8,
+              283.9,
+              319.1
+            ],
+            "median": 288.8
+          },
+          "n": 6,
+          "budgetMs": 250,
+          "met": false
+        },
+        "bar": {
+          "p50Ms": {
+            "values": [
+              73.6,
+              70,
+              73.6
+            ],
+            "median": 73.6
+          },
+          "p95Ms": {
+            "values": [
+              87.2,
+              89.9,
+              79.6
+            ],
+            "median": 87.2
+          },
+          "n": 6,
+          "budgetMs": 250,
+          "met": true
+        },
+        "histogram": {
+          "p50Ms": {
+            "values": [
+              157.2,
+              147.4,
+              168.2
+            ],
+            "median": 157.2
+          },
+          "p95Ms": {
+            "values": [
+              190.9,
+              235.2,
+              186.3
+            ],
+            "median": 190.9
+          },
+          "n": 6,
+          "budgetMs": 250,
+          "met": true
+        },
+        "heatmap": {
+          "p50Ms": {
+            "values": [
+              238.4,
+              247.6,
+              224.5
+            ],
+            "median": 238.4
+          },
+          "p95Ms": {
+            "values": [
+              256.4,
+              266,
+              301.4
+            ],
+            "median": 266
+          },
+          "n": 6,
+          "budgetMs": 250,
+          "met": false
+        }
+      },
+      "met": false
+    },
+    "crossfilter": {
+      "p50Ms": {
+        "values": [
+          64.9,
+          71,
+          70.7
+        ],
+        "median": 70.7
+      },
+      "p95Ms": {
+        "values": [
+          82,
+          98.8,
+          100.5
+        ],
+        "median": 98.8
+      },
+      "maxMs": {
+        "values": [
+          90.3,
+          102.7,
+          131.5
+        ],
+        "median": 102.7
+      },
+      "brushes": 20,
+      "viewsFromCube": [
+        80,
+        80,
+        80
+      ],
+      "views": [
+        100,
+        100,
+        100
+      ],
+      "perViewP95Ms": {
+        "chart": {
+          "values": [
+            76.5,
+            81.9,
+            84.2
+          ],
+          "median": 81.9
+        },
+        "grid:count": {
+          "values": [
+            52.6,
+            56.2,
+            54.6
+          ],
+          "median": 54.6
+        },
+        "grid:rows": {
+          "values": [
+            74.3,
+            90.4,
+            93.6
+          ],
+          "median": 90.4
+        }
+      },
+      "budgetMs": 100,
+      "met": true
+    },
+    "firstBrush": {
+      "ms": {
+        "values": [
+          349.6,
+          611.5,
+          283.5
+        ],
+        "median": 349.6
+      },
+      "cubesReadyMs": {
+        "values": [
+          781.1,
+          1051.7,
+          756.8
+        ],
+        "median": 781.1
+      },
+      "cubeCells": [
+        {
+          "status": "ready",
+          "rows": 17343
+        },
+        {
+          "status": "ready",
+          "rows": 153
+        },
+        {
+          "status": "ready",
+          "rows": 360
+        },
+        {
+          "status": "ready",
+          "rows": 31
+        }
+      ]
+    },
+    "met": false
+  },
+  "rawCsv": {
+    "source": "csv",
+    "chartCreate": {
+      "perMark": {
+        "line": {
+          "p50Ms": {
+            "values": [
+              1461.2,
+              1273,
+              1220.6
+            ],
+            "median": 1273
+          },
+          "p95Ms": {
+            "values": [
+              1461.2,
+              1273,
+              1220.6
+            ],
+            "median": 1273
+          },
+          "n": 1,
+          "budgetMs": 250,
+          "met": false
+        },
+        "bar": {
+          "p50Ms": {
+            "values": [
+              1023.9,
+              868.6,
+              819.5
+            ],
+            "median": 868.6
+          },
+          "p95Ms": {
+            "values": [
+              1023.9,
+              868.6,
+              819.5
+            ],
+            "median": 868.6
+          },
+          "n": 1,
+          "budgetMs": 250,
+          "met": false
+        },
+        "histogram": {
+          "p50Ms": {
+            "values": [
+              867.5,
+              894.4,
+              877.2
+            ],
+            "median": 877.2
+          },
+          "p95Ms": {
+            "values": [
+              867.5,
+              894.4,
+              877.2
+            ],
+            "median": 877.2
+          },
+          "n": 1,
+          "budgetMs": 250,
+          "met": false
+        },
+        "heatmap": {
+          "p50Ms": {
+            "values": [
+              1041.8,
+              985.8,
+              1059.2
+            ],
+            "median": 1041.8
+          },
+          "p95Ms": {
+            "values": [
+              1041.8,
+              985.8,
+              1059.2
+            ],
+            "median": 1041.8
+          },
+          "n": 1,
+          "budgetMs": 250,
+          "met": false
+        }
+      },
+      "met": false
+    },
+    "crossfilter": {
+      "p50Ms": {
+        "values": [
+          69,
+          69.1,
+          66.7
+        ],
+        "median": 69
+      },
+      "p95Ms": {
+        "values": [
+          99.2,
+          78.2,
+          83.5
+        ],
+        "median": 83.5
+      },
+      "maxMs": {
+        "values": [
+          131.8,
+          83.7,
+          108.3
+        ],
+        "median": 108.3
+      },
+      "brushes": 20,
+      "viewsFromCube": [
+        80,
+        80,
+        80
+      ],
+      "views": [
+        100,
+        100,
+        100
+      ],
+      "perViewP95Ms": {
+        "chart": {
+          "values": [
+            75.9,
+            75.9,
+            81.8
+          ],
+          "median": 75.9
+        },
+        "grid:count": {
+          "values": [
+            53.5,
+            59.7,
+            52.5
+          ],
+          "median": 53.5
+        },
+        "grid:rows": {
+          "values": [
+            99.2,
+            74,
+            78.9
+          ],
+          "median": 78.9
+        }
+      },
+      "budgetMs": 100,
+      "met": true
+    },
+    "firstBrush": {
+      "ms": {
+        "values": [
+          4908.3,
+          6170.6,
+          5355.3
+        ],
+        "median": 5355.3
+      },
+      "cubesReadyMs": {
+        "values": [
+          5421.5,
+          6635.8,
+          5901.7
+        ],
+        "median": 5901.7
+      },
+      "cubeCells": [
+        {
+          "status": "ready",
+          "rows": 17343
+        },
+        {
+          "status": "ready",
+          "rows": 153
+        },
+        {
+          "status": "ready",
+          "rows": 360
+        },
+        {
+          "status": "ready",
+          "rows": 31
+        }
+      ]
+    }
+  }
+}

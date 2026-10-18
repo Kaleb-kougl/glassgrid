@@ -493,15 +493,17 @@ Result: met on the Linux dev VM (medians of three 10M-row E2E runs): first rows 
 
 ### M3 · Charts and cross-filtering (week 3)
 
-- [ ] Canvas chart layer on `d3-scale` / `d3-shape`: bar, line with M4, area, histogram, heatmap
-- [ ] Shared WebGL overlay for scatter above \~10K points
-- [ ] Drag-to-chart with the default chart rules; shelves; tooltips; "View data"
-- [ ] `FilterStore`, brush and click selection, filter chips, live row count
-- [ ] Commands `addChart`, `setShelf`, `brush`, `clearFilter`
+- [x] Canvas chart layer on `d3-scale` / `d3-shape`: bar, line with M4, area, histogram, heatmap
+- [x] Shared WebGL overlay for scatter above \~10K points
+- [x] Drag-to-chart with the default chart rules; shelves; tooltips; "View data"
+- [x] `FilterStore`, brush and click selection, filter chips, live row count
+- [x] Commands `addChart`, `setShelf`, `brush`, `clearFilter`
 
 **Exit gate:** every v1 budget in Performance budgets green in CI, including chart create < 250 ms and cross-filter p95 < 100 ms.
 
 **Demo:** four linked charts and the grid on the NYC taxi dataset.
+
+Result: partly met on the Linux dev VM (medians of three 10M-row E2E runs on the Parquet copy, four charts + grid): cross-filter p50 70.7 ms, **p95 98.8 ms** (cubes; raw CSV p95 83.5 ms once its cubes are built, first brush 5.4 s); chart create p50/p95 bar 74/87 ms and histogram 157/191 ms met, **line 245/289 ms and heatmap 238/266 ms missed** at p95 (bound by the aggregate on two cores); first brush including cube build 350 ms. The `FilterStore` is the workspace's `selections` + `userFilters` (core's cross-filter model). The demo runs on a taxi-like fixture; see [M3 notes](m3-notes.md).
 
 ### M4 · Persistence and web demo (week 4)
 

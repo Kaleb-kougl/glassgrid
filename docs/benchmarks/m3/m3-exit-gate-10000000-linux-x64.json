@@ -1,0 +1,2674 @@
+{
+  "benchmark": "m3-exit-gate",
+  "milestone": "M3",
+  "exitGate": {
+    "name": "chart create (drop -> drawn) p50/p95 < 250 ms per mark; cross-filter (brush end -> last view painted) p95 < 100 ms over 20 brushes; 4 charts + grid",
+    "source": "parquet",
+    "chartCreate": {
+      "perMark": {
+        "line": {
+          "n": 6,
+          "min": 224.90000000037253,
+          "p50": 247.7000000011176,
+          "p95": 319.1000000014901,
+          "max": 319.1000000014901,
+          "mean": 258.5000000003104,
+          "budgetMs": 250,
+          "met": false
+        },
+        "bar": {
+          "n": 6,
+          "min": 62.59999999962747,
+          "p50": 73.59999999962747,
+          "p95": 79.59999999962747,
+          "max": 79.59999999962747,
+          "mean": 73.86666666654249,
+          "budgetMs": 250,
+          "met": true
+        },
+        "histogram": {
+          "n": 6,
+          "min": 154.09999999962747,
+          "p50": 168.2000000011176,
+          "p95": 186.30000000074506,
+          "max": 186.30000000074506,
+          "mean": 170.71666666679084,
+          "budgetMs": 250,
+          "met": true
+        },
+        "heatmap": {
+          "n": 6,
+          "min": 216.30000000074506,
+          "p50": 224.5,
+          "p95": 301.40000000037253,
+          "max": 301.40000000037253,
+          "mean": 240.6666666669771,
+          "budgetMs": 250,
+          "met": false
+        }
+      },
+      "met": false
+    },
+    "crossfilter": {
+      "n": 20,
+      "min": 55.09999999962747,
+      "p50": 70.69999999925494,
+      "p95": 100.5,
+      "max": 131.5,
+      "mean": 75.94500000001862,
+      "budgetMs": 100,
+      "met": false,
+      "viewsFromCube": 80,
+      "views": 100,
+      "perView": {
+        "grid:count": {
+          "n": 20,
+          "min": 23.40000000037253,
+          "p50": 34.90000000037253,
+          "p95": 54.59999999962747,
+          "max": 63.59999999962747,
+          "mean": 37.27500000018627
+        },
+        "chart": {
+          "n": 60,
+          "min": 29.40000000037253,
+          "p50": 53.40000000037253,
+          "p95": 84.19999999925494,
+          "max": 100.5,
+          "mean": 55.726666666722544
+        },
+        "grid:rows": {
+          "n": 20,
+          "min": 44.90000000037253,
+          "p50": 67.09999999962747,
+          "p95": 93.59999999962747,
+          "max": 131.5,
+          "mean": 68.76500000013039
+        }
+      }
+    },
+    "firstBrush": {
+      "ms": 283.5,
+      "cubesReadyMs": 756.8000000007451,
+      "cubes": [
+        {
+          "status": "ready",
+          "rows": 17343
+        },
+        {
+          "status": "ready",
+          "rows": 153
+        },
+        {
+          "status": "ready",
+          "rows": 360
+        },
+        {
+          "status": "ready",
+          "rows": 31
+        }
+      ]
+    },
+    "met": false
+  },
+  "rawCsv": {
+    "source": "csv",
+    "chartCreate": {
+      "perMark": {
+        "line": {
+          "n": 1,
+          "min": 1220.6000000014901,
+          "p50": 1220.6000000014901,
+          "p95": 1220.6000000014901,
+          "max": 1220.6000000014901,
+          "mean": 1220.6000000014901,
+          "budgetMs": 250,
+          "met": false
+        },
+        "bar": {
+          "n": 1,
+          "min": 819.5,
+          "p50": 819.5,
+          "p95": 819.5,
+          "max": 819.5,
+          "mean": 819.5,
+          "budgetMs": 250,
+          "met": false
+        },
+        "histogram": {
+          "n": 1,
+          "min": 877.1999999992549,
+          "p50": 877.1999999992549,
+          "p95": 877.1999999992549,
+          "max": 877.1999999992549,
+          "mean": 877.1999999992549,
+          "budgetMs": 250,
+          "met": false
+        },
+        "heatmap": {
+          "n": 1,
+          "min": 1059.2000000011176,
+          "p50": 1059.2000000011176,
+          "p95": 1059.2000000011176,
+          "max": 1059.2000000011176,
+          "mean": 1059.2000000011176,
+          "budgetMs": 250,
+          "met": false
+        }
+      },
+      "met": false
+    },
+    "crossfilter": {
+      "n": 20,
+      "min": 47.09999999962747,
+      "p50": 66.69999999925494,
+      "p95": 83.5,
+      "max": 108.29999999888241,
+      "mean": 70.15999999949709,
+      "budgetMs": 100,
+      "met": true,
+      "viewsFromCube": 80,
+      "views": 100,
+      "perView": {
+        "grid:count": {
+          "n": 20,
+          "min": 27.199999999254942,
+          "p50": 39.79999999888241,
+          "p95": 52.5,
+          "max": 60.59999999962747,
+          "mean": 40.389999999757855
+        },
+        "chart": {
+          "n": 60,
+          "min": 22.399999998509884,
+          "p50": 53.59999999962747,
+          "p95": 81.80000000074506,
+          "max": 108.29999999888241,
+          "mean": 54.67999999982615
+        },
+        "grid:rows": {
+          "n": 20,
+          "min": 41.899999998509884,
+          "p50": 61.80000000074506,
+          "p95": 78.90000000037253,
+          "max": 89.09999999962747,
+          "mean": 64.10999999959022
+        }
+      }
+    },
+    "firstBrush": {
+      "ms": 5355.300000000745,
+      "cubesReadyMs": 5901.699999999255,
+      "cubes": [
+        {
+          "status": "ready",
+          "rows": 17343
+        },
+        {
+          "status": "ready",
+          "rows": 153
+        },
+        {
+          "status": "ready",
+          "rows": 360
+        },
+        {
+          "status": "ready",
+          "rows": 31
+        }
+      ]
+    }
+  },
+  "recordedAt": "2026-10-18T15:22:26.948Z",
+  "rows": 10000000,
+  "fileBytes": 406530704,
+  "machine": {
+    "platform": "linux",
+    "arch": "x64",
+    "cpuModel": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "cpuCount": 2,
+    "totalMemBytes": 8419655680,
+    "ci": false
+  },
+  "versions": {
+    "electron": "44.9.0",
+    "chrome": "152.0.7977.167",
+    "node": "24.22.0",
+    "duckdbNodeApi": "1.5.6-r.1"
+  },
+  "packaged": false,
+  "samples": {
+    "parquet": {
+      "source": "parquet",
+      "creates": [
+        {
+          "mark": "line",
+          "ms": 264.19999999925494,
+          "engineMs": 224.19572599999992,
+          "cached": false,
+          "rows": 744,
+          "filtered": false
+        },
+        {
+          "mark": "bar",
+          "ms": 69.59999999962747,
+          "engineMs": 48.38131799999974,
+          "cached": false,
+          "rows": 5,
+          "filtered": false
+        },
+        {
+          "mark": "histogram",
+          "ms": 168.2000000011176,
+          "engineMs": 154.51538400000027,
+          "cached": false,
+          "rows": 31,
+          "filtered": false
+        },
+        {
+          "mark": "heatmap",
+          "ms": 301.40000000037253,
+          "engineMs": 261.71119999999974,
+          "cached": false,
+          "rows": 360,
+          "filtered": false
+        },
+        {
+          "mark": "line",
+          "ms": 224.90000000037253,
+          "engineMs": 209.10125799999878,
+          "cached": false,
+          "rows": 744,
+          "filtered": true
+        },
+        {
+          "mark": "bar",
+          "ms": 73.59999999962747,
+          "engineMs": 66.36610100000325,
+          "cached": false,
+          "rows": 5,
+          "filtered": true
+        },
+        {
+          "mark": "histogram",
+          "ms": 176,
+          "engineMs": 169.0631489999978,
+          "cached": false,
+          "rows": 31,
+          "filtered": true
+        },
+        {
+          "mark": "heatmap",
+          "ms": 232.40000000037253,
+          "engineMs": 208.04029600000285,
+          "cached": false,
+          "rows": 360,
+          "filtered": true
+        },
+        {
+          "mark": "line",
+          "ms": 319.1000000014901,
+          "engineMs": 296.91384200000175,
+          "cached": false,
+          "rows": 744,
+          "filtered": true
+        },
+        {
+          "mark": "bar",
+          "ms": 79.59999999962747,
+          "engineMs": 72.12895999999455,
+          "cached": false,
+          "rows": 5,
+          "filtered": true
+        },
+        {
+          "mark": "histogram",
+          "ms": 162,
+          "engineMs": 154.3003779999999,
+          "cached": false,
+          "rows": 31,
+          "filtered": true
+        },
+        {
+          "mark": "heatmap",
+          "ms": 249.30000000074506,
+          "engineMs": 215.58014099999855,
+          "cached": false,
+          "rows": 360,
+          "filtered": true
+        },
+        {
+          "mark": "line",
+          "ms": 269.59999999962747,
+          "engineMs": 250.9432089999973,
+          "cached": false,
+          "rows": 744,
+          "filtered": true
+        },
+        {
+          "mark": "bar",
+          "ms": 62.59999999962747,
+          "engineMs": 57.26267099999677,
+          "cached": false,
+          "rows": 5,
+          "filtered": true
+        },
+        {
+          "mark": "histogram",
+          "ms": 186.30000000074506,
+          "engineMs": 173.54821499999525,
+          "cached": false,
+          "rows": 31,
+          "filtered": true
+        },
+        {
+          "mark": "heatmap",
+          "ms": 216.30000000074506,
+          "engineMs": 200.07900500000687,
+          "cached": false,
+          "rows": 360,
+          "filtered": true
+        },
+        {
+          "mark": "line",
+          "ms": 225.5,
+          "engineMs": 211.94939200000226,
+          "cached": false,
+          "rows": 744,
+          "filtered": true
+        },
+        {
+          "mark": "bar",
+          "ms": 79.5,
+          "engineMs": 73.71277900000132,
+          "cached": false,
+          "rows": 5,
+          "filtered": true
+        },
+        {
+          "mark": "histogram",
+          "ms": 154.09999999962747,
+          "engineMs": 144.9037640000024,
+          "cached": false,
+          "rows": 31,
+          "filtered": true
+        },
+        {
+          "mark": "heatmap",
+          "ms": 220.09999999962747,
+          "engineMs": 197.28227399999741,
+          "cached": false,
+          "rows": 359,
+          "filtered": true
+        },
+        {
+          "mark": "line",
+          "ms": 247.7000000011176,
+          "engineMs": 233.8792070000054,
+          "cached": false,
+          "rows": 744,
+          "filtered": true
+        },
+        {
+          "mark": "bar",
+          "ms": 78.30000000074506,
+          "engineMs": 65.87990400000126,
+          "cached": false,
+          "rows": 5,
+          "filtered": true
+        },
+        {
+          "mark": "histogram",
+          "ms": 177.69999999925494,
+          "engineMs": 168.8919770000066,
+          "cached": false,
+          "rows": 31,
+          "filtered": true
+        },
+        {
+          "mark": "heatmap",
+          "ms": 224.5,
+          "engineMs": 209.38729800000146,
+          "cached": false,
+          "rows": 357,
+          "filtered": true
+        }
+      ],
+      "brushes": [
+        {
+          "ms": 82.10000000149012,
+          "rowCount": 294743,
+          "views": [
+            {
+              "view": "grid:count",
+              "ms": 23.40000000037253,
+              "engineMs": 10.843087000001105,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
+              "ms": 29.40000000037253,
+              "engineMs": 23.49324900000647,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
+              "ms": 41.20000000111759,
+              "engineMs": 27.68418300000485,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:rows",
+              "ms": 76.20000000111759,
+              "engineMs": 44.28918999999587,
+              "fromCube": false,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
+              "ms": 82.10000000149012,
+              "engineMs": 71.63362799999595,
+              "fromCube": true,
+              "cached": false
+            }
+          ],
+          "filters": [
+            {
+              "kind": "range",
+              "column": "trip_distance",
+              "min": 9,
+              "max": 16,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          ]
+        },
+        {
+          "ms": 100.5,
+          "rowCount": 3659919,
+          "views": [
+            {
+              "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
+              "ms": 43.29999999888241,
+              "engineMs": 21.994160999995074,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
+              "ms": 52.09999999962747,
+              "engineMs": 25.398004000002402,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:count",
+              "ms": 54.59999999962747,
+              "engineMs": 18.737779000002774,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:rows",
+              "ms": 67.09999999962747,
+              "engineMs": 28.69419200000266,
+              "fromCube": false,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
+              "ms": 100.5,
+              "engineMs": 88.76450099999784,
+              "fromCube": true,
+              "cached": false
+            }
+          ],
+          "filters": [
+            {
+              "kind": "range",
+              "column": "trip_distance",
+              "min": 2,
+              "max": 6,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          ]
+        },
+        {
+          "ms": 72.70000000111759,
+          "rowCount": 449618,
+          "views": [
+            {
+              "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
+              "ms": 33.80000000074506,
+              "engineMs": 22.03052399999433,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
+              "ms": 44.5,
+              "engineMs": 19.43617500000255,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:count",
+              "ms": 48.70000000111759,
+              "engineMs": 18.539489000002504,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
+              "ms": 65.70000000111759,
+              "engineMs": 49.39604200000031,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:rows",
+              "ms": 72.70000000111759,
+              "engineMs": 32.902196999995795,
+              "fromCube": false,
+              "cached": false
+            }
+          ],
+          "filters": [
+            {
+              "kind": "range",
+              "column": "trip_distance",
+              "min": 8,
+              "max": 17,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          ]
+        },
+        {
+          "ms": 61.5,
+          "rowCount": 3026505,
+          "views": [
+            {
+              "view": "grid:count",
+              "ms": 35.20000000111759,
+              "engineMs": 9.319583999997121,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
+              "ms": 46.5,
+              "engineMs": 20.662789999994857,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
+              "ms": 49.100000001490116,
+              "engineMs": 20.94802200000413,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:rows",
+              "ms": 54.100000001490116,
+              "engineMs": 22.63833099999465,
+              "fromCube": false,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
+              "ms": 61.5,
+              "engineMs": 43.25810999999521,
+              "fromCube": true,
+              "cached": false
+            }
+          ],
+          "filters": [
+            {
+              "kind": "range",
+              "column": "trip_distance",
+              "min": 3,
+              "max": 11,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          ]
+        },
+        {
+          "ms": 57.20000000111759,
+          "rowCount": 954578,
+          "views": [
+            {
+              "view": "grid:count",
+              "ms": 32.30000000074506,
+              "engineMs": 16.18508799999836,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
+              "ms": 38.40000000037253,
+              "engineMs": 19.20770800000173,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
+              "ms": 41,
+              "engineMs": 19.559603000001516,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:rows",
+              "ms": 51.30000000074506,
+              "engineMs": 22.54312899999786,
+              "fromCube": false,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
+              "ms": 57.20000000111759,
+              "engineMs": 43.08194700000604,
+              "fromCube": true,
+              "cached": false
+            }
+          ],
+          "filters": [
+            {
+              "kind": "range",
+              "column": "trip_distance",
+              "min": 6,
+              "max": 14,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          ]
+        },
+        {
+          "ms": 70.30000000074506,
+          "rowCount": 4639306,
+          "views": [
+            {
+              "view": "grid:count",
+              "ms": 31.100000001490116,
+              "engineMs": 16.311145999992732,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
+              "ms": 38.30000000074506,
+              "engineMs": 21.597695000004023,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
+              "ms": 55.80000000074506,
+              "engineMs": 42.91507000000274,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
+              "ms": 56.20000000111759,
+              "engineMs": 40.515220000001136,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:rows",
+              "ms": 70.30000000074506,
+              "engineMs": 34.28133699999307,
+              "fromCube": false,
+              "cached": false
+            }
+          ],
+          "filters": [
+            {
+              "kind": "range",
+              "column": "trip_distance",
+              "min": 2,
+              "max": 16,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          ]
+        },
+        {
+          "ms": 74,
+          "rowCount": 45965,
+          "views": [
+            {
+              "view": "grid:count",
+              "ms": 44.40000000037253,
+              "engineMs": 24.052385000002687,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
+              "ms": 54.69999999925494,
+              "engineMs": 34.91726500001096,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
+              "ms": 59.69999999925494,
+              "engineMs": 30.950148000003537,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
+              "ms": 60.09999999962747,
+              "engineMs": 32.8778389999934,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:rows",
+              "ms": 74,
+              "engineMs": 34.25924400000076,
+              "fromCube": false,
+              "cached": false
+            }
+          ],
+          "filters": [
+            {
+              "kind": "range",
+              "column": "trip_distance",
+              "min": 14,
+              "max": 28,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          ]
+        },
+        {
+          "ms": 62.40000000037253,
+          "rowCount": 1696070,
+          "views": [
+            {
+              "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
+              "ms": 37.5,
+              "engineMs": 14.854403000004822,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
+              "ms": 43,
+              "engineMs": 21.616571000005933,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:count",
+              "ms": 45,
+              "engineMs": 14.4918539999926,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
+              "ms": 57,
+              "engineMs": 36.94761999999173,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:rows",
+              "ms": 62.40000000037253,
+              "engineMs": 28.718860000008135,
+              "fromCube": false,
+              "cached": false
+            }
+          ],
+          "filters": [
+            {
+              "kind": "range",
+              "column": "trip_distance",
+              "min": 4,
+              "max": 8,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          ]
+        },
+        {
+          "ms": 131.5,
+          "rowCount": 11506,
+          "views": [
+            {
+              "view": "grid:count",
+              "ms": 43.40000000037253,
+              "engineMs": 23.61100799999258,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
+              "ms": 60.30000000074506,
+              "engineMs": 29.084656999999424,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
+              "ms": 70.70000000111759,
+              "engineMs": 32.06421799999953,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
+              "ms": 99.10000000149012,
+              "engineMs": 67.0716689999972,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:rows",
+              "ms": 131.5,
+              "engineMs": 80.63532400000258,
+              "fromCube": false,
+              "cached": false
+            }
+          ],
+          "filters": [
+            {
+              "kind": "range",
+              "column": "trip_distance",
+              "min": 17,
+              "max": 21,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          ]
+        },
+        {
+          "ms": 64.69999999925494,
+          "rowCount": 1703642,
+          "views": [
+            {
+              "view": "grid:count",
+              "ms": 37,
+              "engineMs": 16.844041000003926,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
+              "ms": 41.59999999962747,
+              "engineMs": 19.619135999993887,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
+              "ms": 49.40000000037253,
+              "engineMs": 18.61375699999917,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:rows",
+              "ms": 56.69999999925494,
+              "engineMs": 23.542935000004945,
+              "fromCube": false,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
+              "ms": 64.69999999925494,
+              "engineMs": 50.46173700000509,
+              "fromCube": true,
+              "cached": false
+            }
+          ],
+          "filters": [
+            {
+              "kind": "range",
+              "column": "trip_distance",
+              "min": 3,
+              "max": 5,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          ]
+        },
+        {
+          "ms": 70.69999999925494,
+          "rowCount": 146363,
+          "views": [
+            {
+              "view": "grid:count",
+              "ms": 26,
+              "engineMs": 16.136472999991383,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
+              "ms": 30.5,
+              "engineMs": 20.096353000000818,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
+              "ms": 37.69999999925494,
+              "engineMs": 27.50050100000226,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:rows",
+              "ms": 62.29999999888241,
+              "engineMs": 50.40442500000063,
+              "fromCube": false,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
+              "ms": 70.69999999925494,
+              "engineMs": 55.76535599998897,
+              "fromCube": true,
+              "cached": false
+            }
+          ],
+          "filters": [
+            {
+              "kind": "range",
+              "column": "trip_distance",
+              "min": 11,
+              "max": 27,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          ]
+        },
+        {
+          "ms": 69.89999999850988,
+          "rowCount": 3127001,
+          "views": [
+            {
+              "view": "grid:count",
+              "ms": 38.899999998509884,
+              "engineMs": 15.337847000002512,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
+              "ms": 49.399999998509884,
+              "engineMs": 17.693637000003946,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
+              "ms": 51.899999998509884,
+              "engineMs": 28.22393799999554,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
+              "ms": 57,
+              "engineMs": 39.163109000000986,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:rows",
+              "ms": 69.89999999850988,
+              "engineMs": 26.39561799999501,
+              "fromCube": false,
+              "cached": false
+            }
+          ],
+          "filters": [
+            {
+              "kind": "range",
+              "column": "trip_distance",
+              "min": 3,
+              "max": 14,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          ]
+        },
+        {
+          "ms": 61.79999999888241,
+          "rowCount": 986137,
+          "views": [
+            {
+              "view": "grid:count",
+              "ms": 28.59999999962747,
+              "engineMs": 17.702231999996002,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
+              "ms": 38.19999999925494,
+              "engineMs": 18.48649799999839,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
+              "ms": 48.59999999962747,
+              "engineMs": 27.796200999990106,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
+              "ms": 58.09999999962747,
+              "engineMs": 47.49409900000319,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:rows",
+              "ms": 61.79999999888241,
+              "engineMs": 35.46923199998855,
+              "fromCube": false,
+              "cached": false
+            }
+          ],
+          "filters": [
+            {
+              "kind": "range",
+              "column": "trip_distance",
+              "min": 6,
+              "max": 17,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          ]
+        },
+        {
+          "ms": 67.10000000149012,
+          "rowCount": 4657562,
+          "views": [
+            {
+              "view": "grid:count",
+              "ms": 34.90000000037253,
+              "engineMs": 17.272315000009257,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
+              "ms": 39.5,
+              "engineMs": 21.43616199999815,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
+              "ms": 49.100000001490116,
+              "engineMs": 21.10786200000439,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:rows",
+              "ms": 51.600000001490116,
+              "engineMs": 34.84326899998996,
+              "fromCube": false,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
+              "ms": 67.10000000149012,
+              "engineMs": 56.766208000000915,
+              "fromCube": true,
+              "cached": false
+            }
+          ],
+          "filters": [
+            {
+              "kind": "range",
+              "column": "trip_distance",
+              "min": 2,
+              "max": 21,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          ]
+        },
+        {
+          "ms": 84.19999999925494,
+          "rowCount": 1468576,
+          "views": [
+            {
+              "view": "grid:count",
+              "ms": 29.90000000037253,
+              "engineMs": 17.012979999999516,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
+              "ms": 37.69999999925494,
+              "engineMs": 28.460582999992766,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
+              "ms": 48.79999999888241,
+              "engineMs": 27.739547000004677,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:rows",
+              "ms": 76.59999999962747,
+              "engineMs": 39.049910000001546,
+              "fromCube": false,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
+              "ms": 84.19999999925494,
+              "engineMs": 70.59760599999572,
+              "fromCube": true,
+              "cached": false
+            }
+          ],
+          "filters": [
+            {
+              "kind": "range",
+              "column": "trip_distance",
+              "min": 5,
+              "max": 24,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          ]
+        },
+        {
+          "ms": 86.29999999888241,
+          "rowCount": 215179,
+          "views": [
+            {
+              "view": "grid:count",
+              "ms": 40.59999999962747,
+              "engineMs": 16.961557000002358,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:rows",
+              "ms": 53.19999999925494,
+              "engineMs": 24.57951999999932,
+              "fromCube": false,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
+              "ms": 59.09999999962747,
+              "engineMs": 17.968915000004927,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
+              "ms": 63.59999999962747,
+              "engineMs": 31.67263400000229,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
+              "ms": 86.29999999888241,
+              "engineMs": 62.798480000012205,
+              "fromCube": true,
+              "cached": false
+            }
+          ],
+          "filters": [
+            {
+              "kind": "range",
+              "column": "trip_distance",
+              "min": 10,
+              "max": 29,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          ]
+        },
+        {
+          "ms": 76.80000000074506,
+          "rowCount": 2491747,
+          "views": [
+            {
+              "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
+              "ms": 53.40000000037253,
+              "engineMs": 15.090981000001193,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
+              "ms": 60.5,
+              "engineMs": 22.511553999996977,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:count",
+              "ms": 63.59999999962747,
+              "engineMs": 25.72981799999252,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
+              "ms": 70.40000000037253,
+              "engineMs": 43.60158099999535,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:rows",
+              "ms": 76.80000000074506,
+              "engineMs": 23.946369999990566,
+              "fromCube": false,
+              "cached": false
+            }
+          ],
+          "filters": [
+            {
+              "kind": "range",
+              "column": "trip_distance",
+              "min": 3,
+              "max": 7,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          ]
+        },
+        {
+          "ms": 55.09999999962747,
+          "rowCount": 432829,
+          "views": [
+            {
+              "view": "grid:count",
+              "ms": 28.59999999962747,
+              "engineMs": 15.899169999989681,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:rows",
+              "ms": 44.90000000037253,
+              "engineMs": 24.468041000000085,
+              "fromCube": false,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
+              "ms": 50.59999999962747,
+              "engineMs": 31.10999300000549,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
+              "ms": 51.30000000074506,
+              "engineMs": 30.19961300000432,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
+              "ms": 55.09999999962747,
+              "engineMs": 39.03497300000163,
+              "fromCube": true,
+              "cached": false
+            }
+          ],
+          "filters": [
+            {
+              "kind": "range",
+              "column": "trip_distance",
+              "min": 8,
+              "max": 15,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          ]
+        },
+        {
+          "ms": 93.59999999962747,
+          "rowCount": 2160160,
+          "views": [
+            {
+              "view": "grid:count",
+              "ms": 28.5,
+              "engineMs": 15.827486999987741,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
+              "ms": 51.40000000037253,
+              "engineMs": 25.77004799999122,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
+              "ms": 69.19999999925494,
+              "engineMs": 31.43872300001385,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
+              "ms": 73,
+              "engineMs": 46.26861000001372,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:rows",
+              "ms": 93.59999999962747,
+              "engineMs": 41.73740800000087,
+              "fromCube": false,
+              "cached": false
+            }
+          ],
+          "filters": [
+            {
+              "kind": "range",
+              "column": "trip_distance",
+              "min": 4,
+              "max": 29,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          ]
+        },
+        {
+          "ms": 76.5,
+          "rowCount": 1000753,
+          "views": [
+            {
+              "view": "grid:count",
+              "ms": 30.800000000745058,
+              "engineMs": 15.839824999988195,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
+              "ms": 49.80000000074506,
+              "engineMs": 22.67508899999666,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:rows",
+              "ms": 68.30000000074506,
+              "engineMs": 15.35787999999593,
+              "fromCube": false,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
+              "ms": 70.5,
+              "engineMs": 23.402384000000893,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
+              "ms": 76.5,
+              "engineMs": 40.406546999991406,
+              "fromCube": true,
+              "cached": false
+            }
+          ],
+          "filters": [
+            {
+              "kind": "range",
+              "column": "trip_distance",
+              "min": 6,
+              "max": 31,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          ]
+        }
+      ],
+      "firstBrush": {
+        "ms": 283.5,
+        "rowCount": 4344563,
+        "views": [
+          {
+            "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
+            "ms": 39.5,
+            "engineMs": 17.17818800000532,
+            "fromCube": true,
+            "cached": false
+          },
+          {
+            "view": "grid:count",
+            "ms": 41.40000000037253,
+            "engineMs": 18.41136700000061,
+            "fromCube": true,
+            "cached": false
+          },
+          {
+            "view": "grid:rows",
+            "ms": 79.59999999962747,
+            "engineMs": 35.65610200000083,
+            "fromCube": false,
+            "cached": false
+          },
+          {
+            "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
+            "ms": 175.5,
+            "engineMs": 154.83566599999904,
+            "fromCube": true,
+            "cached": false
+          },
+          {
+            "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
+            "ms": 283.5,
+            "engineMs": 267.87571200000093,
+            "fromCube": true,
+            "cached": false
+          }
+        ],
+        "filters": [
+          {
+            "kind": "range",
+            "column": "trip_distance",
+            "min": 2,
+            "max": 9,
+            "minInclusive": true,
+            "maxInclusive": false
+          }
+        ],
+        "prepare": {
+          "ms": 756.8000000007451,
+          "detail": {
+            "source": "chart_7a6eede6-f00f-4562-8dc4-f234179024f8",
+            "dimension": "trip_distance width 1",
+            "cubes": [
+              {
+                "status": "ready",
+                "rows": 17343
+              },
+              {
+                "status": "ready",
+                "rows": 153
+              },
+              {
+                "status": "ready",
+                "rows": 360
+              },
+              {
+                "status": "ready",
+                "rows": 31
+              }
+            ],
+            "engineMs": 752.359086000004
+          }
+        }
+      }
+    },
+    "csv": {
+      "source": "csv",
+      "creates": [
+        {
+          "mark": "line",
+          "ms": 1220.6000000014901,
+          "engineMs": 1178.6708619999995,
+          "cached": false,
+          "rows": 744,
+          "filtered": false
+        },
+        {
+          "mark": "bar",
+          "ms": 819.5,
+          "engineMs": 808.5279919999994,
+          "cached": false,
+          "rows": 5,
+          "filtered": false
+        },
+        {
+          "mark": "histogram",
+          "ms": 877.1999999992549,
+          "engineMs": 861.297305,
+          "cached": false,
+          "rows": 31,
+          "filtered": false
+        },
+        {
+          "mark": "heatmap",
+          "ms": 1059.2000000011176,
+          "engineMs": 1032.6262820000002,
+          "cached": false,
+          "rows": 360,
+          "filtered": false
+        }
+      ],
+      "brushes": [
+        {
+          "ms": 108.29999999888241,
+          "rowCount": 294743,
+          "views": [
+            {
+              "view": "grid:count",
+              "ms": 52.5,
+              "engineMs": 29.66902999999911,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
+              "ms": 69.79999999888241,
+              "engineMs": 37.81130600000142,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
+              "ms": 79.40000000037253,
+              "engineMs": 41.58624299999974,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:rows",
+              "ms": 89.09999999962747,
+              "engineMs": 37.418768999999884,
+              "fromCube": false,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
+              "ms": 108.29999999888241,
+              "engineMs": 86.92599999999948,
+              "fromCube": true,
+              "cached": false
+            }
+          ],
+          "filters": [
+            {
+              "kind": "range",
+              "column": "trip_distance",
+              "min": 9,
+              "max": 16,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          ]
+        },
+        {
+          "ms": 81.80000000074506,
+          "rowCount": 3659919,
+          "views": [
+            {
+              "view": "grid:count",
+              "ms": 49.80000000074506,
+              "engineMs": 23.707198000000062,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:rows",
+              "ms": 61.80000000074506,
+              "engineMs": 27.349072999999407,
+              "fromCube": false,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
+              "ms": 71.59999999962747,
+              "engineMs": 37.43140900000071,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
+              "ms": 72.80000000074506,
+              "engineMs": 35.61613500000021,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
+              "ms": 81.80000000074506,
+              "engineMs": 55.43179500000042,
+              "fromCube": true,
+              "cached": false
+            }
+          ],
+          "filters": [
+            {
+              "kind": "range",
+              "column": "trip_distance",
+              "min": 2,
+              "max": 6,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          ]
+        },
+        {
+          "ms": 63.399999998509884,
+          "rowCount": 449618,
+          "views": [
+            {
+              "view": "grid:count",
+              "ms": 32.79999999888241,
+              "engineMs": 9.747391000000789,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:rows",
+              "ms": 48.59999999962747,
+              "engineMs": 27.3628069999977,
+              "fromCube": false,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
+              "ms": 51.19999999925494,
+              "engineMs": 25.502479000002495,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
+              "ms": 55.19999999925494,
+              "engineMs": 36.64673599999878,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
+              "ms": 63.399999998509884,
+              "engineMs": 51.68859100000191,
+              "fromCube": true,
+              "cached": false
+            }
+          ],
+          "filters": [
+            {
+              "kind": "range",
+              "column": "trip_distance",
+              "min": 8,
+              "max": 17,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          ]
+        },
+        {
+          "ms": 82.09999999962747,
+          "rowCount": 3026505,
+          "views": [
+            {
+              "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
+              "ms": 35.40000000037253,
+              "engineMs": 20.755737999999837,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
+              "ms": 46.59999999962747,
+              "engineMs": 22.744924000002356,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:count",
+              "ms": 50,
+              "engineMs": 20.34591299999738,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:rows",
+              "ms": 70.19999999925494,
+              "engineMs": 41.613470000000234,
+              "fromCube": false,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
+              "ms": 82.09999999962747,
+              "engineMs": 60.04174100000091,
+              "fromCube": true,
+              "cached": false
+            }
+          ],
+          "filters": [
+            {
+              "kind": "range",
+              "column": "trip_distance",
+              "min": 3,
+              "max": 11,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          ]
+        },
+        {
+          "ms": 60.80000000074506,
+          "rowCount": 954578,
+          "views": [
+            {
+              "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
+              "ms": 32.600000001490116,
+              "engineMs": 20.202696000000287,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:count",
+              "ms": 43.600000001490116,
+              "engineMs": 18.598578000000998,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
+              "ms": 49.5,
+              "engineMs": 23.283525999999256,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
+              "ms": 60.100000001490116,
+              "engineMs": 51.73533700000189,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:rows",
+              "ms": 60.80000000074506,
+              "engineMs": 28.580430000001797,
+              "fromCube": false,
+              "cached": false
+            }
+          ],
+          "filters": [
+            {
+              "kind": "range",
+              "column": "trip_distance",
+              "min": 6,
+              "max": 14,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          ]
+        },
+        {
+          "ms": 53.09999999962747,
+          "rowCount": 4639306,
+          "views": [
+            {
+              "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
+              "ms": 31.100000001490116,
+              "engineMs": 14.679000000000087,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
+              "ms": 36.100000001490116,
+              "engineMs": 18.421243000000686,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:count",
+              "ms": 41,
+              "engineMs": 17.679164000001037,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
+              "ms": 49.5,
+              "engineMs": 34.559558000000834,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:rows",
+              "ms": 53,
+              "engineMs": 26.51050600000235,
+              "fromCube": false,
+              "cached": false
+            }
+          ],
+          "filters": [
+            {
+              "kind": "range",
+              "column": "trip_distance",
+              "min": 2,
+              "max": 16,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          ]
+        },
+        {
+          "ms": 61.399999998509884,
+          "rowCount": 45965,
+          "views": [
+            {
+              "view": "grid:count",
+              "ms": 39.29999999888241,
+              "engineMs": 14.312470999997458,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
+              "ms": 46.69999999925494,
+              "engineMs": 34.46643699999913,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
+              "ms": 55.29999999888241,
+              "engineMs": 42.019328999998834,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
+              "ms": 60.19999999925494,
+              "engineMs": 50.91418599999815,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:rows",
+              "ms": 61.399999998509884,
+              "engineMs": 37.76233200000206,
+              "fromCube": false,
+              "cached": false
+            }
+          ],
+          "filters": [
+            {
+              "kind": "range",
+              "column": "trip_distance",
+              "min": 14,
+              "max": 28,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          ]
+        },
+        {
+          "ms": 66.69999999925494,
+          "rowCount": 1696070,
+          "views": [
+            {
+              "view": "grid:count",
+              "ms": 33.19999999925494,
+              "engineMs": 16.974899999997433,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
+              "ms": 44.09999999962747,
+              "engineMs": 17.96667299999899,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
+              "ms": 51.90000000037253,
+              "engineMs": 32.52205600000161,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
+              "ms": 58,
+              "engineMs": 48.68411600000036,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:rows",
+              "ms": 66.69999999925494,
+              "engineMs": 21.701225999997405,
+              "fromCube": false,
+              "cached": false
+            }
+          ],
+          "filters": [
+            {
+              "kind": "range",
+              "column": "trip_distance",
+              "min": 4,
+              "max": 8,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          ]
+        },
+        {
+          "ms": 78.90000000037253,
+          "rowCount": 11506,
+          "views": [
+            {
+              "view": "grid:count",
+              "ms": 36.80000000074506,
+              "engineMs": 23.580323000001954,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
+              "ms": 44.20000000111759,
+              "engineMs": 26.22472900000139,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
+              "ms": 58.70000000111759,
+              "engineMs": 35.23301399999764,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
+              "ms": 62.70000000111759,
+              "engineMs": 38.95554800000173,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:rows",
+              "ms": 78.90000000037253,
+              "engineMs": 45.856142000000546,
+              "fromCube": false,
+              "cached": false
+            }
+          ],
+          "filters": [
+            {
+              "kind": "range",
+              "column": "trip_distance",
+              "min": 17,
+              "max": 21,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          ]
+        },
+        {
+          "ms": 48.29999999888241,
+          "rowCount": 1703642,
+          "views": [
+            {
+              "view": "grid:count",
+              "ms": 27.199999999254942,
+              "engineMs": 18.337913999999728,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
+              "ms": 34.09999999962747,
+              "engineMs": 20.540016999999352,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
+              "ms": 35.79999999888241,
+              "engineMs": 23.008035999999265,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:rows",
+              "ms": 41.899999998509884,
+              "engineMs": 27.219237000001158,
+              "fromCube": false,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
+              "ms": 48.29999999888241,
+              "engineMs": 36.38591699999961,
+              "fromCube": true,
+              "cached": false
+            }
+          ],
+          "filters": [
+            {
+              "kind": "range",
+              "column": "trip_distance",
+              "min": 3,
+              "max": 5,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          ]
+        },
+        {
+          "ms": 77.19999999925494,
+          "rowCount": 146363,
+          "views": [
+            {
+              "view": "grid:count",
+              "ms": 39.79999999888241,
+              "engineMs": 17.622604000000138,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
+              "ms": 47.59999999962747,
+              "engineMs": 20.262956999999005,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
+              "ms": 66.19999999925494,
+              "engineMs": 25.350625000002765,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
+              "ms": 71.5,
+              "engineMs": 47.595015999999305,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:rows",
+              "ms": 77.09999999962747,
+              "engineMs": 27.766342999999324,
+              "fromCube": false,
+              "cached": false
+            }
+          ],
+          "filters": [
+            {
+              "kind": "range",
+              "column": "trip_distance",
+              "min": 11,
+              "max": 27,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          ]
+        },
+        {
+          "ms": 47.09999999962747,
+          "rowCount": 3127001,
+          "views": [
+            {
+              "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
+              "ms": 22.399999998509884,
+              "engineMs": 14.306980999997904,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:count",
+              "ms": 30.299999998882413,
+              "engineMs": 15.560009999997419,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
+              "ms": 38,
+              "engineMs": 17.39827900000091,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
+              "ms": 44.69999999925494,
+              "engineMs": 30.25353200000245,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:rows",
+              "ms": 47.09999999962747,
+              "engineMs": 23.136914999999135,
+              "fromCube": false,
+              "cached": false
+            }
+          ],
+          "filters": [
+            {
+              "kind": "range",
+              "column": "trip_distance",
+              "min": 3,
+              "max": 14,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          ]
+        },
+        {
+          "ms": 77.29999999888241,
+          "rowCount": 986137,
+          "views": [
+            {
+              "view": "grid:count",
+              "ms": 42,
+              "engineMs": 21.15795900000012,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
+              "ms": 60.09999999962747,
+              "engineMs": 23.585347000000183,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
+              "ms": 69.19999999925494,
+              "engineMs": 24.75454499999978,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
+              "ms": 73.5,
+              "engineMs": 47.488234000000375,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:rows",
+              "ms": 77.29999999888241,
+              "engineMs": 30.53982199999882,
+              "fromCube": false,
+              "cached": false
+            }
+          ],
+          "filters": [
+            {
+              "kind": "range",
+              "column": "trip_distance",
+              "min": 6,
+              "max": 17,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          ]
+        },
+        {
+          "ms": 67.79999999888241,
+          "rowCount": 4657562,
+          "views": [
+            {
+              "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
+              "ms": 22.59999999962747,
+              "engineMs": 15.690601000002061,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:count",
+              "ms": 33.5,
+              "engineMs": 15.557906999998522,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
+              "ms": 51.5,
+              "engineMs": 20.42710200000147,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:rows",
+              "ms": 55,
+              "engineMs": 33.44045499999993,
+              "fromCube": false,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
+              "ms": 67.79999999888241,
+              "engineMs": 45.81275399999868,
+              "fromCube": true,
+              "cached": false
+            }
+          ],
+          "filters": [
+            {
+              "kind": "range",
+              "column": "trip_distance",
+              "min": 2,
+              "max": 21,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          ]
+        },
+        {
+          "ms": 79,
+          "rowCount": 1468576,
+          "views": [
+            {
+              "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
+              "ms": 41.90000000037253,
+              "engineMs": 24.718189999999595,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
+              "ms": 57.09999999962747,
+              "engineMs": 30.010833000000275,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:count",
+              "ms": 60.59999999962747,
+              "engineMs": 25.53530099999989,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:rows",
+              "ms": 68.79999999888241,
+              "engineMs": 44.279356999999436,
+              "fromCube": false,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
+              "ms": 79,
+              "engineMs": 58.19952600000033,
+              "fromCube": true,
+              "cached": false
+            }
+          ],
+          "filters": [
+            {
+              "kind": "range",
+              "column": "trip_distance",
+              "min": 5,
+              "max": 24,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          ]
+        },
+        {
+          "ms": 63.90000000037253,
+          "rowCount": 215179,
+          "views": [
+            {
+              "view": "grid:count",
+              "ms": 43.30000000074506,
+              "engineMs": 26.79523699999845,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
+              "ms": 54.5,
+              "engineMs": 30.189722000002803,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
+              "ms": 58.30000000074506,
+              "engineMs": 35.238758999999845,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
+              "ms": 63.09999999962747,
+              "engineMs": 47.60506499999974,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:rows",
+              "ms": 63.90000000037253,
+              "engineMs": 32.226730000002135,
+              "fromCube": false,
+              "cached": false
+            }
+          ],
+          "filters": [
+            {
+              "kind": "range",
+              "column": "trip_distance",
+              "min": 10,
+              "max": 29,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          ]
+        },
+        {
+          "ms": 77.29999999888241,
+          "rowCount": 2491747,
+          "views": [
+            {
+              "view": "grid:count",
+              "ms": 28.299999998882413,
+              "engineMs": 17.78116500000033,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
+              "ms": 47.19999999925494,
+              "engineMs": 26.47289499999897,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
+              "ms": 53.59999999962747,
+              "engineMs": 26.733033000000432,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
+              "ms": 71.79999999888241,
+              "engineMs": 59.62314500000139,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:rows",
+              "ms": 77.29999999888241,
+              "engineMs": 50.04547199999797,
+              "fromCube": false,
+              "cached": false
+            }
+          ],
+          "filters": [
+            {
+              "kind": "range",
+              "column": "trip_distance",
+              "min": 3,
+              "max": 7,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          ]
+        },
+        {
+          "ms": 65.39999999850988,
+          "rowCount": 432829,
+          "views": [
+            {
+              "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
+              "ms": 39.399999998509884,
+              "engineMs": 21.63234200000079,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:count",
+              "ms": 43.19999999925494,
+              "engineMs": 21.41010599999936,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
+              "ms": 47.59999999962747,
+              "engineMs": 37.13482699999804,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
+              "ms": 60.79999999888241,
+              "engineMs": 47.91625800000111,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:rows",
+              "ms": 65.39999999850988,
+              "engineMs": 22.8845450000008,
+              "fromCube": false,
+              "cached": false
+            }
+          ],
+          "filters": [
+            {
+              "kind": "range",
+              "column": "trip_distance",
+              "min": 8,
+              "max": 15,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          ]
+        },
+        {
+          "ms": 83.5,
+          "rowCount": 2160160,
+          "views": [
+            {
+              "view": "grid:count",
+              "ms": 35.59999999962747,
+              "engineMs": 15.48747000000003,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
+              "ms": 46,
+              "engineMs": 17.33734800000093,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
+              "ms": 57,
+              "engineMs": 23.809848000000784,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:rows",
+              "ms": 58,
+              "engineMs": 24.19824300000255,
+              "fromCube": false,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
+              "ms": 83.5,
+              "engineMs": 49.418625000002066,
+              "fromCube": true,
+              "cached": false
+            }
+          ],
+          "filters": [
+            {
+              "kind": "range",
+              "column": "trip_distance",
+              "min": 4,
+              "max": 29,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          ]
+        },
+        {
+          "ms": 59.90000000037253,
+          "rowCount": 1000753,
+          "views": [
+            {
+              "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
+              "ms": 23.199999999254942,
+              "engineMs": 16.042766999999003,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
+              "ms": 32.40000000037253,
+              "engineMs": 16.110925999997562,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:count",
+              "ms": 45,
+              "engineMs": 17.868537999998807,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
+              "ms": 52.80000000074506,
+              "engineMs": 27.006569000001036,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "grid:rows",
+              "ms": 59.90000000037253,
+              "engineMs": 27.771726000002673,
+              "fromCube": false,
+              "cached": false
+            }
+          ],
+          "filters": [
+            {
+              "kind": "range",
+              "column": "trip_distance",
+              "min": 6,
+              "max": 31,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          ]
+        }
+      ],
+      "firstBrush": {
+        "ms": 5355.300000000745,
+        "rowCount": 4344563,
+        "views": [
+          {
+            "view": "grid:rows",
+            "ms": 215.69999999925494,
+            "engineMs": 131.74233800000002,
+            "fromCube": false,
+            "cached": false
+          },
+          {
+            "view": "grid:count",
+            "ms": 1387.5,
+            "engineMs": 1312.178366,
+            "fromCube": true,
+            "cached": false
+          },
+          {
+            "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
+            "ms": 2738.89999999851,
+            "engineMs": 2658.641667,
+            "fromCube": true,
+            "cached": false
+          },
+          {
+            "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
+            "ms": 4265.0999999996275,
+            "engineMs": 4160.072181,
+            "fromCube": true,
+            "cached": false
+          },
+          {
+            "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
+            "ms": 5355.199999999255,
+            "engineMs": 5265.818524,
+            "fromCube": true,
+            "cached": false
+          }
+        ],
+        "filters": [
+          {
+            "kind": "range",
+            "column": "trip_distance",
+            "min": 2,
+            "max": 9,
+            "minInclusive": true,
+            "maxInclusive": false
+          }
+        ],
+        "prepare": {
+          "ms": 5901.699999999255,
+          "detail": {
+            "source": "chart_a74b5505-35db-44a7-97b7-022758fde2a7",
+            "dimension": "trip_distance width 1",
+            "cubes": [
+              {
+                "status": "ready",
+                "rows": 17343
+              },
+              {
+                "status": "ready",
+                "rows": 153
+              },
+              {
+                "status": "ready",
+                "rows": 360
+              },
+              {
+                "status": "ready",
+                "rows": 31
+              }
+            ],
+            "engineMs": 5892.332093000001
+          }
+        }
+      }
+    }
+  }
+}
