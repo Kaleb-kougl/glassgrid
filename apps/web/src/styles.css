@@ -170,3 +170,7 @@ body {
   border-radius: var(--gg-radius-control);
   overflow: hidden;
 }
+
+.sheet__grid--tall {
+  height: 420px;
+}
