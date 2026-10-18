@@ -487,11 +487,14 @@ test.describe('data path', () => {
 
     // Copy: copySelection through the registry and the preload clipboard.
     await page.keyboard.press(`${process.platform === 'darwin' ? 'Meta' : 'Control'}+KeyC`);
-    await expect(page.getByRole('status').filter({ hasText: 'Copied 3 rows × 2 columns.' })).toBeVisible();
+    const copiedToast = page.getByRole('status').filter({ hasText: 'Copied 3 rows × 2 columns.' });
+    await expect(copiedToast).toBeVisible();
     const copied = await app.evaluate(({ clipboard }) => clipboard.readText());
     const copiedRows = copied.split('\n').map((line) => line.split('\t'));
     expect(copiedRows).toHaveLength(3);
     expect(copiedRows.every((cells) => cells.length === 2 && cells[0] === selected.category)).toBe(true);
+    // Info toasts leave by themselves (6 s); the screenshots below show the screen without it.
+    await expect(copiedToast).toBeHidden({ timeout: 15_000 });
 
     await page.mouse.move(box.x + box.width / 2, box.y + index * 26 + 10);
     await expect(page.getByRole('tooltip')).toContainText(selected.category);
