@@ -158,6 +158,9 @@ importers:
       '@fontsource/ibm-plex-sans':
         specifier: 5.3.0
         version: 5.3.0
+      '@glassgrid/core':
+        specifier: workspace:*
+        version: link:../core
       d3-scale:
         specifier: 4.0.2
         version: 4.0.2
