@@ -4,8 +4,8 @@ import { DataType } from 'apache-arrow';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { EngineRequest, FileHandle, GlassgridBridge, TableId } from '@glassgrid/core';
 import { EngineClient, EngineRequestError, isAbandoned } from '../renderer/src/engine-client';
-import { EngineSession } from './session';
-import { createHarness, writeFixtureCsv, type Harness } from './test-support';
+import { EngineSession } from '@glassgrid/engine';
+import { createHarness, writeFixtureCsv, type Harness } from '@glassgrid/engine/test-support';
 
 /*
  * The renderer client against a real EngineSession and DuckDB, over a

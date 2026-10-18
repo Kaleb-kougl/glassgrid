@@ -1,5 +1,8 @@
 /*
- * Glassgrid engine: runs inside an Electron utility process and owns DuckDB.
+ * Glassgrid engine host: runs inside an Electron utility process and wires
+ * the shared engine (@glassgrid/engine) to native DuckDB and to Electron's
+ * message ports. The query engine itself is runtime-neutral; the web demo
+ * runs the same code on DuckDB-WASM in a Web Worker.
  *
  * - Control messages (from main) arrive on process.parentPort.
  * - Query requests arrive on MessagePorts that main brokers directly to
@@ -7,7 +10,6 @@
  *   bytes (pages) or small JSON objects (profiles, counts) on the same port.
  */
 import { stat } from 'node:fs/promises';
-import { version as duckdbVersion } from '@duckdb/node-api';
 import type { MessagePortMain } from 'electron';
 import {
   ControlMessageSchema,
@@ -17,9 +19,8 @@ import {
   type EngineConfig,
   type RegisterFileMessage,
 } from '@glassgrid/core';
-import { errorMessage } from './errors';
-import { QueryService } from './query-service';
-import { EngineSession } from './session';
+import { EngineSession, QueryService, errorMessage } from '@glassgrid/engine';
+import { createNativeDriver } from '@glassgrid/engine/native';
 
 const parentPort = process.parentPort;
 
@@ -34,7 +35,8 @@ function readConfig(): EngineConfig {
   return EngineConfigSchema.parse(JSON.parse(raw));
 }
 
-const service: Promise<QueryService> = (async () => QueryService.create(readConfig()))();
+const driver = createNativeDriver();
+const service: Promise<QueryService> = (async () => QueryService.create(driver, readConfig()))();
 // Failures are reported through the 'fatal' reply below and per request as engine_unavailable.
 service.catch(() => undefined);
 
@@ -91,7 +93,7 @@ function attachPort(port: MessagePortMain): void {
 // Lifecycle
 
 service.then(
-  () => reply({ kind: 'ready', duckdbVersion: duckdbVersion() }),
+  (ready) => reply({ kind: 'ready', duckdbVersion: ready.duckdbVersion }),
   (error: unknown) => reply({ kind: 'fatal', message: `DuckDB failed to start: ${errorMessage(error)}` }),
 );
 

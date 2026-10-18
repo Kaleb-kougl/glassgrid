@@ -1,0 +1,10 @@
+{
+  // Browser tests and benches: Playwright specs and config (Node) and the page they drive (DOM).
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node"]
+  },
+  "include": ["e2e", "playwright.config.ts", "src/web/assets.d.ts"],
+  "exclude": ["e2e/.out", "e2e/.samples"]
+}

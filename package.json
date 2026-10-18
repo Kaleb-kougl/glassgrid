@@ -17,7 +17,7 @@
     "lint": "eslint .",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r --if-present test",
-    "e2e": "pnpm --filter @glassgrid/desktop build && pnpm --filter @glassgrid/desktop e2e",
+    "e2e": "pnpm --filter @glassgrid/desktop build && pnpm --filter @glassgrid/desktop e2e && pnpm --filter @glassgrid/engine e2e",
     "e2e:10m": "pnpm --filter @glassgrid/desktop build && pnpm --filter @glassgrid/desktop e2e:10m",
     "package": "pnpm --filter @glassgrid/desktop package"
   },

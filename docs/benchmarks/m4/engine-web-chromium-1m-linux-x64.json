@@ -1,0 +1,98 @@
+{
+  "label": "",
+  "files": {
+    "csv": "synthetic-1m-seed42.csv",
+    "parquet": "synthetic-1m-seed42.parquet"
+  },
+  "runs": 3,
+  "machine": {
+    "platform": "linux",
+    "arch": "x64",
+    "cpus": 2,
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "memoryGb": 8
+  },
+  "info": {
+    "duckdbVersion": "v1.4.3",
+    "capabilities": {
+      "interrupt": "cooperative",
+      "progress": false,
+      "parquet": false,
+      "cache": "opfs",
+      "crossOriginIsolated": false
+    },
+    "extensionErrors": []
+  },
+  "startMs": [
+    1217.9,
+    1106.5,
+    1192.6
+  ],
+  "csv": {
+    "runs": [
+      {
+        "openToFirstPageMs": 490.5,
+        "openMs": 417.7,
+        "firstPageMs": 72.8,
+        "profileMs": 1452.7,
+        "sortedFirstPageMs": 1278.1,
+        "barMs": 1710.1,
+        "heatmapMs": 2518.1,
+        "crossfilterPrepareMs": 2746.2,
+        "brushMs": 29.6,
+        "brushPlainMs": 2410,
+        "rows": 1000000,
+        "fromCube": true
+      },
+      {
+        "openToFirstPageMs": 512.5,
+        "openMs": 433.4,
+        "firstPageMs": 79.1,
+        "profileMs": 1476.7,
+        "sortedFirstPageMs": 1340.6,
+        "barMs": 1740.2,
+        "heatmapMs": 2204.6,
+        "crossfilterPrepareMs": 2734.9,
+        "brushMs": 43.3,
+        "brushPlainMs": 1964.5,
+        "rows": 1000000,
+        "fromCube": true
+      },
+      {
+        "openToFirstPageMs": 425.7,
+        "openMs": 377,
+        "firstPageMs": 48.7,
+        "profileMs": 1348.5,
+        "sortedFirstPageMs": 1297.1,
+        "barMs": 1705,
+        "heatmapMs": 1986.6,
+        "crossfilterPrepareMs": 2732.3,
+        "brushMs": 45.2,
+        "brushPlainMs": 2238.3,
+        "rows": 1000000,
+        "fromCube": true
+      }
+    ],
+    "median": {
+      "openToFirstPageMs": 490.5,
+      "openMs": 417.7,
+      "firstPageMs": 72.8,
+      "profileMs": 1452.7,
+      "sortedFirstPageMs": 1297.1,
+      "barMs": 1710.1,
+      "heatmapMs": 2204.6,
+      "crossfilterPrepareMs": 2734.9,
+      "brushMs": 43.3,
+      "brushPlainMs": 2238.3,
+      "rows": 1000000,
+      "fromCube": true
+    },
+    "sizeBytes": 156162183
+  },
+  "parquet": {
+    "skipped": "DuckDB-WASM has no Parquet extension here (no extension repository configured)"
+  },
+  "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.0.0 Safari/537.36",
+  "hardwareConcurrency": 2,
+  "deviceMemoryGb": 8
+}

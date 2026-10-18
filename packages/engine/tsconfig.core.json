@@ -1,0 +1,13 @@
+{
+  // Runtime-neutral engine code: runs in Node (Electron's utility process)
+  // and in a browser Web Worker. DOM typings only for the globals both share
+  // (timers, AbortController, crypto, performance, TextEncoder); ESLint
+  // forbids DOM and Node APIs here.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM"],
+    "types": []
+  },
+  "include": ["src"],
+  "exclude": ["src/native", "src/wasm/node.ts", "src/worker", "src/**/*.test.ts", "src/test-support.ts", "src/testing"]
+}

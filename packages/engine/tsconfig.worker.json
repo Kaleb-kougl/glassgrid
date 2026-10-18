@@ -1,0 +1,9 @@
+{
+  // The engine worker (DuckDB-WASM in a dedicated Web Worker).
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "WebWorker", "WebWorker.AsyncIterable"],
+    "types": []
+  },
+  "include": ["src/worker"]
+}

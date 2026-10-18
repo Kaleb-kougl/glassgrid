@@ -26,6 +26,7 @@
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
     "@glassgrid/core": "workspace:*",
+    "@glassgrid/engine": "workspace:*",
     "@glassgrid/ui": "workspace:*",
     "@playwright/test": "1.64.1",
     "@testing-library/dom": "10.4.2",

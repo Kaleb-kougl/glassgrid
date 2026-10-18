@@ -30,6 +30,7 @@ import {
   type TableHandle,
   type TableId,
 } from '@glassgrid/core';
+import type { EngineClientApi } from '@glassgrid/engine/client';
 import { renderPerf } from './render-perf-core';
 
 /** `tableFromIPC`, timed for the render-perf recording in render-perf builds. */
@@ -208,7 +209,7 @@ interface Pending {
  * In-flight requests on the old port are rejected with `engine_restarted`;
  * table ids stay valid because the engine reopens tables on demand.
  */
-export class EngineClient {
+export class EngineClient implements EngineClientApi {
   private port: MessagePort | null = null;
   private nextId = 0;
   private readonly pending = new Map<string, Pending>();
