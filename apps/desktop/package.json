@@ -15,6 +15,8 @@
     "test": "vitest run",
     "e2e": "playwright test",
     "e2e:10m": "cross-env GLASSGRID_E2E_ROWS=10000000 playwright test",
+    "e2e:render": "cross-env GLASSGRID_RENDER_PERF=1 electron-vite build && cross-env GLASSGRID_E2E_RENDER=1 playwright test",
+    "e2e:render:10m": "cross-env GLASSGRID_RENDER_PERF=1 electron-vite build && cross-env GLASSGRID_E2E_RENDER=1 GLASSGRID_E2E_ROWS=10000000 playwright test",
     "package": "electron-vite build && electron-builder --publish never",
     "package:dir": "electron-vite build && electron-builder --dir --publish never"
   },

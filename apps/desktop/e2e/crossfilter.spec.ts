@@ -1,27 +1,22 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { basename, join } from 'node:path';
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { join } from 'node:path';
+import { expect, test, type Page } from '@playwright/test';
 import {
-  CHART_CREATE_MEASURE,
-  CROSSFILTER_MEASURE,
   CROSSFILTER_PREPARE_MEASURE,
-  PROFILE_MEASURE,
-  type ChartCreateMeasureDetail,
   type CrossfilterMeasureDetail,
   type CrossfilterPrepareMeasureDetail,
 } from '../src/renderer/src/perf';
+import { BRUSH_PATH, brush, card, cardMenu, clickBar, DROPS, dropColumns, openTrips, plotBox, removeAllChips, removeChart, type Mark } from './charts';
 import { PAYMENT_TYPES, writeTripsCsv } from './csv-fixture';
 import { SqlReference, type ReferenceFilter } from './sql-reference';
 import {
   axe,
   digits,
-  gridGeometry,
   launchApp,
   machineInfo,
   measureCount,
   measures,
-  nextMeasure,
   RESULTS_DIR,
   ROWS,
   screenshot,
@@ -50,41 +45,6 @@ const BRUSHES = 20;
 const CREATE_ROUNDS = 5;
 /** Wait after a filter before timing chart creation (the engine's background index build for the grid). */
 const SETTLE_MS = PARQUET ? 6_000 : 2_500;
-/** `[from, to]` as fractions of the histogram's canvas width; each differs from the one before. */
-const BRUSH_PATH: readonly (readonly [number, number])[] = [
-  [0.14, 0.3],
-  [0.2, 0.42],
-  [0.12, 0.22],
-  [0.3, 0.55],
-  [0.16, 0.36],
-  [0.25, 0.33],
-  [0.13, 0.5],
-  [0.35, 0.7],
-  [0.18, 0.27],
-  [0.22, 0.6],
-  [0.15, 0.19],
-  [0.4, 0.85],
-  [0.17, 0.45],
-  [0.28, 0.38],
-  [0.13, 0.65],
-  [0.21, 0.31],
-  [0.45, 0.6],
-  [0.16, 0.24],
-  [0.32, 0.48],
-  [0.19, 0.9],
-  [0.24, 0.29],
-];
-
-type Mark = 'line' | 'bar' | 'histogram' | 'heatmap';
-/** Columns dropped for each mark (the heatmap's second column is selected in the grid). */
-const DROPS: Record<Mark, string[]> = {
-  line: ['pickup_at'],
-  bar: ['payment_type'],
-  histogram: ['trip_distance'],
-  heatmap: ['trip_distance', 'fare_amount'],
-};
-const GRID_COLUMNS = ['pickup_at', 'payment_type', 'trip_distance', 'fare_amount'];
-
 interface CreateSample {
   mark: string;
   ms: number;
@@ -109,117 +69,6 @@ interface SourceResults {
 }
 
 const results: { parquet?: SourceResults; csv?: SourceResults; fileBytes?: number; machine?: Awaited<ReturnType<typeof machineInfo>> } = {};
-
-// ---------------------------------------------------------------------------
-// Driving the app
-
-/** Waits for the profile; on large files also for the background Parquet copy. */
-async function openTrips(page: Page, csvPath: string, waitForParquet: boolean): Promise<void> {
-  const previous = await measureCount(page, PROFILE_MEASURE);
-  await page.getByTestId('open-csv').click();
-  await expect(page.getByTestId('file-name')).toHaveText(basename(csvPath));
-  await nextMeasure(page, PROFILE_MEASURE, previous);
-  await expect.poll(async () => digits(await page.getByTestId('row-count').textContent()), { timeout: 120_000 }).toBe(String(ROWS));
-  if (waitForParquet) await expect(page.getByTestId('app')).toHaveAttribute('data-parquet', 'ready', { timeout: 300_000 });
-}
-
-/** Selects one cell (`cols` = 1) or a row of cells across two adjacent columns in the grid. */
-async function selectGridColumns(page: Page, first: number, last = first): Promise<void> {
-  const grid = await gridGeometry(page);
-  const from = grid.cell(0, first);
-  await page.mouse.click(from.x, from.y);
-  if (last !== first) {
-    const to = grid.cell(0, last);
-    await page.keyboard.down('Shift');
-    await page.mouse.click(to.x, to.y);
-    await page.keyboard.up('Shift');
-  }
-}
-
-/** Drags a column from the list onto the charts panel; resolves with the chart-create measure. */
-async function dropColumns(page: Page, columns: string[]): Promise<{ duration: number; detail: ChartCreateMeasureDetail }> {
-  const [first, second] = columns;
-  if (!first) throw new Error('no column');
-  if (second) {
-    await selectGridColumns(page, GRID_COLUMNS.indexOf(first), GRID_COLUMNS.indexOf(second));
-    await expect(page.getByTestId(`column-${second}`)).toHaveAttribute('data-selected', 'true');
-  } else {
-    // One cell in another column: a single column is dropped.
-    await selectGridColumns(page, first === 'pickup_at' ? 1 : 0);
-  }
-  const previous = await measureCount(page, CHART_CREATE_MEASURE);
-  const empty = page.getByTestId('charts-drop');
-  if ((await empty.count()) > 0) await page.getByTestId(`column-${first}`).dragTo(empty);
-  else await page.getByTestId(`column-${first}`).dragTo(page.locator('section.charts .panel__head'), { targetPosition: { x: 40, y: 12 } });
-  const measured = await nextMeasure(page, CHART_CREATE_MEASURE, previous);
-  const detail = measured.detail as ChartCreateMeasureDetail;
-  expect(detail.columns).toEqual(columns);
-  return { duration: measured.duration, detail };
-}
-
-function card(page: Page, chartId: string): Locator {
-  return page.getByTestId(`chart-${chartId}`);
-}
-
-/** Picks an item of the card's ⋯ menu: a mark (`menuitemradio`) or an action. */
-async function cardMenu(page: Page, chartId: string, role: 'menuitem' | 'menuitemradio', item: RegExp): Promise<void> {
-  await card(page, chartId).getByRole('button', { name: 'Chart actions' }).click();
-  await page.getByRole(role, { name: item }).click();
-}
-
-async function removeChart(page: Page, chartId: string): Promise<void> {
-  await cardMenu(page, chartId, 'menuitem', /^Remove chart/);
-  await expect(card(page, chartId)).toHaveCount(0);
-}
-
-/** Pixel rectangle of a chart's plot canvas (the brush layer). */
-async function plotBox(page: Page, chartId: string) {
-  const canvas = page.getByTestId(`chart-${chartId}-chart-canvas`);
-  await canvas.scrollIntoViewIfNeeded();
-  const box = await canvas.boundingBox();
-  if (!box) throw new Error(`chart ${chartId} has no canvas`);
-  return box;
-}
-
-/**
- * Drags a brush over the histogram from `from` to `to` (fractions of the
- * canvas width) in about 300 ms, as a person does, and waits for the
- * cross-filter measure.
- */
-async function brush(page: Page, chartId: string, from: number, to: number): Promise<{ duration: number; detail: CrossfilterMeasureDetail }> {
-  const box = await plotBox(page, chartId);
-  const y = box.y + box.height * 0.45;
-  const previous = await measureCount(page, CROSSFILTER_MEASURE);
-  await page.mouse.move(box.x + box.width * from, y);
-  await page.mouse.down();
-  for (let step = 1; step <= 10; step += 1) {
-    await page.mouse.move(box.x + box.width * (from + ((to - from) * step) / 10), y);
-    await page.waitForTimeout(30);
-  }
-  await page.mouse.up();
-  const measured = await nextMeasure(page, CROSSFILTER_MEASURE, previous);
-  return { duration: measured.duration, detail: measured.detail as CrossfilterMeasureDetail };
-}
-
-/** Clicks the bar at `index` (bars are 20 px rows, 6 px apart). */
-async function clickBar(page: Page, chartId: string, index: number): Promise<{ duration: number; detail: CrossfilterMeasureDetail }> {
-  const canvas = card(page, chartId).getByRole('listbox').locator('canvas');
-  const box = await canvas.boundingBox();
-  if (!box) throw new Error('bar chart has no canvas');
-  const previous = await measureCount(page, CROSSFILTER_MEASURE);
-  await page.mouse.click(box.x + box.width / 2, box.y + index * 26 + 10);
-  const measured = await nextMeasure(page, CROSSFILTER_MEASURE, previous);
-  return { duration: measured.duration, detail: measured.detail as CrossfilterMeasureDetail };
-}
-
-async function removeAllChips(page: Page): Promise<void> {
-  const chips = page.getByRole('list', { name: 'Active filters' }).getByRole('button', { name: /^Remove filter on/ });
-  while ((await chips.count()) > 0) {
-    const before = await chips.count();
-    await chips.first().click();
-    await expect(chips).toHaveCount(before - 1);
-  }
-}
 
 const rowCountOf = async (page: Page) => Number(digits((await page.getByTestId('row-count').locator('strong').textContent()) ?? ''));
 
