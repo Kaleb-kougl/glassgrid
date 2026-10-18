@@ -1,0 +1,6 @@
+{
+  // Solution file for editors and typescript-eslint's project service.
+  // `pnpm typecheck` checks each referenced project separately.
+  "files": [],
+  "references": [{ "path": "./tsconfig.core.json" }, { "path": "./tsconfig.node.json" }]
+}

@@ -1,7 +1,8 @@
 import { mkdir, rm } from 'node:fs/promises';
 import { totalmem } from 'node:os';
 import { DuckDBInstance } from '@duckdb/node-api';
-import { quoteLiteral } from './sql-text';
+import type { DatabaseOptions } from '../driver';
+import { quoteLiteral } from '../sql-text';
 
 /*
  * DuckDB instances with external access locked down (docs/m2-engine-notes.md,
@@ -18,16 +19,8 @@ import { quoteLiteral } from './sql-text';
  * write.
  */
 
-export interface SandboxOptions {
-  /** Exact files the instance may read (the table's CSV). */
-  allowedPaths: readonly string[];
-  /** Folders whose contents the instance may read and write (the Parquet cache). */
-  allowedDirectories: readonly string[];
-  /** Spill folder. Must be private to this instance: DuckDB's temp file names are fixed. */
-  tempDirectory: string;
-  /** DuckDB `memory_limit` in bytes. */
-  memoryLimitBytes: number;
-}
+/** `tempDirectory` must be private to the instance: DuckDB's temp file names are fixed. */
+export type SandboxOptions = DatabaseOptions;
 
 /** Default per-instance memory limit: half of physical memory, at least 512 MB. */
 export function defaultMemoryLimitBytes(): number {

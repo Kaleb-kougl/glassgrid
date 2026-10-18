@@ -5,7 +5,7 @@ import { DataType } from 'apache-arrow';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { compileWhere, tableIdForFile, toFileHandle, type EngineResponse, type FileHandle, type TableId } from '@glassgrid/core';
 import { EngineSession, runAggregate, toFragment } from './session';
-import { columnValues, createHarness, decode, writeFixtureCsv, type Harness } from './test-support';
+import { columnValues, createHarness, decode, hasParquet, writeFixtureCsv, type Harness } from './test-support';
 
 /*
  * setColumnTypes: TRY_CAST per overridden column, failed-cast counts, cache
@@ -54,7 +54,7 @@ async function column(table: TableId, name: string, sort?: { column: string; dir
   return { values: columnValues(decoded, name), field: decoded.schema.fields.find((field) => field.name === name) };
 }
 
-describe.each(['never', 'always'] as const)('setColumnTypes (parquet: %s)', (parquet) => {
+describe.each(hasParquet ? (['never', 'always'] as const) : (['never'] as const))('setColumnTypes (parquet: %s)', (parquet) => {
   it('casts with TRY_CAST, counts failed casts and changes the effective types', async () => {
     const { table } = await openFresh(parquet);
     expect((await h.service.columns(table)).find((c) => c.name === 'code')).toMatchObject({ type: 'text' });
@@ -231,7 +231,7 @@ describe('a page requested while the views are redefined', () => {
   });
 });
 
-describe('type changes racing the switch to Parquet', () => {
+describe.skipIf(!hasParquet)('type changes racing the switch to Parquet', () => {
   it('leaves the views with the latest overrides when the Parquet copy lands mid-change', async () => {
     const service = await h.restart({ autoConvertMinBytes: 0 });
     for (let round = 0; round < 6; round += 1) {

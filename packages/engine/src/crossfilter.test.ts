@@ -22,7 +22,7 @@ import {
   type WorkspaceState,
 } from '@glassgrid/core';
 import { prepareCrossfilter, runAggregate, runCount, EngineSession } from './session';
-import { createHarness, decode, mulberry32, writeLines, type Harness } from './test-support';
+import { createHarness, decode, hasParquet, mulberry32, writeLines, type Harness } from './test-support';
 
 const ROWS = 3_000;
 const SEED = 20261018;
@@ -72,7 +72,7 @@ beforeAll(async () => {
   ({ file: parquetFile, table: parquetTable } = h.register(path));
   await h.service.open(file, { parquet: 'never' });
   await h.service.open(parquetFile, { parquet: 'never' });
-  await h.service.ensureParquetCache(parquetTable);
+  if (hasParquet) await h.service.ensureParquetCache(parquetTable);
 });
 
 afterAll(async () => {
@@ -199,7 +199,7 @@ async function checkBrush(id: TableId, state: WorkspaceState, activeView: string
 }
 
 describe('cross-filter cubes against plain queries (property)', () => {
-  for (const source of ['csv', 'parquet'] as const) {
+  for (const source of hasParquet ? (['csv', 'parquet'] as const) : (['csv'] as const)) {
     it(`answers every hinted view exactly like the plain query (${source})`, { timeout: 300_000 }, async () => {
       const id = source === 'csv' ? table : parquetTable;
       const handle = source === 'csv' ? file : parquetFile;

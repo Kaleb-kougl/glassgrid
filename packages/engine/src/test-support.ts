@@ -11,7 +11,47 @@ import { join } from 'node:path';
 import { finished } from 'node:stream/promises';
 import { tableFromIPC, type Table } from 'apache-arrow';
 import { tableIdForFile, toFileHandle, type FileHandle, type TableId } from '@glassgrid/core';
+import type { DuckDriver } from './driver';
+import { createNativeDriver } from './native/driver';
 import { QueryService, type QueryServiceOptions } from './query-service';
+
+/** Which driver the suite runs against: `GLASSGRID_ENGINE_DRIVER=native` (default) or `wasm`. */
+export const DRIVER_NAME: 'native' | 'wasm' = process.env['GLASSGRID_ENGINE_DRIVER'] === 'wasm' ? 'wasm' : 'native';
+export const isWasm = DRIVER_NAME === 'wasm';
+
+let wasmDriver: Promise<DuckDriver> | undefined;
+
+/**
+ * The driver for this run. The WASM driver shares one DuckDB-WASM instance
+ * per process (see wasm/driver.ts), allowed to read the OS temp folder where
+ * the tests write their fixtures.
+ */
+export async function testDriver(): Promise<DuckDriver> {
+  if (DRIVER_NAME === 'native') return createNativeDriver();
+  wasmDriver ??= import('./wasm/node').then(async ({ createNodeWasmDriver }) => {
+    const driver = await createNodeWasmDriver({ allowedRoots: [tmpdir()] });
+    await driver.start();
+    return driver;
+  });
+  return wasmDriver;
+}
+
+/**
+ * Whether this run's driver reads and writes Parquet. DuckDB-WASM needs its
+ * Parquet extension, fetched from an extension repository; without one the
+ * Parquet-backed variants of the tests are skipped (CSV variants still run).
+ */
+export const hasParquet = (await testDriver()).capabilities.parquet;
+
+/**
+ * Latency bound for assertions about how quickly something answers. On
+ * DuckDB-WASM the engine shares its thread with DuckDB, so an answer can wait
+ * for the running DuckDB step (up to a few hundred ms) before the event loop
+ * runs; native answers are bounded as written.
+ */
+export function latencyBudget(nativeMs: number): number {
+  return isWasm ? Math.max(nativeMs, 1_500) : nativeMs;
+}
 
 export const CATEGORIES = ['alpha', 'bravo', 'charlie', 'delta', 'echo'] as const;
 
@@ -116,7 +156,7 @@ export async function createHarness(options: Partial<QueryServiceOptions> = {}):
   const cacheDir = join(dir, 'cache', 'parquet');
   const services: QueryService[] = [];
   const make = async (extra: Partial<QueryServiceOptions> = {}) => {
-    const created = await QueryService.create({ cacheDir, ...options, ...extra });
+    const created = await QueryService.create(await testDriver(), { cacheDir, ...options, ...extra });
     services.push(created);
     return created;
   };

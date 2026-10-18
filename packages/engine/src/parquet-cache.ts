@@ -1,7 +1,5 @@
-import { randomBytes } from 'node:crypto';
-import { mkdir, readdir, rename, rm, stat, utimes } from 'node:fs/promises';
-import { join } from 'node:path';
 import type { ParquetCacheStats } from '@glassgrid/core';
+import type { DriverFiles } from './driver';
 
 export const DEFAULT_PARQUET_CACHE_BYTES = 20 * 1024 ** 3;
 /** Temp files untouched for this long are leftovers of a crashed conversion. */
@@ -33,6 +31,7 @@ export class ParquetCache {
   private readyPromise: Promise<void> | null = null;
 
   constructor(
+    private readonly files: DriverFiles,
     readonly dir: string,
     readonly maxBytes = DEFAULT_PARQUET_CACHE_BYTES,
   ) {}
@@ -40,7 +39,7 @@ export class ParquetCache {
   /** Create the folder and drop stale temp files. Idempotent. */
   ready(): Promise<void> {
     this.readyPromise ??= (async () => {
-      await mkdir(this.dir, { recursive: true });
+      await this.files.mkdir(this.dir);
       await this.removeStaleTemps();
     })();
     return this.readyPromise;
@@ -48,12 +47,12 @@ export class ParquetCache {
 
   pathFor(key: string): string {
     assertKey(key);
-    return join(this.dir, `${key}${ENTRY_SUFFIX}`);
+    return this.files.join(this.dir, `${key}${ENTRY_SUFFIX}`);
   }
 
   tempPathFor(key: string): string {
     assertKey(key);
-    return join(this.dir, `${key}${ENTRY_SUFFIX}.${randomBytes(6).toString('hex')}${TEMP_SUFFIX}`);
+    return this.files.join(this.dir, `${key}${ENTRY_SUFFIX}.${randomHex(6)}${TEMP_SUFFIX}`);
   }
 
   /** Return the entry for `key` and mark it recently used, or undefined on a miss. */
@@ -61,11 +60,10 @@ export class ParquetCache {
     await this.ready();
     const path = this.pathFor(key);
     try {
-      const info = await stat(path);
-      if (!info.isFile()) return undefined;
-      const now = new Date();
-      await utimes(path, now, now).catch(() => undefined);
-      return { key, path, sizeBytes: info.size };
+      const info = await this.files.stat(path);
+      if (!info.isFile) return undefined;
+      await this.files.touch(path).catch(() => undefined);
+      return { key, path, sizeBytes: info.sizeBytes };
     } catch {
       return undefined;
     }
@@ -74,14 +72,14 @@ export class ParquetCache {
   /** Atomically move a finished temp file into place, then enforce the cap. */
   async commit(key: string, tempPath: string, protectedKeys: ReadonlySet<string> = new Set()): Promise<CacheEntry> {
     const path = this.pathFor(key);
-    await rename(tempPath, path);
-    const info = await stat(path);
+    await this.files.rename(tempPath, path);
+    const info = await this.files.stat(path);
     await this.evict(new Set([...protectedKeys, key]));
-    return { key, path, sizeBytes: info.size };
+    return { key, path, sizeBytes: info.sizeBytes };
   }
 
   async discardTemp(tempPath: string): Promise<void> {
-    await rm(tempPath, { force: true });
+    await this.files.remove(tempPath);
   }
 
   /** Remove least recently used entries until the total size fits `maxBytes`. */
@@ -92,7 +90,7 @@ export class ParquetCache {
     for (const entry of entries) {
       if (total <= this.maxBytes) break;
       if (protectedKeys.has(entry.key)) continue;
-      await rm(entry.path, { force: true });
+      await this.files.remove(entry.path);
       total -= entry.sizeBytes;
       evicted.push(entry.key);
     }
@@ -104,7 +102,7 @@ export class ParquetCache {
     const removed: string[] = [];
     for (const entry of await this.list()) {
       if (keep.has(entry.key)) continue;
-      await rm(entry.path, { force: true });
+      await this.files.remove(entry.path);
       removed.push(entry.key);
     }
     return removed;
@@ -123,14 +121,14 @@ export class ParquetCache {
   private async list(): Promise<Array<CacheEntry & { usedAt: number }>> {
     await this.ready();
     const entries: Array<CacheEntry & { usedAt: number }> = [];
-    for (const name of await readdir(this.dir)) {
+    for (const name of await this.files.readdir(this.dir)) {
       if (!name.endsWith(ENTRY_SUFFIX)) continue;
       const key = name.slice(0, -ENTRY_SUFFIX.length);
       if (!KEY_PATTERN.test(key)) continue;
-      const path = join(this.dir, name);
+      const path = this.files.join(this.dir, name);
       try {
-        const info = await stat(path);
-        if (info.isFile()) entries.push({ key, path, sizeBytes: info.size, usedAt: info.mtimeMs });
+        const info = await this.files.stat(path);
+        if (info.isFile) entries.push({ key, path, sizeBytes: info.sizeBytes, usedAt: info.mtimeMs });
       } catch {
         // Removed concurrently; nothing to account for.
       }
@@ -140,17 +138,21 @@ export class ParquetCache {
 
   private async removeStaleTemps(): Promise<void> {
     const now = Date.now();
-    for (const name of await readdir(this.dir)) {
+    for (const name of await this.files.readdir(this.dir)) {
       if (!name.endsWith(TEMP_SUFFIX)) continue;
-      const path = join(this.dir, name);
+      const path = this.files.join(this.dir, name);
       try {
-        const info = await stat(path);
-        if (now - info.mtimeMs > STALE_TEMP_MS) await rm(path, { force: true });
+        const info = await this.files.stat(path);
+        if (now - info.mtimeMs > STALE_TEMP_MS) await this.files.remove(path);
       } catch {
         // Already gone.
       }
     }
   }
+}
+
+function randomHex(bytes: number): string {
+  return Array.from(crypto.getRandomValues(new Uint8Array(bytes)), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
 function assertKey(key: string): void {

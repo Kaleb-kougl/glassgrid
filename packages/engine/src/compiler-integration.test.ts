@@ -9,7 +9,7 @@ import type { Table } from 'apache-arrow';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { compileChartQuery, type AggregateResult, type EngineReply, type EngineRequest, type EngineResponse, type FilterInput, type TableId } from '@glassgrid/core';
 import { EngineSession } from './session';
-import { CATEGORIES, columnValues, createHarness, decode, fixtureRow, writeFixtureCsv, writeLines, type Harness } from './test-support';
+import { CATEGORIES, columnValues, createHarness, decode, fixtureRow, hasParquet, writeFixtureCsv, writeLines, type Harness } from './test-support';
 
 /** Large enough for several 1,000-row pages after filtering, small enough to stay fast. */
 const ROWS = 20_000;
@@ -38,13 +38,14 @@ beforeAll(async () => {
   session = new EngineSession(Promise.resolve(h.service), (message) => sent.push(message));
   await request({ kind: 'open', file: csv.file, parquet: 'never' });
   await request({ kind: 'open', file: parquet.file, parquet: 'never' });
-  await h.service.ensureParquetCache(parquetTable);
+  // Without Parquet (DuckDB-WASM with no extension repository) the "Parquet" table reads the CSV too.
+  if (hasParquet) await h.service.ensureParquetCache(parquetTable);
   const stampsPath = join(h.dir, 'stamps.csv');
   await writeLines(stampsPath, 'at,v', stamps.map((ms, i) => `${new Date(ms).toISOString().replace('T', ' ').replace('.000Z', '')},${i % 7}`));
   const stamped = h.register(stampsPath);
   stampsTable = stamped.table;
   await request({ kind: 'open', file: stamped.file, parquet: 'always' });
-  await h.service.ensureParquetCache(stampsTable);
+  if (hasParquet) await h.service.ensureParquetCache(stampsTable);
 });
 
 afterAll(async () => {

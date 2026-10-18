@@ -359,6 +359,11 @@ export const EngineErrorCodeSchema = z.enum([
   /** A newer request for the same view replaced this one. */
   'superseded',
   'not_implemented',
+  /**
+   * The query ran out of memory. On the web demo (DuckDB-WASM, a few GB at
+   * most and no spilling) the message tells the person to use the desktop app.
+   */
+  'out_of_memory',
 ]);
 export type EngineErrorCode = z.infer<typeof EngineErrorCodeSchema>;
 

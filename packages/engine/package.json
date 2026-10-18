@@ -1,0 +1,41 @@
+{
+  "name": "@glassgrid/engine",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Glassgrid's query engine (QueryService, sessions, caches, cubes) behind a DuckDB driver interface, with native (@duckdb/node-api) and DuckDB-WASM drivers.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./native": "./src/native/index.ts",
+    "./test-support": "./src/test-support.ts",
+    "./wasm": "./src/wasm/index.ts",
+    "./wasm/node": "./src/wasm/node.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.core.json && tsc --noEmit -p tsconfig.node.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@duckdb/duckdb-wasm": "1.33.1-dev65.0",
+    "@glassgrid/core": "workspace:*",
+    "apache-arrow": "21.2.0"
+  },
+  "peerDependencies": {
+    "@duckdb/node-api": "1.5.6-r.1"
+  },
+  "peerDependenciesMeta": {
+    "@duckdb/node-api": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@duckdb/node-api": "1.5.6-r.1",
+    "@glassgrid/ui": "workspace:*",
+    "@types/node": "24.19.2",
+    "fast-check": "4.10.2",
+    "typescript": "6.0.3",
+    "vitest": "5.0.5"
+  }
+}

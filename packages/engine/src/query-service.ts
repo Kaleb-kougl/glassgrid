@@ -1,14 +1,3 @@
-import { createHash } from 'node:crypto';
-import { EventEmitter } from 'node:events';
-import { readdir, stat } from 'node:fs/promises';
-import { basename, dirname, join } from 'node:path';
-import {
-  DuckDBInstance,
-  DuckDBListValue,
-  DuckDBStructValue,
-  type DuckDBConnection,
-  type DuckDBValue,
-} from '@duckdb/node-api';
 import {
   tableIdForFile,
   type CacheScope,
@@ -29,7 +18,6 @@ import {
   type TableId,
 } from '@glassgrid/core';
 import { tableFromIPC, tableToIPC, type Table } from 'apache-arrow';
-import { readerToArrowIPC } from './arrow';
 import { Coalescer } from './coalesce';
 import { CubeStore, MAX_CUBE_ROWS, type CubeRef, type CubeStoreStats } from './cubes';
 import { overrideDuckdbType, simpleColumnType, toCount, toScalar } from './column-types';
@@ -41,10 +29,12 @@ import {
   throwIfAborted,
   toEngineFailure,
 } from './errors';
+import type { DriverParam, DriverResult, DriverValue, DuckConnection, DuckDatabase, DuckDriver } from './driver';
+import { Emitter } from './emitter';
 import { fingerprintFile } from './fingerprint';
+import { sha256Hex } from './hash';
 import { DEFAULT_PARQUET_CACHE_BYTES, ParquetCache, type CacheEntry } from './parquet-cache';
 import { DEFAULT_RESULT_CACHE_BYTES, ResultCache } from './result-cache';
-import { createSandboxedInstance, defaultMemoryLimitBytes, removeTempDirectory } from './sandbox';
 import { DEFAULT_MAX_SORT_INDEXES, SortIndexes, type BuildSpec } from './sort-indexes';
 import { fragmentKey, intLiteral, quoteIdent, quoteLiteral, type SqlFragment, type SqlParam } from './sql-text';
 
@@ -143,6 +133,9 @@ export interface ColumnTypesOutcome {
 
 type Source = { kind: 'csv' } | { kind: 'parquet'; path: string; key: string };
 
+/** What the user opened: a CSV (read in place, optionally copied to Parquet) or a Parquet file (read in place). */
+export type InputFormat = 'csv' | 'parquet';
+
 type ColumnStats = Pick<TableColumnProfile, 'nullFraction' | 'distinctCount' | 'min' | 'max'>;
 
 /**
@@ -152,15 +145,17 @@ type ColumnStats = Pick<TableColumnProfile, 'nullFraction' | 'distinctCount' | '
 function overridesVersion(state: Pick<TableState, 'overrides' | 'typeGeneration'>): string {
   const entries = [...state.overrides.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
   if (entries.length === 0 && state.typeGeneration === 0) return '';
-  return createHash('sha256').update(JSON.stringify([entries, state.typeGeneration])).digest('hex').slice(0, 16);
+  return sha256Hex(JSON.stringify([entries, state.typeGeneration])).slice(0, 16);
 }
 
 interface TableState {
   id: TableId;
   file: FileHandle;
+  /** The opened file (a CSV, or a Parquet file when `input` is `parquet`). */
   csvPath: string;
-  /** This table's own DuckDB instance, locked down to `csvPath` and the cache folder. */
-  db: DuckDBInstance;
+  input: InputFormat;
+  /** This table's own DuckDB database, locked down to `csvPath` and the cache folder (see the driver). */
+  db: DuckDatabase;
   tempDir: string;
   /**
    * `read_csv(...)` with the dialect and column types sniffed once at open
@@ -195,7 +190,7 @@ interface TableState {
   /** Serializes view redefinitions (type changes, the switch to Parquet and back). */
   viewLock: Promise<unknown>;
   /** Connections running a query on `db` right now (shared with a reopened state over the same instance). */
-  active: Set<DuckDBConnection>;
+  active: Set<DuckConnection>;
   /** Set by closeTable once the instance is closing; new queries on this state fail. */
   closed: boolean;
   /** Source columns, no casts. */
@@ -214,9 +209,9 @@ type CachedValue =
   /** A cube build's outcome (never stored in the result cache): its ref, or the cell count it was too large at. */
   | { kind: 'cube'; cube: CubeRef | null; rows: number };
 
-interface QueryServiceEvents {
+type QueryServiceEvents = {
   event: [EngineEvent];
-}
+};
 
 interface ParquetJob {
   promise: Promise<{ entry: CacheEntry; alreadyCached: boolean }>;
@@ -225,15 +220,18 @@ interface ParquetJob {
 /**
  * The engine's query layer: tables over CSV/Parquet files, profiles, grid
  * pages, counts, type overrides, the Parquet cache and the result cache. It
- * is plain Node (no Electron), so Vitest drives it against real DuckDB.
+ * talks to DuckDB only through a `DuckDriver` (driver.ts), so the same code
+ * runs on the native binding in Electron's utility process and on
+ * DuckDB-WASM in a Web Worker; Vitest drives it against both.
  *
- * Each open table has its own DuckDB instance whose external access is
- * locked to that file and the cache folder (see sandbox.ts). Every request
- * runs on its own connection, and `ctx.signal` maps to
- * `connection.interrupt()`, which DuckDB honours within milliseconds.
+ * Each open table has its own database whose external access is locked to
+ * that file and the cache folder (native: its own instance, see
+ * native/sandbox.ts). Every request runs on its own connection, and
+ * `ctx.signal` maps to `connection.interrupt()`, which native DuckDB honours
+ * within milliseconds (DuckDB-WASM at its next scheduling point).
  * Identical in-flight requests share one query (see coalesce.ts).
  */
-export class QueryService extends EventEmitter<QueryServiceEvents> {
+export class QueryService extends Emitter<QueryServiceEvents> {
   private readonly files = new Map<FileHandle, string>();
   private readonly tables = new Map<TableId, TableState>();
   private readonly opening = new Map<TableId, Promise<TableState>>();
@@ -256,24 +254,29 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
   private readonly indexDelays = new Map<string, () => void>();
   private closed = false;
 
-  private constructor(options: QueryServiceOptions) {
+  private constructor(
+    readonly driver: DuckDriver,
+    /** DuckDB's version string as the driver reports it, e.g. `v1.5.6`. */
+    readonly duckdbVersion: string,
+    options: QueryServiceOptions,
+  ) {
     super();
-    this.parquetCache = new ParquetCache(options.cacheDir, options.parquetCacheMaxBytes ?? DEFAULT_PARQUET_CACHE_BYTES);
+    const files = driver.files;
+    this.parquetCache = new ParquetCache(files, options.cacheDir, options.parquetCacheMaxBytes ?? DEFAULT_PARQUET_CACHE_BYTES);
     this.results = new ResultCache(options.resultCacheMaxBytes ?? DEFAULT_RESULT_CACHE_BYTES);
     this.sortIndexes = new SortIndexes(options.maxSortIndexes ?? DEFAULT_MAX_SORT_INDEXES);
     this.autoConvertMinBytes = options.autoConvertMinBytes ?? DEFAULT_AUTO_CONVERT_MIN_BYTES;
-    this.tempRoot = options.tempDir ?? join(dirname(options.cacheDir), 'duckdb-tmp');
-    this.memoryLimitBytes = options.memoryLimitBytes ?? defaultMemoryLimitBytes();
+    this.tempRoot = options.tempDir ?? files.join(files.dirname(options.cacheDir), 'duckdb-tmp');
+    this.memoryLimitBytes = options.memoryLimitBytes ?? driver.defaultMemoryLimitBytes();
     this.pagingStrategy = options.pagingStrategy ?? 'auto';
     this.topKRows = options.topKRows ?? TOP_K_MAX_ROWS;
     this.filteredIndexDelayMs = options.filteredIndexDelayMs ?? FILTERED_INDEX_DELAY_MS;
   }
 
-  static async create(options: QueryServiceOptions): Promise<QueryService> {
-    // Fail fast (and report engine_unavailable) if the native binding cannot start DuckDB.
-    const probe = await DuckDBInstance.create(':memory:', { autoinstall_known_extensions: 'false' });
-    probe.closeSync();
-    const service = new QueryService(options);
+  static async create(driver: DuckDriver, options: QueryServiceOptions): Promise<QueryService> {
+    // Fail fast (and report engine_unavailable) if the binding cannot start DuckDB.
+    const version = await driver.start();
+    const service = new QueryService(driver, version, options);
     void service.removeStaleTempDirs();
     return service;
   }
@@ -315,7 +318,7 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
     const mode = options.parquet ?? 'auto';
     state.parquetMode = mode;
     if (
-      state.source.kind === 'csv' &&
+      this.canConvert(state) &&
       (mode === 'always' || (mode === 'auto' && state.fingerprint.sizeBytes >= this.autoConvertMinBytes))
     ) {
       // Background conversion; progress and completion arrive as events.
@@ -334,10 +337,15 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
 
   private async doOpen(id: TableId, file: FileHandle, csvPath: string, ctx: RequestContext): Promise<TableState> {
     let fingerprint: Fingerprint;
+    let input: InputFormat;
     try {
-      fingerprint = await fingerprintFile(csvPath);
+      fingerprint = await fingerprintFile(this.driver.files, csvPath);
+      input = await this.inputFormat(csvPath);
     } catch (error) {
       throw new EngineFailure('io_failed', `Cannot read the file: ${errorMessage(error)}`, { cause: error });
+    }
+    if (input === 'parquet' && !this.driver.capabilities.parquet) {
+      throw new EngineFailure('not_implemented', 'Parquet files cannot be read here: the Parquet extension is not available');
     }
 
     const existing = this.tables.get(id);
@@ -350,10 +358,10 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
     }
 
     let db = existing?.db;
-    const tempDir = existing?.tempDir ?? join(this.tempRoot, id);
+    const tempDir = existing?.tempDir ?? this.driver.files.join(this.tempRoot, id);
     if (!db) {
       await this.parquetCache.ready().catch(() => undefined);
-      db = await createSandboxedInstance({
+      db = await this.driver.createDatabase({
         allowedPaths: [csvPath],
         allowedDirectories: [this.parquetCache.dir],
         tempDirectory: tempDir,
@@ -361,12 +369,18 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
       });
     }
 
-    const cached = await this.parquetCache.lookup(fingerprint.key).catch(() => undefined);
-    const source: Source = cached ? { kind: 'parquet', path: cached.path, key: cached.key } : { kind: 'csv' };
+    let source: Source;
+    if (input === 'parquet') {
+      source = { kind: 'parquet', path: csvPath, key: fingerprint.key };
+    } else {
+      const cached = this.driver.capabilities.parquet ? await this.parquetCache.lookup(fingerprint.key).catch(() => undefined) : undefined;
+      source = cached ? { kind: 'parquet', path: cached.path, key: cached.key } : { kind: 'csv' };
+    }
     const state: TableState = {
       id,
       file,
       csvPath,
+      input,
       db,
       tempDir,
       csvReader: null,
@@ -393,10 +407,10 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
     try {
       await this.withConnection(state, ctx.signal, async (connection) => {
         await this.createRawView(connection, state);
-        const described = await connection.runAndReadAll(`DESCRIBE SELECT * FROM ${state.rawView}`);
-        state.inferred = described.getRowObjects().map((row) => {
-          const name = String(row['column_name']);
-          const duckdbType = String(row['column_type']);
+        const described = await connection.query(`DESCRIBE SELECT * FROM ${state.rawView}`);
+        state.inferred = rowObjects(described).map((row) => {
+          const name = textValue(row['column_name']);
+          const duckdbType = textValue(row['column_type']);
           return { name, duckdbType, type: simpleColumnType(duckdbType) };
         });
         if (state.inferred.some((column) => column.name === ORD || column.name === RN)) {
@@ -411,20 +425,27 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
         await this.createViews(connection, state);
         if (source.kind === 'parquet') {
           // Parquet row counts come from file metadata, so this is cheap.
-          const counted = await connection.runAndReadAll(`SELECT count(*) FROM ${state.rawView}`);
-          state.rowCount = toCount(counted.getRows()[0]?.[0] ?? null);
+          state.rowCount = await countRows(connection, `SELECT count(*) FROM ${state.rawView}`);
         }
       });
     } catch (error) {
-      if (!existing) {
-        db.closeSync();
-        void removeTempDirectory(tempDir);
-      }
+      if (!existing) void db.close().catch(() => undefined);
       throw error;
     }
 
     this.tables.set(id, state);
     return state;
+  }
+
+  /** CSV unless the file starts with Parquet's magic bytes. */
+  private async inputFormat(path: string): Promise<InputFormat> {
+    const magic = await this.driver.files.readRange(path, 0, 4);
+    return magic.length === 4 && magic[0] === 0x50 && magic[1] === 0x41 && magic[2] === 0x52 && magic[3] === 0x31 ? 'parquet' : 'csv';
+  }
+
+  /** The table reads a CSV that could be copied to Parquet. */
+  private canConvert(state: TableState): boolean {
+    return state.source.kind === 'csv' && state.input === 'csv' && this.driver.capabilities.parquet;
   }
 
   /** Recompute effective columns and (unless `keepVersion`) the version digest from `state.overrides`. */
@@ -449,20 +470,20 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
       .join(', ');
   }
 
-  private sourceRelation(connection: DuckDBConnection, state: TableState): Promise<string> | string {
+  private sourceRelation(connection: DuckConnection, state: TableState): Promise<string> | string {
     if (state.source.kind === 'parquet') {
       return `read_parquet(${quoteLiteral(state.source.path)}, file_row_number = true)`;
     }
     return this.csvReader(connection, state);
   }
 
-  private async createRawView(connection: DuckDBConnection, state: TableState): Promise<void> {
+  private async createRawView(connection: DuckConnection, state: TableState): Promise<void> {
     const source = await this.sourceRelation(connection, state);
     const select = state.source.kind === 'parquet' ? `* EXCLUDE (file_row_number)` : '*';
     await connection.run(`CREATE OR REPLACE VIEW ${state.rawView} AS SELECT ${select} FROM ${source}`);
   }
 
-  private async createViews(connection: DuckDBConnection, state: TableState): Promise<void> {
+  private async createViews(connection: DuckConnection, state: TableState): Promise<void> {
     await this.createRawView(connection, state);
     const source = await this.sourceRelation(connection, state);
     const columns = this.castList(state);
@@ -472,7 +493,7 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
     await connection.run(`CREATE OR REPLACE VIEW ${state.ordView} AS SELECT ${ord} AS ${ORD}, ${columns} FROM ${source}`);
   }
 
-  private async csvReader(connection: DuckDBConnection, state: TableState): Promise<string> {
+  private async csvReader(connection: DuckConnection, state: TableState): Promise<string> {
     state.csvReader ??= await sniffCsvReader(connection, state.csvPath);
     return state.csvReader;
   }
@@ -498,7 +519,7 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
     return {
       id: state.id,
       file: state.file,
-      fileName: basename(state.csvPath),
+      fileName: this.driver.files.basename(state.csvPath),
       ...(state.rowCount === undefined ? {} : { rowCount: state.rowCount }),
       fingerprint: state.fingerprint,
       usingParquetCache: state.source.kind === 'parquet',
@@ -564,10 +585,10 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
       for (const entry of failedNeeded) {
         selects.push(`count(*) FILTER (WHERE ${quoteIdent(entry.inferred.name)} IS NOT NULL AND ${cast(entry)} IS NULL)`);
       }
-      for (const entry of statsNeeded) selects.push(...statSelects(cast(entry)));
+      for (const entry of statsNeeded) selects.push(...statSelects(cast(entry), entry.duckdbType));
       const row = await this.withConnection(state, ctx.signal, async (connection) => {
-        const reader = await connection.runAndReadAll(`SELECT ${selects.join(', ')} FROM ${state.rawView}`);
-        return reader.getRows()[0] ?? [];
+        const result = await connection.query(`SELECT ${selects.join(', ')} FROM ${state.rawView}`);
+        return result.rows[0] ?? [];
       });
       const rowCount = toCount(row[0] ?? null);
       state.rowCount = rowCount;
@@ -644,10 +665,10 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
       await this.awaitConversion(state, signal);
       const missing = state.columns.filter((column) => !state.stats.has(statKey(column.name, column.duckdbType)));
       const selects = ['count(*)'];
-      for (const column of missing) selects.push(...statSelects(quoteIdent(column.name)));
+      for (const column of missing) selects.push(...statSelects(quoteIdent(column.name), column.duckdbType));
       const row = await this.withConnection(state, signal, async (connection) => {
-        const reader = await connection.runAndReadAll(`SELECT ${selects.join(', ')} FROM ${state.view}`);
-        return reader.getRows()[0] ?? [];
+        const result = await connection.query(`SELECT ${selects.join(', ')} FROM ${state.view}`);
+        return result.rows[0] ?? [];
       });
       const rowCount = toCount(row[0] ?? null);
       state.rowCount = rowCount;
@@ -670,10 +691,7 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
       // An unfiltered count parses little of each line, so it is cheaper than waiting for the
       // conversion; it is the row count the grid shows right after open.
       if (where) await this.awaitConversion(state, signal);
-      const rowCount = await this.withConnection(state, signal, async (connection) => {
-        const reader = await connection.runAndReadAll(sql, bind(where?.params));
-        return toCount(reader.getRows()[0]?.[0] ?? null);
-      });
+      const rowCount = await this.withConnection(state, signal, (connection) => countRows(connection, sql, where?.params));
       if (!where) state.rowCount = rowCount;
       const result: CachedValue = { kind: 'count', rowCount };
       this.results.set(key, result, 64);
@@ -843,7 +861,7 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
 
   /** Before an index build: prefer the Parquet copy, which sorts about twice as fast as the CSV. */
   private async beforeBuild(state: TableState): Promise<void> {
-    if (state.source.kind === 'csv' && state.parquetMode !== 'never') this.parquetJob(state).promise.catch(() => undefined);
+    if (this.canConvert(state) && state.parquetMode !== 'never') this.parquetJob(state).promise.catch(() => undefined);
     await this.awaitConversion(state, undefined);
   }
 
@@ -877,10 +895,7 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
     if (hit?.kind === 'count') return { value: hit.rowCount, cached: true };
     const value = await this.inflight.run(key, ctx.signal, async (signal): Promise<CachedValue> => {
       await this.awaitConversion(state, signal);
-      const rowCount = await this.withConnection(state, signal, async (connection) => {
-        const reader = await connection.runAndReadAll(compiled.sql, bind(compiled.params));
-        return toCount(reader.getRows()[0]?.[0] ?? null);
-      });
+      const rowCount = await this.withConnection(state, signal, (connection) => countRows(connection, compiled.sql, compiled.params));
       const result: CachedValue = { kind: 'count', rowCount };
       this.results.set(key, result, 64);
       return result;
@@ -907,13 +922,12 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
     const ready = this.cubes.get(key);
     if (ready) return ready;
     if (this.cubes.tooLargeRows(key) !== undefined) return null;
-    const name = quoteIdent(`gg_cube_${createHash('sha256').update(key).digest('hex').slice(0, 24)}`);
+    const name = quoteIdent(`gg_cube_${sha256Hex(key).slice(0, 24)}`);
     const built = this.inflight.run(key, undefined, async (): Promise<CachedValue> => {
       await this.awaitConversion(state, undefined);
       const rows = await this.withConnection(state, undefined, async (connection) => {
         await connection.run(`CREATE OR REPLACE TABLE ${name} AS ${build.sql}`, bind(build.params));
-        const reader = await connection.runAndReadAll(`SELECT count(*) FROM ${name}`);
-        const count = toCount(reader.getRows()[0]?.[0] ?? null);
+        const count = await countRows(connection, `SELECT count(*) FROM ${name}`);
         if (count > MAX_CUBE_ROWS) await connection.run(`DROP TABLE IF EXISTS ${name}`);
         return count;
       });
@@ -955,10 +969,7 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
     const hit = this.results.get(key);
     if (hit?.kind === 'count') return { value: hit.rowCount, cached: true };
     const value = await this.inflight.run(key, ctx.signal, async (signal): Promise<CachedValue> => {
-      const rowCount = await this.withConnection(state, signal, async (connection) => {
-        const reader = await connection.runAndReadAll(answer.sql, bind(answer.params));
-        return toCount(reader.getRows()[0]?.[0] ?? null);
-      });
+      const rowCount = await this.withConnection(state, signal, (connection) => countRows(connection, answer.sql, answer.params));
       const result: CachedValue = { kind: 'count', rowCount };
       this.results.set(key, result, 64);
       return result;
@@ -1029,9 +1040,7 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
     params: readonly SqlParam[] | undefined,
     signal: AbortSignal | undefined,
   ): Promise<Uint8Array> {
-    return this.withConnection(state, signal, async (connection) =>
-      readerToArrowIPC(await connection.runAndReadAll(sql, bind(params))),
-    );
+    return this.withConnection(state, signal, (connection) => connection.arrow(sql, bind(params)));
   }
 
   // -------------------------------------------------------------------------
@@ -1057,8 +1066,11 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
     const job: ParquetJob = {
       promise: (async () => {
         if (state.source.kind === 'parquet') {
-          const info = await stat(state.source.path).catch(() => undefined);
-          if (info) return { entry: { key, path: state.source.path, sizeBytes: info.size }, alreadyCached: true };
+          const info = await this.driver.files.stat(state.source.path).catch(() => undefined);
+          if (info) return { entry: { key, path: state.source.path, sizeBytes: info.sizeBytes }, alreadyCached: true };
+        }
+        if (!this.driver.capabilities.parquet) {
+          throw new EngineFailure('not_implemented', 'Parquet copies are not available here: the Parquet extension is not loaded');
         }
         const existing = await this.parquetCache.lookup(key);
         if (existing) {
@@ -1106,13 +1118,13 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
 
   /** For deep CSV pages: start the conversion (unless `never`) and wait for it. */
   private async preferParquet(state: TableState, signal: AbortSignal | undefined): Promise<void> {
-    if (state.parquetMode !== 'never') this.parquetJob(state).promise.catch(() => undefined);
+    if (state.parquetMode !== 'never' && this.canConvert(state)) this.parquetJob(state).promise.catch(() => undefined);
     await this.awaitConversion(state, signal);
   }
 
   private convert(state: TableState): Promise<CacheEntry> {
     const key = state.fingerprint.key;
-    let active: DuckDBConnection | null = null;
+    let active: DuckConnection | null = null;
     const flags = { interrupted: false };
     this.conversions.set(key, {
       interrupt: () => {
@@ -1128,8 +1140,8 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
       if (flags.interrupted) connection.interrupt();
       let lastFraction: number | null = -1;
       const timer = setInterval(() => {
-        const percentage = connection.progress.percentage;
-        const fraction = percentage < 0 ? null : Math.min(1, Math.max(0, percentage / 100));
+        const percentage = connection.progress();
+        const fraction = percentage === null || percentage < 0 ? null : Math.min(1, Math.max(0, percentage / 100));
         if (fraction === lastFraction) return;
         lastFraction = fraction;
         for (const table of this.tablesWithKey(key)) {
@@ -1138,14 +1150,13 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
       }, PROGRESS_INTERVAL_MS);
       try {
         // PRAGMAs, unlike SET, still work after lock_configuration; they only touch this connection.
-        await connection.run('PRAGMA enable_progress_bar');
-        await connection.run('PRAGMA disable_print_progress_bar');
+        await connection.enableProgress();
         if (flags.interrupted) throw new EngineFailure('cancelled', 'Parquet conversion was cancelled');
         await connection.run(
           `COPY (SELECT * FROM ${await this.csvReader(connection, state)}) TO ${quoteLiteral(tempPath)} (FORMAT parquet, COMPRESSION ${PARQUET_COMPRESSION})`,
         );
         // The CSV may have changed while it was being copied; never cache a mix.
-        const after = await fingerprintFile(state.csvPath);
+        const after = await fingerprintFile(this.driver.files, state.csvPath);
         if (after.key !== key) throw new EngineFailure('io_failed', 'The file changed during conversion');
         return await this.parquetCache.commit(key, tempPath, this.keysInUse());
       } catch (error) {
@@ -1155,7 +1166,7 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
       } finally {
         clearInterval(timer);
         active = null;
-        connection.closeSync();
+        connection.close();
       }
     })().finally(() => this.conversions.delete(key));
   }
@@ -1180,8 +1191,7 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
       await this.withViewLock(state, () =>
         this.withConnection(state, undefined, async (connection) => {
           await this.createViews(connection, state);
-          const counted = await connection.runAndReadAll(`SELECT count(*) FROM ${state.rawView}`);
-          state.rowCount = toCount(counted.getRows()[0]?.[0] ?? null);
+          state.rowCount = await countRows(connection, `SELECT count(*) FROM ${state.rawView}`);
         }),
       );
       if (emit) {
@@ -1222,7 +1232,7 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
       for (const conversion of this.conversions.values()) conversion.interrupt();
       // Point tables back at their CSVs before their Parquet files disappear.
       for (const state of this.tables.values()) {
-        if (state.source.kind !== 'parquet') continue;
+        if (state.source.kind !== 'parquet' || state.input === 'parquet') continue;
         state.source = { kind: 'csv' };
         await this.withViewLock(state, () => this.withConnection(state, undefined, (connection) => this.createViews(connection, state)));
         this.emit('event', { type: 'tableUpdated', table: this.handleFor(state) });
@@ -1275,8 +1285,7 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
     state.closed = true;
     for (const connection of state.active) connection.interrupt();
     for (let waited = 0; state.active.size > 0 && waited < 5_000; waited += 5) await new Promise((resolve) => setTimeout(resolve, 5));
-    state.db.closeSync();
-    await removeTempDirectory(state.tempDir);
+    await state.db.close();
   }
 
   /**
@@ -1317,10 +1326,7 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
     if (this.closed) return;
     this.closed = true;
     for (const conversion of this.conversions.values()) conversion.interrupt();
-    for (const state of this.tables.values()) {
-      state.db.closeSync();
-      void removeTempDirectory(state.tempDir);
-    }
+    for (const state of this.tables.values()) void state.db.close().catch(() => undefined);
     this.tables.clear();
   }
 
@@ -1329,7 +1335,7 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
   private async withConnection<T>(
     state: TableState,
     signal: AbortSignal | undefined,
-    fn: (connection: DuckDBConnection) => Promise<T>,
+    fn: (connection: DuckConnection) => Promise<T>,
   ): Promise<T> {
     throwIfAborted(signal);
     if (this.closed) throw new EngineFailure('engine_unavailable', 'The engine is shutting down');
@@ -1346,22 +1352,23 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
     } finally {
       state.active.delete(connection);
       signal?.removeEventListener('abort', onAbort);
-      connection.closeSync();
+      connection.close();
     }
   }
 
   /** Spill folders left behind by a crashed engine (instances remove their own on close). */
   private async removeStaleTempDirs(): Promise<void> {
-    const names = await readdir(this.tempRoot).catch(() => [] as string[]);
+    const files = this.driver.files;
+    const names = await files.readdir(this.tempRoot).catch(() => [] as string[]);
     const now = Date.now();
     await Promise.all(
       names
         .filter((name) => name.startsWith('tb_'))
         .map(async (name) => {
-          const path = join(this.tempRoot, name);
-          const info = await stat(path).catch(() => undefined);
+          const path = files.join(this.tempRoot, name);
+          const info = await files.stat(path).catch(() => undefined);
           if (info && now - info.mtimeMs > STALE_TEMP_DIR_MS && !this.tables.has(name as TableId)) {
-            await removeTempDirectory(path);
+            await this.driver.removeTempDirectory(path);
           }
         }),
     );
@@ -1372,11 +1379,24 @@ function statKey(column: string, duckdbType: string): string {
   return `${column}\u0000${duckdbType}`;
 }
 
-function statSelects(expression: string): string[] {
-  return [`count(${expression})`, `approx_count_distinct(${expression})`, `min(${expression})`, `max(${expression})`];
+/**
+ * Profile statistics of one column. Min and max come back as numbers for
+ * numeric columns (DECIMAL as DOUBLE), booleans for BOOLEAN, and DuckDB's
+ * text for everything else, cast in SQL so every driver reports the same
+ * text (see driver.ts on value mapping).
+ */
+function statSelects(expression: string, duckdbType: string): string[] {
+  const type = simpleColumnType(duckdbType);
+  const bound = (fn: 'min' | 'max') =>
+    type === 'integer' || type === 'float' || type === 'boolean'
+      ? `${fn}(${expression})`
+      : type === 'decimal'
+        ? `CAST(${fn}(${expression}) AS DOUBLE)`
+        : `CAST(${fn}(${expression}) AS VARCHAR)`;
+  return [`count(${expression})`, `approx_count_distinct(${expression})`, bound('min'), bound('max')];
 }
 
-function readStats(row: readonly DuckDBValue[], base: number, rowCount: number): ColumnStats {
+function readStats(row: readonly DriverValue[], base: number, rowCount: number): ColumnStats {
   const nonNull = toCount(row[base] ?? null);
   return {
     nullFraction: rowCount === 0 ? 0 : (rowCount - nonNull) / rowCount,
@@ -1415,11 +1435,11 @@ function expectCount(value: CachedValue): number {
  * the options of DuckDB's own `sniff_csv(...).Prompt`. Falls back to
  * `read_csv_auto` if sniffing fails, so DuckDB reports the real error on use.
  */
-async function sniffCsvReader(connection: DuckDBConnection, path: string): Promise<string> {
+async function sniffCsvReader(connection: DuckConnection, path: string): Promise<string> {
   const fallback = `read_csv_auto(${quoteLiteral(path)})`;
-  let row: Record<string, DuckDBValue> | undefined;
+  let row: Record<string, DriverValue> | undefined;
   try {
-    row = (await connection.runAndReadAll('SELECT * FROM sniff_csv(?)', [path])).getRowObjects()[0];
+    row = rowObjects(await connection.query('SELECT * FROM sniff_csv(?)', [path]))[0];
   } catch (error) {
     if (isInterruptError(error)) throw error;
     return fallback;
@@ -1427,13 +1447,17 @@ async function sniffCsvReader(connection: DuckDBConnection, path: string): Promi
   if (!row) return fallback;
   const text = (name: string): string => {
     const value = row[name];
-    return value === null || value === undefined || String(value) === '(empty)' ? '' : String(value);
+    return typeof value !== 'string' || value === '(empty)' ? '' : value;
   };
   const columns = row['Columns'];
-  if (!(columns instanceof DuckDBListValue) || columns.items.length === 0) return fallback;
-  const columnDefs = columns.items.map((item) => {
-    if (!(item instanceof DuckDBStructValue)) throw new Error('Unexpected sniff_csv column entry');
-    return `${quoteLiteral(String(item.entries['name']))}: ${quoteLiteral(String(item.entries['type']))}`;
+  if (!Array.isArray(columns) || columns.length === 0) return fallback;
+  const columnDefs = (columns as readonly DriverValue[]).map((item) => {
+    if (item === null || typeof item !== 'object' || Array.isArray(item)) throw new Error('Unexpected sniff_csv column entry');
+    const entry = item as { readonly [key: string]: DriverValue };
+    const name = entry['name'];
+    const type = entry['type'];
+    if (typeof name !== 'string' || typeof type !== 'string') throw new Error('Unexpected sniff_csv column entry');
+    return `${quoteLiteral(name)}: ${quoteLiteral(type)}`;
   });
   const options = [
     'auto_detect = false',
@@ -1451,18 +1475,29 @@ async function sniffCsvReader(connection: DuckDBConnection, path: string): Promi
   return `read_csv(${quoteLiteral(path)}, ${options.join(', ')})`;
 }
 
-function bind(params: readonly SqlParam[] | undefined): SqlParam[] | undefined {
+function bind(params: readonly SqlParam[] | undefined): DriverParam[] | undefined {
   return params && params.length > 0 ? [...params] : undefined;
+}
+
+/** A text cell (DESCRIBE output). */
+function textValue(value: DriverValue | undefined): string {
+  if (typeof value !== 'string') throw new EngineFailure('query_failed', 'Unexpected DESCRIBE output');
+  return value;
+}
+
+/** Rows of a result as objects keyed by column name. */
+function rowObjects(result: DriverResult): Array<Record<string, DriverValue>> {
+  return result.rows.map((row) => Object.fromEntries(result.columns.map((name, index) => [name, row[index] ?? null])));
+}
+
+/** The first column of the first row of a count query. */
+async function countRows(connection: DuckConnection, sql: string, params?: readonly SqlParam[]): Promise<number> {
+  const result = await connection.query(sql, bind(params));
+  return toCount(result.rows[0]?.[0] ?? null);
 }
 
 /** Deterministic, so a rebuilt index gets the same name and cached pages stay valid. */
 function sortIndexName(state: TableState, orderBy: string, where: SqlFragment | undefined): string {
-  const digest = createHash('sha256')
-    .update(state.version)
-    .update('\u0000')
-    .update(orderBy)
-    .update('\u0000')
-    .update(fragmentKey(where))
-    .digest('hex');
+  const digest = sha256Hex(state.version, '\u0000', orderBy, '\u0000', fragmentKey(where));
   return quoteIdent(`gg_idx_${state.id}_${digest.slice(0, 16)}`);
 }

@@ -1,41 +1,48 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { DuckDBInstance } from '@duckdb/node-api';
-import { DataType, IntervalUnit, TimeUnit } from 'apache-arrow';
+import { DataType, IntervalUnit, TimeUnit, tableFromIPC } from 'apache-arrow';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { filterValue, formatValue, valueKind } from '@glassgrid/ui/format';
-import { readerToArrowTable } from './arrow';
-import { createHarness, decode, type Harness } from './test-support';
+import type { DriverValue, DuckDatabase } from './driver';
+import { createHarness, decode, isWasm, testDriver, type Harness } from './test-support';
 
 /*
  * DECIMAL -> Arrow Decimal128, TIME -> Time64, INTERVAL -> Interval
  * (MONTH_DAY_NANO), and the renderer's formatting of each, checked against
- * DuckDB's own text rendering of the same values.
+ * DuckDB's own text rendering of the same values. Runs through the driver
+ * (`connection.arrow`), so the same expectations hold for the native
+ * driver's Arrow builder and for DuckDB-WASM's own Arrow export.
  */
 
-let db: DuckDBInstance;
+let db: DuckDatabase;
 let h: Harness;
 
 beforeAll(async () => {
-  db = await DuckDBInstance.create(':memory:');
   h = await createHarness();
+  db = await (await testDriver()).createDatabase({
+    allowedPaths: [],
+    allowedDirectories: [h.cacheDir],
+    tempDirectory: join(h.dir, 'arrow-tmp'),
+    memoryLimitBytes: 256 * 1024 * 1024,
+  });
 });
 
 afterAll(async () => {
-  db.closeSync();
+  await db.close();
   await h.dispose();
 });
 
 async function typed(selectList: string) {
   const connection = await db.connect();
   try {
-    const values = readerToArrowTable(await connection.runAndReadAll(`SELECT ${selectList}`));
-    const texts = await connection.runAndReadAll(
+    const values = tableFromIPC(await connection.arrow(`SELECT ${selectList}`));
+    const texts = await connection.query(
       `SELECT ${values.schema.fields.map((field) => `CAST("${field.name}" AS VARCHAR) AS "${field.name}"`).join(', ')} FROM (SELECT ${selectList})`,
     );
-    return { values, texts: texts.getRowObjects() };
+    const rows = texts.rows.map((row): Record<string, DriverValue> => Object.fromEntries(texts.columns.map((name, i) => [name, row[i] ?? null])));
+    return { values, texts: rows };
   } finally {
-    connection.closeSync();
+    connection.close();
   }
 }
 
@@ -46,7 +53,7 @@ function expectRenderedLikeDuckDB(result: Awaited<ReturnType<typeof typed>>) {
     const kind = valueKind(field);
     result.texts.forEach((row, index) => {
       const expected = row[field.name] ?? null;
-      expect(formatValue(vector?.get(index), kind), `${field.name}[${index}]`).toBe(expected === null ? null : String(expected));
+      expect(formatValue(vector?.get(index), kind), `${field.name}[${index}]`).toBe(expected === null ? null : expected);
     });
   }
 }
@@ -114,9 +121,31 @@ describe('INTERVAL', () => {
     expectRenderedLikeDuckDB(result);
   });
 
-  it('sends a page as text when the time part overflows 64-bit nanoseconds', async () => {
+  // DuckDB-WASM's own Arrow export does the conversion (and its overflow handling) itself.
+  it.skipIf(isWasm)('sends a page as text when the time part overflows 64-bit nanoseconds', async () => {
     const result = await typed(`* FROM (VALUES (INTERVAL '3000000 hours'), (INTERVAL '1 hour')) t(i)`);
     const field = result.values.schema.fields[0];
     expect(field && DataType.isUtf8(field.type)).toBe(true);
+  });
+});
+
+describe('types Arrow JS cannot show', () => {
+  it('travel as DuckDB text (HUGEINT, UUID, BLOB) on every driver', async () => {
+    const result = await typed(
+      `* FROM (VALUES
+        (170141183460469231731687303715884105727::HUGEINT, '6a2b3e0c-6f1e-4c2a-9d6e-0a1b2c3d4e5f'::UUID, '\\xAA\\x00AB'::BLOB),
+        (-1::HUGEINT, NULL::UUID, NULL::BLOB)
+      ) t(h, u, b)`,
+    );
+    for (const field of result.values.schema.fields) expect(DataType.isUtf8(field.type), field.name).toBe(true);
+    result.texts.forEach((row, index) => {
+      for (const name of ['h', 'u', 'b']) expect(result.values.getChild(name)?.get(index) ?? null, `${name}[${index}]`).toBe(row[name] ?? null);
+    });
+  });
+
+  it('travel as text when nested (LIST, STRUCT)', async () => {
+    const result = await typed(`[1, 2, NULL] AS l, {'a': 1, 'b': 'x'} AS s`);
+    for (const field of result.values.schema.fields) expect(DataType.isUtf8(field.type), field.name).toBe(true);
+    expect(result.values.getChild('l')?.get(0)).toBe(result.texts[0]?.['l']);
   });
 });

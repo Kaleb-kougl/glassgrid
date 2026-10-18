@@ -14,7 +14,7 @@ import {
 } from '@glassgrid/core';
 import { QueryService, type PagingStrategy, type RowsOptions } from './query-service';
 import { toFragment } from './session';
-import { columnValues, createHarness, decode, fixtureRow, writeFixtureCsv, type Harness } from './test-support';
+import { columnValues, createHarness, decode, fixtureRow, hasParquet, latencyBudget, testDriver, writeFixtureCsv, type Harness } from './test-support';
 
 /*
  * Sorted and filtered pages come from two paths: a top-K query (block of the
@@ -29,9 +29,9 @@ const services: Record<PagingStrategy, QueryService> = {} as Record<PagingStrate
 
 beforeAll(async () => {
   h = await createHarness();
-  services.auto = await QueryService.create({ cacheDir: h.cacheDir, topKRows: 40 });
-  services.topK = await QueryService.create({ cacheDir: h.cacheDir, pagingStrategy: 'topK' });
-  services.index = await QueryService.create({ cacheDir: h.cacheDir, pagingStrategy: 'index' });
+  services.auto = await QueryService.create(await testDriver(), { cacheDir: h.cacheDir, topKRows: 40 });
+  services.topK = await QueryService.create(await testDriver(), { cacheDir: h.cacheDir, pagingStrategy: 'topK' });
+  services.index = await QueryService.create(await testDriver(), { cacheDir: h.cacheDir, pagingStrategy: 'index' });
 });
 
 afterAll(async () => {
@@ -130,7 +130,7 @@ describe('top-K and row-number index paths', () => {
         filterArb,
         fc.integer({ min: 0, max: 130 }),
         fc.integer({ min: 1, max: 60 }),
-        fc.boolean(),
+        hasParquet ? fc.boolean() : fc.constant(false),
         async (rows, sort, filters, offset, limit, parquet) => {
           const path = await writeRandomCsv(rows);
           const { table } = await openEverywhere(path, parquet);
@@ -184,7 +184,7 @@ describe('top-K block while the index builds', () => {
     // Pages inside the block are slices of it: no query, even while the index builds.
     const started = performance.now();
     const second = await service.rows(table, { offset: 1000, limit: 1000, sort }, { viewId: 'grid' });
-    expect(performance.now() - started).toBeLessThan(100);
+    expect(performance.now() - started).toBeLessThan(latencyBudget(100));
     expect(service.debugState().sortIndexes).toBe(1);
 
     const expected = (offset: number) =>
@@ -242,7 +242,7 @@ describe('deep unsorted pages on CSV', () => {
     await writeFixtureCsv(path, ROWS);
   });
 
-  it('switch to the Parquet copy (converting on demand) in auto mode', async () => {
+  it.skipIf(!hasParquet)('switch to the Parquet copy (converting on demand) in auto mode', async () => {
     const service = await h.restart();
     await service.clearCache('parquet');
     const file = toFileHandle(randomUUID());

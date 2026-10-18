@@ -1,4 +1,4 @@
-import type { DuckDBConnection } from '@duckdb/node-api';
+import type { DuckConnection } from './driver';
 import type { SqlParam } from './sql-text';
 import { EngineFailure, errorMessage, isInterruptError, raceAbort } from './errors';
 
@@ -7,14 +7,14 @@ export const DEFAULT_MAX_SORT_INDEXES = 4;
 interface SortIndex {
   name: string;
   tableId: string;
-  connect: () => Promise<DuckDBConnection>;
+  connect: () => Promise<DuckConnection>;
   ready: Promise<void>;
   building: boolean;
   /** Set once the table exists. */
   done: boolean;
   /** Set when the build was abandoned or failed; the entry is gone from the map. */
   dead: boolean;
-  connection: DuckDBConnection | null;
+  connection: DuckConnection | null;
   /** Kept alive although no view wants it (requested without a view id). */
   pinned: boolean;
   /** Requests currently reading or awaiting the index. */
@@ -31,7 +31,7 @@ export interface BuildSpec {
   sql: string;
   params: readonly SqlParam[];
   /** Connection to the table's DuckDB instance. */
-  connect: () => Promise<DuckDBConnection>;
+  connect: () => Promise<DuckConnection>;
   /**
    * Awaited before the build starts, e.g. until the top-K page that asked
    * for it has been served or a running Parquet conversion has finished.
@@ -194,7 +194,7 @@ export class SortIndexes {
           // An interrupt may have been requested before the connection existed.
           if (isDead()) throw abandoned();
           await connection.run(`DROP TABLE IF EXISTS ${spec.name}`);
-          await connection.run(spec.sql, spec.params.length > 0 ? [...spec.params] : undefined);
+          await connection.run(spec.sql, spec.params.length > 0 ? spec.params : undefined);
           if (isDead()) {
             // Abandoned just as it finished: do not leak the table (unless a rebuild owns the name).
             if (!this.indexes.has(spec.name)) await connection.run(`DROP TABLE IF EXISTS ${spec.name}`);
@@ -203,7 +203,7 @@ export class SortIndexes {
           index.done = true;
         } finally {
           index.connection = null;
-          connection.closeSync();
+          connection.close();
         }
       } catch (error) {
         if (this.indexes.get(spec.name) === index) this.indexes.delete(spec.name);
@@ -247,7 +247,7 @@ export class SortIndexes {
       try {
         if (!this.indexes.has(index.name)) await connection.run(`DROP TABLE IF EXISTS ${index.name}`);
       } finally {
-        connection.closeSync();
+        connection.close();
       }
     } catch (error) {
       // The table's instance may already be closed, which drops the table with it.

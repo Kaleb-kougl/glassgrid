@@ -8,6 +8,15 @@ import tseslint from 'typescript-eslint';
 
 const NODE_BUILTINS = [...new Set(builtinModules.map((name) => name.replace(/^node:/, '')))];
 
+/** Engine files that run only in Node: the native driver, DuckDB-WASM's Node runtime, tests and benches. */
+const ENGINE_NODE_FILES = [
+  'packages/engine/src/native/**',
+  'packages/engine/src/wasm/node.ts',
+  'packages/engine/src/**/*.test.ts',
+  'packages/engine/src/test-support.ts',
+  'packages/engine/web/*.ts',
+];
+
 /** Imports that only make sense in Node or Electron's privileged processes. */
 const nodeOnlyImports = {
   paths: [{ name: 'electron', message: 'Electron APIs belong in apps/desktop main, preload or engine code.' }],
@@ -74,8 +83,20 @@ export default defineConfig(
 
   // --- Runtime environments -------------------------------------------------
   {
-    files: ['apps/desktop/src/main/**', 'apps/desktop/src/engine/**', '**/*.config.ts', 'apps/desktop/e2e/**', 'tools/**', 'packages/ui/bench/*.ts'],
+    files: [
+      'apps/desktop/src/main/**',
+      'apps/desktop/src/engine/**',
+      '**/*.config.ts',
+      'apps/desktop/e2e/**',
+      'tools/**',
+      'packages/ui/bench/*.ts',
+      ...ENGINE_NODE_FILES,
+    ],
     languageOptions: { globals: globals.node },
+  },
+  {
+    files: ['packages/engine/src/worker/**', 'packages/engine/src/client/**', 'packages/engine/web/**'],
+    languageOptions: { globals: { ...globals.browser, ...globals.worker } },
   },
   {
     files: ['apps/desktop/src/preload/**'],
@@ -122,6 +143,35 @@ export default defineConfig(
         })),
         ...['process', 'Buffer', 'require', 'module', '__dirname', '__filename', 'global', 'setImmediate'].map(
           (name) => ({ name, message: 'Core must not use Node APIs.' }),
+        ),
+      ],
+    },
+  },
+  {
+    // The engine core runs in Electron's utility process and in a browser
+    // worker: no Node built-ins, no Electron, no DOM. Drivers and runtimes
+    // (native, wasm/node, worker) are the exceptions.
+    files: ['packages/engine/src/**'],
+    ignores: [...ENGINE_NODE_FILES, 'packages/engine/src/worker/**', 'packages/engine/src/client/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: nodeOnlyImports.paths,
+          patterns: [
+            ...nodeOnlyImports.patterns,
+            { group: ['@duckdb/*'], message: 'Only drivers may import a DuckDB binding.' },
+          ],
+        },
+      ],
+      'no-restricted-globals': [
+        'error',
+        ...['window', 'document', 'navigator', 'localStorage', 'sessionStorage', 'location', 'self'].map((name) => ({
+          name,
+          message: 'The engine core must not use DOM APIs.',
+        })),
+        ...['process', 'Buffer', 'require', 'module', '__dirname', '__filename', 'global', 'setImmediate'].map(
+          (name) => ({ name, message: 'The engine core must not use Node APIs.' }),
         ),
       ],
     },

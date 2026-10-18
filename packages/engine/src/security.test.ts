@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { TableId } from '@glassgrid/core';
 import { quoteLiteral } from './sql-text';
-import { columnValues, createHarness, decode, writeFixtureCsv, type Harness } from './test-support';
+import { columnValues, createHarness, decode, isWasm, writeFixtureCsv, type Harness } from './test-support';
 
 /*
  * DuckDB runs with enable_external_access = false, an allowlist of the
@@ -46,7 +46,8 @@ function whereFragment(sql: string) {
   return { sql, params: [] };
 }
 
-describe('external access is locked down', () => {
+// Each table's own allowlist is the native driver's model; the WASM driver's sandbox is tested in wasm/wasm-security.test.ts.
+describe.skipIf(isWasm)('external access is locked down', () => {
   it('refuses arbitrary local files through a crafted WHERE fragment', async () => {
     const fragment = whereFragment(`(SELECT count(*) FROM read_csv('/etc/passwd')) > 0`);
     await expect(h.service.rows(table, { offset: 0, limit: 10, where: fragment })).rejects.toMatchObject(permission);

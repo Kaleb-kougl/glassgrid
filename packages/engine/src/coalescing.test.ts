@@ -2,7 +2,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { FileHandle, TableId } from '@glassgrid/core';
 import { Coalescer } from './coalesce';
-import { columnValues, createHarness, decode, writeFixtureCsv, type Harness } from './test-support';
+import { columnValues, createHarness, decode, latencyBudget, writeFixtureCsv, type Harness } from './test-support';
 
 /*
  * Grid paging under load: identical in-flight pages share one query, an
@@ -107,7 +107,7 @@ describe('page requests', () => {
     // The shared query is interrupted, not left running: the in-flight entry is gone almost at once.
     for (let i = 0; i < 100 && h.service.debugState().inflight > 0; i += 1) await new Promise((resolve) => setTimeout(resolve, 5));
     expect(h.service.debugState().inflight).toBe(0);
-    expect(performance.now() - abortedAt).toBeLessThan(250);
+    expect(performance.now() - abortedAt).toBeLessThan(latencyBudget(250));
   });
 
   it('settle a fling quickly: superseded pages are interrupted, the last ones arrive', async () => {
@@ -135,7 +135,7 @@ describe('page requests', () => {
     const results = await Promise.all(flights);
     // Every abandoned page settled within a few ms of its abort (or had already finished).
     results.slice(0, 27).forEach((result, i) => {
-      if (!result.ok) expect(result.at - (abortedAt[i] ?? 0)).toBeLessThan(100);
+      if (!result.ok) expect(result.at - (abortedAt[i] ?? 0)).toBeLessThan(latencyBudget(100));
     });
     expect(results.slice(27).every((result) => result.ok)).toBe(true);
     // The last three only compete with each other, not with 27 abandoned scans.

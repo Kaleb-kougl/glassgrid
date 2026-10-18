@@ -2,8 +2,9 @@ import { readdir, stat, utimes, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { EngineEvent, FileHandle } from '@glassgrid/core';
+import { nodeFiles } from './native/files';
 import { ParquetCache } from './parquet-cache';
-import { columnValues, createHarness, decode, writeFixtureCsv, type Harness } from './test-support';
+import { columnValues, createHarness, decode, hasParquet, writeFixtureCsv, type Harness } from './test-support';
 
 const KEY_A = 'a'.repeat(32);
 const KEY_B = 'b'.repeat(32);
@@ -32,7 +33,7 @@ async function fakeEntry(cache: ParquetCache, key: string, bytes: number, usedAt
 
 describe('ParquetCache (files only)', () => {
   it('evicts least recently used entries down to the cap, sparing protected keys', async () => {
-    const cache = new ParquetCache(h.cacheDir, 250);
+    const cache = new ParquetCache(nodeFiles, h.cacheDir, 250);
     await fakeEntry(cache, KEY_A, 100, 1_000);
     await fakeEntry(cache, KEY_B, 100, 2_000);
     await fakeEntry(cache, KEY_C, 100, 3_000);
@@ -43,7 +44,7 @@ describe('ParquetCache (files only)', () => {
   });
 
   it('counts a lookup as a use', async () => {
-    const cache = new ParquetCache(h.cacheDir, 250);
+    const cache = new ParquetCache(nodeFiles, h.cacheDir, 250);
     await fakeEntry(cache, KEY_A, 100, 1_000);
     await fakeEntry(cache, KEY_B, 100, 2_000);
     await fakeEntry(cache, KEY_C, 100, 3_000);
@@ -52,7 +53,7 @@ describe('ParquetCache (files only)', () => {
   });
 
   it('never serves temp files and removes only stale ones', async () => {
-    const cache = new ParquetCache(h.cacheDir);
+    const cache = new ParquetCache(nodeFiles, h.cacheDir);
     await cache.ready();
     const stale = cache.tempPathFor(KEY_A);
     const fresh = cache.tempPathFor(KEY_B);
@@ -62,14 +63,14 @@ describe('ParquetCache (files only)', () => {
     await utimes(stale, twoHoursAgo, twoHoursAgo);
 
     expect(await cache.lookup(KEY_A)).toBeUndefined();
-    await new ParquetCache(h.cacheDir).ready();
+    await new ParquetCache(nodeFiles, h.cacheDir).ready();
     const names = await listCache(h.cacheDir);
     expect(names).toHaveLength(1);
     expect(names[0]).toMatch(new RegExp(`^${KEY_B}\\.parquet\\.[0-9a-f]+\\.tmp$`));
   });
 });
 
-describe('QueryService Parquet cache', () => {
+describe.skipIf(!hasParquet)('QueryService Parquet cache', () => {
   async function openCsv(rows: number, name = 'data.csv') {
     const path = join(h.dir, name);
     await writeFixtureCsv(path, rows);

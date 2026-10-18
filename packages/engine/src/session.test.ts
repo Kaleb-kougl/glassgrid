@@ -2,7 +2,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { EngineRequest, EngineResponse, FileHandle, TableId } from '@glassgrid/core';
 import { EngineSession } from './session';
-import { createHarness, decode, writeFixtureCsv, type Harness } from './test-support';
+import { createHarness, decode, hasParquet, latencyBudget, writeFixtureCsv, type Harness } from './test-support';
 
 const ROWS = 2_000_000;
 
@@ -150,12 +150,12 @@ describe('EngineSession', () => {
     const started = performance.now();
     send({ kind: 'cancel', requestId: 'k1', target: 'victim' });
     expect(await replyTo('victim')).toMatchObject({ kind: 'error', code: 'cancelled' });
-    expect(performance.now() - started).toBeLessThan(100);
+    expect(performance.now() - started).toBeLessThan(latencyBudget(100));
     await settle(1000);
     expect(sent.filter((m) => m.kind !== 'event' && m.requestId === 'victim')).toHaveLength(1);
   });
 
-  it('forwards engine events and reports cache stats', async () => {
+  it.skipIf(!hasParquet)('forwards engine events and reports cache stats', async () => {
     const { send, replyTo, sent } = connect();
     send({ kind: 'ensureParquetCache', requestId: 'pq', table });
     expect(await replyTo('pq', 60_000)).toMatchObject({ kind: 'parquetCache', table: { usingParquetCache: true } });

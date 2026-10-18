@@ -1,4 +1,4 @@
-import { DuckDBDecimalValue, type DuckDBValue } from '@duckdb/node-api';
+import type { DriverValue } from './driver';
 import type { ColumnType, ProfileValue } from '@glassgrid/core';
 
 const INTEGER = /^(TINYINT|SMALLINT|INTEGER|BIGINT|HUGEINT|UTINYINT|USMALLINT|UINTEGER|UBIGINT|UHUGEINT)$/;
@@ -48,7 +48,7 @@ export function overrideDuckdbType(type: ColumnType, inferredDuckdbType: string)
 const MAX_TEXT = 200;
 
 /** Convert a DuckDB value to a JSON-safe scalar for profiles (long text is truncated). */
-export function toScalar(value: DuckDBValue): ProfileValue {
+export function toScalar(value: DriverValue): ProfileValue {
   if (value === null) return null;
   if (typeof value === 'boolean') return value;
   if (typeof value === 'number') return Number.isFinite(value) ? value : String(value);
@@ -57,13 +57,12 @@ export function toScalar(value: DuckDBValue): ProfileValue {
       ? Number(value)
       : value.toString();
   }
-  if (value instanceof DuckDBDecimalValue) return value.toDouble();
-  const text = typeof value === 'string' ? value : String(value);
+  const text = typeof value === 'string' ? value : JSON.stringify(value);
   return text.length > MAX_TEXT ? `${text.slice(0, MAX_TEXT - 1)}…` : text;
 }
 
-export function toCount(value: DuckDBValue): number {
+export function toCount(value: DriverValue): number {
   if (typeof value === 'bigint') return Number(value);
   if (typeof value === 'number') return value;
-  throw new TypeError(`Expected an integer count, got ${String(value)}`);
+  throw new TypeError(`Expected an integer count, got ${JSON.stringify(value, (_key, v: unknown) => (typeof v === 'bigint' ? v.toString() : v))}`);
 }
