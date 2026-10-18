@@ -87,6 +87,7 @@ interface ToastState {
 
 const numberFormat = new Intl.NumberFormat('en-US');
 const compact = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 2 });
+const percent = new Intl.NumberFormat('en-US', { style: 'percent', maximumFractionDigits: 1 });
 
 function measure(name: string, start: string, detail: unknown): number {
   const end = `${name}:end`;
@@ -109,6 +110,13 @@ function isEditableTarget(target: EventTarget | null): boolean {
 /** Distinct counts as the column list shows them: exact below a million, then compact (8.41M). */
 export function formatDistinct(count: number): string {
   return count < 1_000_000 ? numberFormat.format(count) : compact.format(count);
+}
+
+/** The share of NULLs in a column, as the column list reads it out: `no nulls`, `<0.1% null`, `12.5% null`. */
+export function formatNulls(fraction: number): string {
+  if (fraction <= 0) return 'no nulls';
+  if (fraction < 0.001) return '<0.1% null';
+  return `${percent.format(fraction)} null`;
 }
 
 /** A bar chart over `column`, the v1 default for a dropped column (other marks arrive in M3). */
@@ -527,6 +535,7 @@ export function App({ engine, bridge, workspace }: AppProps) {
     () => new Map((profiled?.columns ?? []).map((column) => [column.name, column.distinctCount])),
     [profiled],
   );
+  const nullsByColumn = useMemo(() => new Map((profiled?.columns ?? []).map((column) => [column.name, formatNulls(column.nullFraction)])), [profiled]);
   // While a new count runs (filters changed), keep showing the last one for this table.
   const rowCount = count?.table === tableId ? count.rowCount : null;
   const totalRows = profiled?.rowCount ?? (filters.length === 0 ? rowCount : null);
@@ -628,6 +637,7 @@ export function App({ engine, bridge, workspace }: AppProps) {
                       type={effectiveColumnType(column)}
                       inferredType={column.inferredType}
                       distinct={distinct === undefined ? '–' : formatDistinct(distinct)}
+                      nulls={nullsByColumn.get(column.name)}
                       profiling={profiling}
                       selected={selectedColumns.includes(column.name)}
                       onTypeChange={(type) => dispatch('setColumnType', { column: column.name, type })}

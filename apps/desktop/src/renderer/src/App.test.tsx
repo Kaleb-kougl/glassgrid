@@ -5,7 +5,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { tableFromArrays } from 'apache-arrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { tableIdForFile, toFileHandle, type FilterInput, type MenuCommand, type SortKey, type TableHandle } from '@glassgrid/core';
-import { App, type AppProps } from './App';
+import { App, formatNulls, type AppProps } from './App';
 import { EngineRequestError } from './engine-client';
 import { THEME_STORAGE_KEY } from './theme';
 import { createAppWorkspace } from './workspace';
@@ -200,6 +200,12 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+describe('formatNulls', () => {
+  it('words the share of NULLs', () => {
+    expect([0, 0.0004, 0.125, 1].map(formatNulls)).toEqual(['no nulls', '<0.1% null', '12.5% null', '100% null']);
+  });
+});
+
 describe('App', () => {
   it('starts on the empty state: the window is the drop zone', () => {
     renderApp();
@@ -218,6 +224,7 @@ describe('App', () => {
     expect(mirror().getAttribute('aria-rowcount')).toBe('3');
     await waitFor(() => expect(within(screen.getByTestId('column-category')).getByText('12,345')).toBeDefined());
     expect(within(screen.getByTestId('column-amount')).getByText('8.41M')).toBeDefined();
+    expect(screen.getByTestId('column-amount').getAttribute('title')).toBe('no nulls');
     expect(historyEntries()).toEqual(['Opened trips.csvby you · ' + new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(1_000)]);
   });
 

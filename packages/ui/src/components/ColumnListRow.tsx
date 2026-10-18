@@ -27,6 +27,8 @@ export interface ColumnListRowProps {
   distinct: ReactNode;
   /** The profile for this column is still running. */
   profiling?: boolean;
+  /** Share of NULLs, already formatted (e.g. "12.5% null"); shown on hover and read out, not drawn (the design shows distinct counts only). */
+  nulls?: string | undefined;
   /** The column is part of the grid selection. */
   selected?: boolean;
   onTypeChange: (type: ColumnType) => void;
@@ -46,6 +48,7 @@ export function ColumnListRow({
   inferredType,
   distinct,
   profiling = false,
+  nulls,
   selected = false,
   onTypeChange,
   onActivate,
@@ -60,7 +63,8 @@ export function ColumnListRow({
       data-testid={testId}
       tabIndex={0}
       draggable
-      aria-label={`${name}, ${type}${selected ? ', in the grid selection' : ''}. Press Enter to chart it, or drag it onto the charts.`}
+      title={nulls}
+      aria-label={`${name}, ${type}${nulls ? `, ${nulls}` : ''}${selected ? ', in the grid selection' : ''}. Press Enter to chart it, or drag it onto the charts.`}
       onDragStart={(event) => {
         event.dataTransfer.setData(COLUMN_DRAG_TYPE, name);
         event.dataTransfer.setData('text/plain', name);
