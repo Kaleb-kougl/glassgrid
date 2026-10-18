@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "@glassgrid/core": "workspace:*",
+    "@glassgrid/engine": "workspace:*",
     "@glassgrid/ui": "workspace:*",
     "apache-arrow": "21.2.0"
   },

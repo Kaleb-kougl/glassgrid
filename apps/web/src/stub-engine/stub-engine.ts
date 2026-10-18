@@ -42,7 +42,7 @@ import { castCell, DUCKDB_TYPES, formatTemporal, sampleTrips, type Cell, type St
  * │ (packages/engine) is wired into apps/web (M4 integration).           │
  * └──────────────────────────────────────────────────────────────────────┘
  *
- * An in-memory `EngineClientLike` over one tiny fixed dataset
+ * An in-memory `EngineClientLike` (the engine package's `EngineClientApi`) over one tiny fixed dataset
  * (sample-trips.ts), so the shared app can be exercised in a browser without
  * DuckDB. Whatever file is opened, its name and size are kept but the rows
  * are always the sample's. It answers every request the app makes with the
@@ -624,6 +624,37 @@ export function createStubEngine(options: { newId?: () => string } = {}): StubEn
 
     onRestarted: () => () => undefined,
     onEvent: () => () => undefined,
+
+    // The rest of EngineClientApi: the app does not call these, but the stub
+    // answers them so it stands in for any engine client.
+    rows(table, query, options = {}) {
+      return timed(options.signal, () => ({ table: view(table).page(query.offset, query.limit, query.sort ?? [], options.filters), cached: false }));
+    },
+
+    fetchPage(table, query, options = {}) {
+      return timed(options.signal, () => ({ table: view(table).page(query.offset, query.limit, query.sort ?? [], options.filters), cached: false }));
+    },
+
+    ensureParquetCache() {
+      return Promise.reject(new EngineError('not_implemented', 'The stub engine has no Parquet cache'));
+    },
+
+    clearCache: () => Promise.resolve(),
+
+    cacheStats: () =>
+      Promise.resolve({
+        results: { entries: 0, bytes: 0, maxBytes: 0, hits: 0, misses: 0, evictions: 0 },
+        parquet: { files: 0, bytes: 0, maxBytes: 0 },
+      }),
+
+    // Requests are answered in-process and cannot be cancelled by id; abort signals still work.
+    cancel: () => undefined,
+    lastRequestId: '',
+
+    dispose() {
+      tables.clear();
+      files.clear();
+    },
   };
 
   return {

@@ -200,6 +200,10 @@ export default defineConfig(
             ...nodeOnlyImports.patterns,
             { group: ['@glassgrid/desktop', '@glassgrid/desktop/*', '@glassgrid/web', '@glassgrid/web/*'], message: 'The app must not depend on a shell; add what it needs to Platform.' },
             { group: ['**/apps/**'], message: 'The app must not depend on a shell; add what it needs to Platform.' },
+            {
+              regex: '^@glassgrid/engine(?!/client$)(/.*)?$',
+              message: 'The app talks to the engine through its browser-safe client entry only: import from @glassgrid/engine/client.',
+            },
           ],
         },
       ],

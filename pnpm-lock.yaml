@@ -168,6 +168,9 @@ importers:
       '@glassgrid/core':
         specifier: workspace:*
         version: link:../core
+      '@glassgrid/engine':
+        specifier: workspace:*
+        version: link:../engine
       '@glassgrid/ui':
         specifier: workspace:*
         version: link:../ui

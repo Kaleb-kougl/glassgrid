@@ -183,38 +183,23 @@ title-bar padding on the latter. E2E selectors are unchanged.
 
 ## The engine client interface
 
-`packages/app/src/engine.ts`: the subset of the desktop `EngineClient`'s
-public API the app calls, with the same signatures and result types. The
-desktop class satisfies it structurally (`createDesktopPlatform(bridge, new
-EngineClient(bridge))` type-checks it), as do the stub and the test doubles.
+`packages/app/src/engine.ts`. **Integrated:** `EngineClientLike` is now an
+alias of the engine package's `EngineClientApi`
+(`packages/engine/src/client/types.ts`, imported type-only from the
+browser-safe `@glassgrid/engine/client` entry), and the result types
+(`RowsResult`, `AggregateResult`, `CountResult`, `ProfileResult`,
+`OpenResult`, `ColumnTypesResult`, `PrepareCrossfilterResult`, `FetchPage`,
+`QueryOptions`, …) are re-exported from there. One interface is implemented
+by the desktop `EngineClient` (`implements EngineClientApi`), the web
+`createWorkerEngine()` (`WorkerEngine extends EngineClientApi`), the web
+stub engine and the app's `fakeEngine()`. App code that needs a few methods
+takes `Pick<EngineClientLike, …>`. ESLint keeps `packages/app/src/**` off
+every other `@glassgrid/engine` entry (`.`, `./native`, `./wasm`, `./web`).
 
 ```ts
-export interface QueryOptions { viewId?: string; signal?: AbortSignal }
-export interface FilteredQueryOptions extends QueryOptions { filters?: readonly FilterInput[] }
-export interface CrossfilterQueryOptions { crossfilter?: CrossfilterHint | null }
-
-interface Timed { engineMs: number; cached: boolean }
-export interface RowsResult extends Timed { table: Table }
-export interface AggregateResult extends Timed { table: Table; mark: Mark; fellBackToHeatmap: boolean; fromCube?: boolean }
-export interface CountResult extends Timed { rowCount: number; fromCube?: boolean }
-export interface PrepareCrossfilterResult { cubes: PreparedCube[]; engineMs: number }
-export interface ProfileResult extends Timed { rowCount: number; columns: TableColumnProfile[] }
-export interface OpenResult { table: TableHandle; engineMs: number }
-export interface ColumnTypesResult { table: TableHandle; columns: ColumnTypeResult[]; engineMs: number }
-export type FetchPage = (offset: number, limit: number, signal?: AbortSignal) => Promise<RowsResult>;
-
-export interface EngineClientLike {
-  open(file: FileHandle, options?: { parquet?: ParquetMode; signal?: AbortSignal }): Promise<OpenResult>;
-  profile(table: TableId, options?: QueryOptions): Promise<ProfileResult>;
-  count(table: TableId, options?: FilteredQueryOptions & CrossfilterQueryOptions): Promise<CountResult>;
-  pageFetcher(table: TableId, view?: { viewId?: string; sort?: SortKey[]; filters?: readonly FilterInput[] }): FetchPage;
-  setColumnTypes(table: TableId, overrides: readonly ColumnTypeOverride[], options?: { signal?: AbortSignal }): Promise<ColumnTypesResult>;
-  aggregate(table: TableId, spec: AggregateSpecInput, options?: QueryOptions & CrossfilterQueryOptions): Promise<AggregateResult>;
-  prepareCrossfilter(table: TableId, plan: { dimension: CrossfilterDimension; targets: readonly CubeTarget[] }, options?: QueryOptions): Promise<PrepareCrossfilterResult>;
-  closeTable(table: TableId): Promise<void>;
-  onRestarted(listener: () => void): () => void;
-  onEvent(listener: (event: EngineEvent) => void): () => void;
-}
+export type EngineClientLike = EngineClientApi;   // open, profile, rows, count, fetchPage, pageFetcher, setColumnTypes,
+                                                  // aggregate, prepareCrossfilter, ensureParquetCache, closeTable,
+                                                  // clearCache, cacheStats, cancel, lastRequestId, onRestarted, onEvent, dispose
 
 /** What clients reject with: an Error with the engine's code and, for compiler errors, the input path. */
 export class EngineError extends Error { constructor(readonly code: string, message: string, readonly path?: string) }
@@ -222,12 +207,12 @@ export class EngineError extends Error { constructor(readonly code: string, mess
 export function isAbandoned(error: unknown): boolean;
 ```
 
-Left out because the app does not call them: `rows`, `fetchPage`,
-`ensureParquetCache`, `clearCache`, `cacheStats`, `cancel`, `lastRequestId`,
-`connected`, `dispose`. Errors are recognised by their `code`, not their
-class, so the desktop `EngineRequestError`, `EngineError` and a WASM
-client's own class all work; ChartView reads `error.path` for the
-offending-spec message.
+`EngineError` and `isAbandoned` stay in the app: errors are recognised by
+their `code`, not their class, so the desktop `EngineRequestError`, the
+engine package's `EngineRequestError`, `EngineError` and any other client's
+class all work; ChartView reads `error.path` for the offending-spec message.
+(The engine package's own `isAbandoned` checks `instanceof
+EngineRequestError`; the app does not use it.)
 
 ## Web build: routes, CSP and headers
 
@@ -357,13 +342,11 @@ the web platform). Where things plug in, all in `packages/app/src/App.tsx`
   `toFileHandle(uuid)` handle; samples are the bundled Parquet datasets.
   Then delete `src/stub-engine/`, the badge (`app-route.css`, the `<aside>`)
   and `apache-arrow` from `apps/web` dependencies if nothing else needs it.
-- **Unify the interface.** `EngineClientLike` here and the engine package's
-  interface should be one type: either `@glassgrid/app` re-exports the
-  engine package's (and drops `engine.ts`'s copy, keeping `isAbandoned`
-  structural), or the engine package's clients `satisfies` this one. The
-  desktop `EngineClient` stays a structural match; if it moves into
-  `packages/engine`, update `desktop-platform`'s import and
-  `client-integration.test.ts`.
+- **Unify the interface.** Done at integration: `EngineClientLike` is the
+  engine package's `EngineClientApi` (see "The engine client interface").
+  If the desktop `EngineClient` moves into `packages/engine` (or becomes
+  `PortEngineClient` over the preload port), update `desktop-platform`'s
+  import and `client-integration.test.ts`.
 - **Render-perf.** Clients report phases through
   `@glassgrid/app/render-perf-core` behind `if (__GG_RENDER_PERF__)`, as
   `engine-client.ts` does (`request`, `reply`, `validated`, `decoded`); a

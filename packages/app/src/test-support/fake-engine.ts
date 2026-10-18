@@ -96,5 +96,19 @@ export function fakeEngine() {
     ),
     prepareCrossfilter: vi.fn(() => Promise.resolve({ cubes: [], engineMs: 1 })),
     onEvent: vi.fn(() => () => undefined),
+    // The rest of EngineClientApi, which the app does not call.
+    rows: vi.fn(() => Promise.reject(new Error('fakeEngine.rows is not used by the app'))),
+    fetchPage: vi.fn(() => Promise.reject(new Error('fakeEngine.fetchPage is not used by the app'))),
+    ensureParquetCache: vi.fn(() => Promise.reject(new Error('fakeEngine.ensureParquetCache is not used by the app'))),
+    clearCache: vi.fn(() => Promise.resolve()),
+    cacheStats: vi.fn(() =>
+      Promise.resolve({
+        results: { entries: 0, bytes: 0, maxBytes: 0, hits: 0, misses: 0, evictions: 0 },
+        parquet: { files: 0, bytes: 0, maxBytes: 0 },
+      }),
+    ),
+    cancel: vi.fn(),
+    lastRequestId: '',
+    dispose: vi.fn(),
   } satisfies EngineClientLike & Record<string, unknown>;
 }
