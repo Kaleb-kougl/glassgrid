@@ -239,6 +239,39 @@ describe('App', () => {
     expect(typeBadge('amount').dataset['type']).toBe('text');
   });
 
+  it('sends type overrides to the engine, re-queries every view and reports failed casts with Undo', async () => {
+    const { engine, workspace } = await openFile();
+    const fetchers = engine.pageFetcher.mock.calls.length;
+    const profiles = engine.profile.mock.calls.length;
+    const counts = engine.count.mock.calls.length;
+    await setType('id', 'Text');
+    await waitFor(() => expect(engine.setColumnTypes).toHaveBeenLastCalledWith(tableId, [{ column: 'id', type: 'text' }]));
+    // Views re-query once the engine applied the overrides.
+    await waitFor(() => expect(engine.pageFetcher.mock.calls.length).toBeGreaterThan(fetchers));
+    await waitFor(() => expect(engine.profile.mock.calls.length).toBeGreaterThan(profiles));
+    await waitFor(() => expect(engine.count.mock.calls.length).toBeGreaterThan(counts));
+    expect(screen.queryByText(/couldn’t be read/)).toBeNull();
+
+    // A cast that fails for some values says so, with Undo.
+    await setType('category', 'Integer');
+    await waitFor(() =>
+      expect(engine.setColumnTypes).toHaveBeenLastCalledWith(tableId, [
+        { column: 'id', type: 'text' },
+        { column: 'category', type: 'integer' },
+      ]),
+    );
+    const toast = await waitFor(() => toastWith('1,234 values in category couldn’t be read as integer and show as null'));
+    fireEvent.click(within(toast).getByRole('button', { name: /Undo/ }));
+    expect(workspace.store.getState().columns.find((column) => column.name === 'category')?.typeOverride).toBeNull();
+    await waitFor(() => expect(engine.setColumnTypes).toHaveBeenLastCalledWith(tableId, [{ column: 'id', type: 'text' }]));
+
+    // The engine forgets overrides when it restarts: they are sent again.
+    const sent = engine.setColumnTypes.mock.calls.length;
+    act(() => engine.restart());
+    await waitFor(() => expect(engine.setColumnTypes.mock.calls.length).toBe(sent + 1));
+    expect(engine.setColumnTypes).toHaveBeenLastCalledWith(tableId, [{ column: 'id', type: 'text' }]);
+  });
+
   it('labels changes made by an AI caller in History', async () => {
     const { workspace } = await openFile();
     await act(() => workspace.registry.dispatch('setColumnType', { column: 'amount', type: 'decimal' }, { caller: 'ai' }));

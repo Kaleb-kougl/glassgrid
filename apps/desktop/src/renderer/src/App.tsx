@@ -164,6 +164,9 @@ export function App({ engine, bridge, workspace }: AppProps) {
     [registry, showToast],
   );
 
+  /** A shortcut as this platform writes it: ⌘Z on macOS, Ctrl+Z elsewhere. */
+  const mod = (key: string) => (bridge.platform === 'darwin' ? `⌘${key}` : `Ctrl+${key}`);
+
   // ---------------------------------------------------------------------------
   // Views of the data source
 
@@ -248,7 +251,11 @@ export function App({ engine, bridge, workspace }: AppProps) {
   useEffect(() => {
     const previous = shownTable.current;
     shownTable.current = tableId;
-    if (previous !== null && previous !== tableId) void engine.closeTable(previous).catch(() => undefined);
+    if (previous !== null && previous !== tableId) {
+      // Reopened later (undo back to it), the table starts with inferred types again.
+      engineOverrides.current.delete(previous);
+      void engine.closeTable(previous).catch(() => undefined);
+    }
   }, [engine, tableId]);
   useEffect(() => {
     const onPageHide = () => {
@@ -258,8 +265,72 @@ export function App({ engine, bridge, workspace }: AppProps) {
     return () => window.removeEventListener('pagehide', onPageHide);
   }, [engine]);
 
-  // After an engine restart every view re-queries (in-flight requests were dropped).
-  useEffect(() => engine.onRestarted(() => setDataVersion((version) => version + 1)), [engine]);
+  // ---------------------------------------------------------------------------
+  // Type overrides reach the engine: after setColumnType, undo/redo of one, or an engine restart
+
+  const overrides = useMemo(
+    () => state.columns.flatMap((column) => (column.typeOverride === null ? [] : [{ column: column.name, type: column.typeOverride }])),
+    [state.columns],
+  );
+  const overridesKey = JSON.stringify(overrides);
+  /** The override set (as `overridesKey`) the engine applies per table; tables open with none. */
+  const engineOverrides = useRef(new Map<TableId, string>());
+  const [engineEpoch, setEngineEpoch] = useState(0);
+  const [retyping, setRetyping] = useState<string | null>(null);
+  const latestOverrides = useRef(overridesKey);
+  useLayoutEffect(() => {
+    latestOverrides.current = overridesKey;
+  }, [overridesKey]);
+
+  useEffect(
+    () =>
+      engine.onRestarted(() => {
+        // The engine reopens tables with inferred types: re-send the overrides, then every view re-queries.
+        engineOverrides.current.clear();
+        setEngineEpoch((epoch) => epoch + 1);
+        if (latestOverrides.current === '[]') setDataVersion((version) => version + 1);
+      }),
+    [engine],
+  );
+
+  useEffect(() => {
+    if (tableId === null) return;
+    const applied = engineOverrides.current.get(tableId) ?? '[]';
+    if (applied === overridesKey) return;
+    const before = new Map((JSON.parse(applied) as { column: string; type: string }[]).map((entry) => [entry.column, entry.type]));
+    const changed = overrides.filter((entry) => before.get(entry.column) !== entry.type);
+    const run = { live: true };
+    setRetyping(changed.length === 1 && changed[0] ? `Reading ${changed[0].column} as ${changed[0].type}…` : 'Applying column types…');
+    engine.setColumnTypes(tableId, overrides).then(
+      (result) => {
+        engineOverrides.current.set(tableId, overridesKey);
+        if (!run.live) return;
+        setRetyping(null);
+        // The engine dropped the table's cached pages, counts, charts and sort indexes: every view re-queries.
+        setDataVersion((version) => version + 1);
+        const failed = result.columns.filter((entry) => entry.failedCasts > 0 && before.get(entry.column) !== entry.type);
+        const first = failed[0];
+        if (first) {
+          const more = failed.length > 1 ? ` (and in ${failed.length - 1} more ${failed.length === 2 ? 'column' : 'columns'})` : '';
+          showToast({
+            tone: 'info',
+            message: `${numberFormat.format(first.failedCasts)} ${first.failedCasts === 1 ? 'value' : 'values'} in ${first.column} couldn’t be read as ${first.type} and show as null${more}`,
+            action: { label: 'Undo', shortcut: mod('Z'), onClick: () => dispatch('undo') },
+          });
+        }
+      },
+      (cause: unknown) => {
+        if (!run.live) return;
+        setRetyping(null);
+        if (!isAbandoned(cause)) showToast({ tone: 'error', message: messageOf(cause) });
+      },
+    );
+    return () => {
+      run.live = false;
+    };
+    // overridesKey stands for overrides by value.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engine, tableId, overridesKey, engineEpoch, showToast, dispatch]);
 
   // copySelection: the selection as TSV, through the preload's clipboard.
   const gridSource = useRef<EngineGridSource | null>(null);
@@ -387,7 +458,6 @@ export function App({ engine, bridge, workspace }: AppProps) {
     [dispatch],
   );
 
-  const mod = (key: string) => (bridge.platform === 'darwin' ? `⌘${key}` : `Ctrl+${key}`);
 
   const removeFilter = (viewId: string, filter: Filter) => {
     dispatch('clearFilter', { viewId });
@@ -576,6 +646,10 @@ export function App({ engine, bridge, workspace }: AppProps) {
                       + Filter
                     </Button>
                   </div>
+                ) : retyping !== null ? (
+                  <span className="grid-panel__note" data-testid="retyping">
+                    {retyping}
+                  </span>
                 ) : profiling ? (
                   <span className="grid-panel__note">Showing the first rows while the file is read.</span>
                 ) : null}
