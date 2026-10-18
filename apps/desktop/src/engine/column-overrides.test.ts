@@ -207,3 +207,48 @@ describe('pages racing a type change', () => {
     }
   });
 });
+
+describe('a page requested while the views are redefined', () => {
+  it('is not served under the new version with the old types', async () => {
+    const csv = join(h.dir, 'window.csv');
+    await writeFixtureCsv(csv, 50_000);
+    const { file, table } = h.register(csv);
+    await h.service.open(file, { parquet: 'never' });
+    // Warm the statistics so the changes below need no scan and go straight to redefining the views.
+    await h.service.setColumnTypes(table, [{ column: 'amount', type: 'text' }]);
+    await h.service.setColumnTypes(table, []);
+    for (let round = 0; round < 8; round += 1) {
+      const text = round % 2 === 0;
+      const change = h.service.setColumnTypes(table, text ? [{ column: 'amount', type: 'text' }] : []);
+      // Lands while the views are being redefined (DuckDB work runs off the JS thread).
+      await new Promise((resolve) => setImmediate(resolve));
+      const racing = h.service.rows(table, { offset: round, limit: 10 }).catch(() => null);
+      await Promise.all([change, racing]);
+      const page = decode((await h.service.rows(table, { offset: round, limit: 10 })).value);
+      const type: unknown = page.schema.fields.find((field) => field.name === 'amount')?.type;
+      expect(text ? DataType.isUtf8(type) : DataType.isFloat(type), `round ${round}`).toBe(true);
+    }
+  });
+});
+
+describe('type changes racing the switch to Parquet', () => {
+  it('leaves the views with the latest overrides when the Parquet copy lands mid-change', async () => {
+    const service = await h.restart({ autoConvertMinBytes: 0 });
+    for (let round = 0; round < 6; round += 1) {
+      const csv = join(h.dir, `landing-${round}.csv`);
+      await writeFixtureCsv(csv, 200_000 + round);
+      const { file, table } = h.register(csv);
+      await service.open(file); // converts in the background
+      const changes = [
+        service.setColumnTypes(table, [{ column: 'amount', type: 'text' }]),
+        service.setColumnTypes(table, []),
+        service.setColumnTypes(table, [{ column: 'amount', type: 'text' }]),
+        service.setColumnTypes(table, []),
+      ];
+      await Promise.all(changes);
+      await service.ensureParquetCache(table);
+      const page = decode((await service.rows(table, { offset: 0, limit: 10 })).value);
+      expect(DataType.isFloat(page.schema.fields.find((field) => field.name === 'amount')?.type), `round ${round}`).toBe(true);
+    }
+  });
+});

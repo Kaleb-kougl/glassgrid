@@ -125,6 +125,16 @@ type Source = { kind: 'csv' } | { kind: 'parquet'; path: string; key: string };
 
 type ColumnStats = Pick<TableColumnProfile, 'nullFraction' | 'distinctCount' | 'min' | 'max'>;
 
+/**
+ * '' before any type change, else a digest of the overrides and the type-change count, so a version
+ * never repeats once the types changed (see TableState.version).
+ */
+function overridesVersion(state: Pick<TableState, 'overrides' | 'typeGeneration'>): string {
+  const entries = [...state.overrides.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  if (entries.length === 0 && state.typeGeneration === 0) return '';
+  return createHash('sha256').update(JSON.stringify([entries, state.typeGeneration])).digest('hex').slice(0, 16);
+}
+
 interface TableState {
   id: TableId;
   file: FileHandle;
@@ -162,6 +172,8 @@ interface TableState {
   failedCasts: Map<string, number>;
   /** Serializes setColumnTypes calls. */
   typeChange: Promise<unknown>;
+  /** Serializes view redefinitions (type changes, the switch to Parquet and back). */
+  viewLock: Promise<unknown>;
   /** Connections running a query on `db` right now (shared with a reopened state over the same instance). */
   active: Set<DuckDBConnection>;
   /** Set by closeTable once the instance is closing; new queries on this state fail. */
@@ -342,6 +354,7 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
       stats: new Map(),
       failedCasts: new Map(),
       typeChange: Promise.resolve(),
+      viewLock: Promise.resolve(),
       active: existing?.active ?? new Set(),
       closed: false,
       rawView: quoteIdent(`gg_${id}_raw`),
@@ -386,17 +399,13 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
     return state;
   }
 
-  /** Recompute effective columns and the version digest from `state.overrides`. */
-  private applyOverrides(state: TableState): void {
+  /** Recompute effective columns and (unless `keepVersion`) the version digest from `state.overrides`. */
+  private applyOverrides(state: TableState, options: { keepVersion?: boolean } = {}): void {
     state.columns = state.inferred.map((column) => {
       const type = state.overrides.get(column.name);
       return type === undefined ? column : { name: column.name, type, duckdbType: overrideDuckdbType(type, column.duckdbType) };
     });
-    const entries = [...state.overrides.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-    state.version =
-      entries.length === 0 && state.typeGeneration === 0
-        ? ''
-        : createHash('sha256').update(JSON.stringify([entries, state.typeGeneration])).digest('hex').slice(0, 16);
+    if (options.keepVersion !== true) state.version = overridesVersion(state);
   }
 
   /** The SELECT list of `view`: every column, cast where overridden. */
@@ -549,14 +558,17 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
       const previous = state.overrides;
       state.overrides = next;
       state.typeGeneration += 1;
-      this.applyOverrides(state);
+      // The version (part of every cache key) moves on only once the views read the new types: a query
+      // keyed in between runs on either views and is cached under the old version, which never comes back.
+      this.applyOverrides(state, { keepVersion: true });
       try {
-        await this.withConnection(state, undefined, (connection) => this.createViews(connection, state));
+        await this.withViewLock(state, () => this.withConnection(state, undefined, (connection) => this.createViews(connection, state)));
       } catch (error) {
         state.overrides = previous;
-        this.applyOverrides(state);
+        this.applyOverrides(state, { keepVersion: true });
         throw error;
       }
+      state.version = overridesVersion(state);
       this.results.invalidateTable(state.id);
       await this.sortIndexes.drop(state.id);
       this.emit('event', { type: 'tableUpdated', table: this.handleFor(state) });
@@ -989,15 +1001,30 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
     })().finally(() => this.conversions.delete(key));
   }
 
+  /**
+   * Redefines a table's views one at a time. createViews reads the overrides and the source between
+   * awaits, so a type change and the Parquet switch redefining them at once could leave the views with
+   * the casts of a type change that was already undone (seen when the Parquet copy landed during an undo).
+   * Only the redefinition is locked, not the scans before it, so a type change waiting for the
+   * conversion does not wait for itself.
+   */
+  private withViewLock<T>(state: TableState, change: () => Promise<T>): Promise<T> {
+    const run = state.viewLock.then(change);
+    state.viewLock = run.catch(() => undefined);
+    return run;
+  }
+
   private async switchToParquet(key: string, entry: CacheEntry, emit: boolean, engineMs = 0): Promise<void> {
     for (const state of this.tablesWithKey(key)) {
       if (state.source.kind === 'parquet' && state.source.path === entry.path) continue;
       state.source = { kind: 'parquet', path: entry.path, key };
-      await this.withConnection(state, undefined, async (connection) => {
-        await this.createViews(connection, state);
-        const counted = await connection.runAndReadAll(`SELECT count(*) FROM ${state.rawView}`);
-        state.rowCount = toCount(counted.getRows()[0]?.[0] ?? null);
-      });
+      await this.withViewLock(state, () =>
+        this.withConnection(state, undefined, async (connection) => {
+          await this.createViews(connection, state);
+          const counted = await connection.runAndReadAll(`SELECT count(*) FROM ${state.rawView}`);
+          state.rowCount = toCount(counted.getRows()[0]?.[0] ?? null);
+        }),
+      );
       if (emit) {
         this.emit('event', { type: 'parquetReady', table: this.handleFor(state), sizeBytes: entry.sizeBytes, engineMs });
       } else {
@@ -1034,7 +1061,7 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
       for (const state of this.tables.values()) {
         if (state.source.kind !== 'parquet') continue;
         state.source = { kind: 'csv' };
-        await this.withConnection(state, undefined, (connection) => this.createViews(connection, state));
+        await this.withViewLock(state, () => this.withConnection(state, undefined, (connection) => this.createViews(connection, state)));
         this.emit('event', { type: 'tableUpdated', table: this.handleFor(state) });
       }
       await this.parquetCache.clear();

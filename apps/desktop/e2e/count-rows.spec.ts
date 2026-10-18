@@ -275,7 +275,10 @@ test.describe('data path', () => {
   // eslint-disable-next-line no-empty-pattern
   test.afterEach(async ({}, testInfo) => {
     if (testInfo.status !== testInfo.expectedStatus) {
-      await testInfo.attach('app-logs', { body: logs.join(''), contentType: 'text/plain' });
+      await mkdir(RESULTS_DIR, { recursive: true });
+      const path = join(RESULTS_DIR, 'app-logs.txt');
+      await writeFile(path, logs.join(''));
+      await testInfo.attach('app-logs', { path, contentType: 'text/plain' });
     }
   });
 
