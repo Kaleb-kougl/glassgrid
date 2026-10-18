@@ -161,6 +161,9 @@ importers:
       '@glassgrid/core':
         specifier: workspace:*
         version: link:../core
+      apache-arrow:
+        specifier: 21.2.0
+        version: 21.2.0
       d3-scale:
         specifier: 4.0.2
         version: 4.0.2

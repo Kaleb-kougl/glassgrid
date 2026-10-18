@@ -4,6 +4,7 @@ import {
   AgentIndicator,
   BarChart,
   Button,
+  CanvasGrid,
   ChartCard,
   ChartSkeleton,
   ColumnListRow,
@@ -14,11 +15,13 @@ import {
   ProgressBar,
   SegmentedControl,
   ShelfChip,
+  SyntheticSource,
   Spinner,
   Toast,
   Tooltip,
   TypeMenu,
   tokensFor,
+  useCanvasGridState,
   type BarDatum,
   type GridColumn,
   type ThemeName,
@@ -54,6 +57,31 @@ const gridRows = Array.from({ length: 6 }, (_, i) => [
   (2.24 + i * 0.61).toFixed(2),
   i % 3 === 2 ? 'Cash' : 'Credit card',
 ]);
+
+/** One million deterministic rows, shared by both sheets (pages load after 40 ms). */
+const syntheticRows = new SyntheticSource({ rowCount: 1_000_000, latencyMs: 40 });
+
+function CanvasGridDemo({ theme }: { theme: ThemeName }) {
+  const state = useCanvasGridState(syntheticRows);
+  const [copied, setCopied] = useState('');
+  return (
+    <>
+      <div className="sheet__grid sheet__grid--tall">
+        <CanvasGrid
+          source={syntheticRows}
+          tokens={tokensFor(theme)}
+          label={`Synthetic rows (${theme})`}
+          testId={`canvas-grid-${theme}`}
+          onCopy={(_, info) => setCopied(info.message)}
+          {...state}
+        />
+      </div>
+      <p className="sheet__note" aria-hidden="true">
+        {copied || 'Click a header to sort (state only), drag its edge to resize, drag it to reorder; Shift+arrows extend, ⌘C copies TSV.'}
+      </p>
+    </>
+  );
+}
 
 function ColumnRows() {
   const [types, setTypes] = useState<Record<string, ColumnType>>({ trip_distance: 'float', payment_type: 'text' });
@@ -279,6 +307,14 @@ function Sheet({ theme }: { theme: ThemeName }) {
         <div className="sheet__grid">
           <DataGrid columns={gridColumns} rowCount={gridRows.length} getRow={(i) => gridRows[i]} sort={[{ column: 'pickup_datetime', direction: 'asc' }]} label="Sample rows" />
         </div>
+      </Section>
+
+      <Section
+        title="Canvas grid"
+        wide
+        note="M2 grid: one canvas, 1,000-row pages, scaled scrolling past ~500K rows, and a hidden ARIA grid mirroring the visible window. 1,000,000 synthetic rows."
+      >
+        <CanvasGridDemo theme={theme} />
       </Section>
     </div>
   );

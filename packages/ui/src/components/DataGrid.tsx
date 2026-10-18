@@ -10,26 +10,10 @@ import {
 } from 'react';
 import { isNumericType, isTemporalType, type ColumnType, type SortKey } from '@glassgrid/core';
 import { cx } from '../cx.js';
+import type { GridCell, GridCellRef, GridColumn, GridSelection } from '../grid/types.js';
 
-export interface GridColumn {
-  readonly name: string;
-  readonly type: ColumnType;
-  /** Width in px, including padding. */
-  readonly width: number;
-}
-
-/** A cell as displayed: its text, or null for SQL NULL. */
-export type GridCell = string | null;
-
-export interface GridCellRef {
-  readonly row: number;
-  readonly col: number;
-}
-
-export interface GridSelection {
-  readonly anchor: GridCellRef;
-  readonly focus: GridCellRef;
-}
+// The column, cell and selection types are shared with the canvas grid.
+export type { GridCell, GridCellRef, GridColumn, GridSelection };
 
 export interface DataGridProps {
   columns: readonly GridColumn[];

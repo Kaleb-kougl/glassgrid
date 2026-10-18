@@ -48,4 +48,51 @@ export {
   type GridCell,
   type GridSelection,
 } from './components/DataGrid.js';
+export {
+  CanvasGrid,
+  copySelectionAsTsv,
+  copyMessage,
+  type CanvasGridProps,
+  type CanvasGridHandle,
+  type GridCopyInfo,
+} from './grid/CanvasGrid.js';
+export { useCanvasGridState, type CanvasGridState } from './grid/useCanvasGridState.js';
+export { GridController, type GridWindow } from './grid/controller.js';
+export type { GridCellRef, GridDataSource, GridRange, GridSourceChange, GridSourceListener } from './grid/types.js';
+export { PagedGridSource, isAbortError, type PageColumns, type PagedSourceOptions } from './grid/PagedGridSource.js';
+export { ArrowPagedSource, tableToColumns, type ArrowPagedSourceOptions, type FetchArrowPage } from './grid/ArrowPagedSource.js';
+export {
+  SyntheticSource,
+  syntheticCell,
+  syntheticColumns,
+  MAX_SYNTHETIC_ROWS,
+  type SyntheticSourceOptions,
+} from './grid/SyntheticSource.js';
+export { formatDate, formatTimestamp, formatValue, columnWidthFor, cellKind, type CellKind, type ValueKind } from './grid/format.js';
+export {
+  createScrollMapping,
+  scrollToVirtual,
+  virtualToScroll,
+  visibleRows,
+  visibleColumns,
+  hitTest,
+  columnOffsets,
+  PAGE_SIZE,
+  OVERSCAN,
+  MAX_SCROLL_HEIGHT as CANVAS_MAX_SCROLL_HEIGHT,
+  type ScrollMapping,
+  type HitResult,
+} from './grid/geometry.js';
+export {
+  normalizeSelection,
+  clampSelection,
+  moveSelection,
+  keyToMove,
+  rangeToTsv,
+  tsvField,
+  MAX_COPY_ROWS,
+  MAX_COPY_CELLS,
+  type GridMove,
+  type TsvResult,
+} from './grid/selection.js';
 export { resolvedTokens, tokensFor, type ResolvedTokens, type ThemeName } from './tokens.js';
