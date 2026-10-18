@@ -156,6 +156,10 @@ interface TableState {
   failedCasts: Map<string, number>;
   /** Serializes setColumnTypes calls. */
   typeChange: Promise<unknown>;
+  /** Connections running a query on `db` right now (shared with a reopened state over the same instance). */
+  active: Set<DuckDBConnection>;
+  /** Set by closeTable once the instance is closing; new queries on this state fail. */
+  closed: boolean;
   /** Source columns, no casts. */
   rawView: string;
   /** The user's columns with overrides applied. */
@@ -193,6 +197,8 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
   private readonly files = new Map<FileHandle, string>();
   private readonly tables = new Map<TableId, TableState>();
   private readonly opening = new Map<TableId, Promise<TableState>>();
+  /** Renderer sessions using each table (see retainTable). */
+  private readonly holders = new Map<TableId, Set<string>>();
   private readonly conversions = new Map<string, { interrupt: () => void }>();
   private readonly parquetJobs = new Map<string, ParquetJob>();
   private readonly results: ResultCache<CachedValue>;
@@ -329,6 +335,8 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
       stats: new Map(),
       failedCasts: new Map(),
       typeChange: Promise.resolve(),
+      active: existing?.active ?? new Set(),
+      closed: false,
       rawView: quoteIdent(`gg_${id}_raw`),
       view: quoteIdent(QueryService.viewName(id)),
       ordView: quoteIdent(`gg_${id}_ord`),
@@ -1055,13 +1063,52 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
     const state = this.tables.get(id);
     if (!state) return;
     await state.typeChange;
+    if (this.tables.get(id) !== state) return;
     this.tables.delete(id);
     this.results.invalidateTable(id);
     await this.sortIndexes.drop(id);
     if (!this.tablesWithKey(state.fingerprint.key).length) this.conversions.get(state.fingerprint.key)?.interrupt();
     await this.parquetJobs.get(state.fingerprint.key)?.promise.catch(() => undefined);
+    // Queries still running on the instance are interrupted (their callers see an error) before it closes.
+    state.closed = true;
+    for (const connection of state.active) connection.interrupt();
+    for (let waited = 0; state.active.size > 0 && waited < 5_000; waited += 5) await new Promise((resolve) => setTimeout(resolve, 5));
     state.db.closeSync();
     await removeTempDirectory(state.tempDir);
+  }
+
+  /**
+   * A renderer session uses `id`. A table stays open while any session holds
+   * it, so one window closing a file does not close it under another.
+   */
+  retainTable(id: TableId, holder: string): void {
+    let holders = this.holders.get(id);
+    if (!holders) {
+      holders = new Set();
+      this.holders.set(id, holders);
+    }
+    holders.add(holder);
+  }
+
+  /**
+   * `holder` is done with `id` (it opened another file, or its window
+   * closed). The last holder's release closes the table and frees its DuckDB
+   * instance; the id still reopens on demand while the file is registered
+   * (undo back to it). Resolves true when the table was closed.
+   */
+  async releaseTable(id: TableId, holder: string): Promise<boolean> {
+    const holders = this.holders.get(id);
+    if (!holders?.delete(holder)) return false;
+    if (holders.size > 0) return false;
+    this.holders.delete(id);
+    await this.closeTable(id);
+    return true;
+  }
+
+  /** Releases every table `holder` holds (its connection closed). */
+  async releaseHolder(holder: string): Promise<void> {
+    const held = [...this.holders].filter(([, holders]) => holders.has(holder)).map(([id]) => id);
+    await Promise.all(held.map((id) => this.releaseTable(id, holder)));
   }
 
   close(): void {
@@ -1084,15 +1131,18 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
   ): Promise<T> {
     throwIfAborted(signal);
     if (this.closed) throw new EngineFailure('engine_unavailable', 'The engine is shutting down');
+    if (state.closed) throw new EngineFailure('unknown_table', 'This table was closed');
     const connection = await state.db.connect();
     const onAbort = () => connection.interrupt();
     signal?.addEventListener('abort', onAbort, { once: true });
+    state.active.add(connection);
     try {
       throwIfAborted(signal);
       return await fn(connection);
     } catch (error) {
       throw toEngineFailure(error, signal);
     } finally {
+      state.active.delete(connection);
       signal?.removeEventListener('abort', onAbort);
       connection.closeSync();
     }

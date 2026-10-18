@@ -56,6 +56,10 @@ const bridge: GlassgridBridge = {
     menuListeners.add(listener);
     return () => menuListeners.delete(listener);
   },
+  // One purpose-built call, not a generic IPC: main checks the sender and the text before writing it.
+  clipboard: {
+    writeText: (text: string) => ipcRenderer.invoke(IpcChannel.clipboardWriteText, text) as Promise<void>,
+  },
 };
 
 contextBridge.exposeInMainWorld('glassgrid', bridge);

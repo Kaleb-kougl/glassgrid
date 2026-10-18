@@ -1,8 +1,8 @@
 import { stat } from 'node:fs/promises';
 import { basename, isAbsolute, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, type OpenDialogOptions } from 'electron';
-import { APP_NAME, IpcChannel, isThemePreference, type OpenCsvResult } from '@glassgrid/core';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, nativeTheme, type OpenDialogOptions } from 'electron';
+import { APP_NAME, IpcChannel, isThemePreference, MAX_CLIPBOARD_TEXT, type OpenCsvResult } from '@glassgrid/core';
 import { applyE2EOverrides, e2eOpenPath } from './e2e';
 import { EngineHost } from './engine-host';
 import { applyTheme, installAppMenu } from './menu';
@@ -101,6 +101,12 @@ function registerIpcHandlers(): void {
   ipcMain.on(IpcChannel.setTheme, (event, theme: unknown) => {
     assertTrustedSender(event);
     if (isThemePreference(theme)) applyTheme(theme);
+  });
+
+  ipcMain.handle(IpcChannel.clipboardWriteText, async (event, text: unknown) => {
+    assertTrustedSender(event);
+    if (typeof text !== 'string' || text.length > MAX_CLIPBOARD_TEXT) throw new Error('Clipboard text must be a string of at most 64M characters');
+    await clipboard.writeText(text);
   });
 
   ipcMain.on(IpcChannel.requestEnginePort, (event) => {

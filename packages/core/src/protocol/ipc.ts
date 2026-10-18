@@ -25,7 +25,12 @@ export const IpcChannel = {
   setTheme: 'glassgrid:set-theme',
   /** main -> preload: an application-menu command for the focused window (MenuCommand). */
   menuCommand: 'glassgrid:menu-command',
+  /** invoke: put plain text on the system clipboard (the `copySelection` command). */
+  clipboardWriteText: 'glassgrid:clipboard-write-text',
 } as const;
+
+/** Largest text `clipboard.writeText` accepts (UTF-16 code units); copies are capped well below this. */
+export const MAX_CLIPBOARD_TEXT = 64 * 1024 * 1024;
 
 export const THEME_PREFERENCES = ['system', 'light', 'dark'] as const;
 export type ThemePreference = (typeof THEME_PREFERENCES)[number];
@@ -66,4 +71,8 @@ export interface GlassgridBridge {
   setTheme(theme: ThemePreference): void;
   /** Subscribe to application-menu commands. Returns an unsubscribe function. */
   onMenuCommand(listener: (command: MenuCommand) => void): () => void;
+  /** The system clipboard, write-only: the one way cells leave the app (`copySelection`). */
+  readonly clipboard: {
+    writeText(text: string): Promise<void>;
+  };
 }

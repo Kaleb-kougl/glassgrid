@@ -129,6 +129,13 @@ describe('EngineRequestSchema', () => {
     expect(EngineRequestSchema.parse({ ...types, overrides: [] }).kind).toBe('setColumnTypes');
   });
 
+  it('closes tables by id, never by path', () => {
+    const close = { kind: 'closeTable', requestId: 'c', table };
+    expect(EngineRequestSchema.parse(close)).toEqual(close);
+    expect(isViewScopedRequest(EngineRequestSchema.parse(close))).toBe(false);
+    expect(EngineRequestSchema.safeParse({ ...close, table: '/tmp/a.csv' }).success).toBe(false);
+  });
+
   it('rejects malformed type overrides', () => {
     const base = { kind: 'setColumnTypes', requestId: 't', table };
     const dup = [

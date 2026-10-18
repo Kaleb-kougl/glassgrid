@@ -51,9 +51,9 @@ function parseOrReject<T>(parsed: SafeParsed<T>, what: string): T {
   return parsed.data;
 }
 
-/** True for errors that only mean "a newer request replaced this one" or "you cancelled it". */
+/** True for errors that only mean "a newer request replaced this one", "you cancelled it" or "the engine restarted" (views re-query). */
 export function isAbandoned(error: unknown): boolean {
-  return error instanceof EngineRequestError && (error.code === 'superseded' || error.code === 'cancelled');
+  return error instanceof EngineRequestError && (error.code === 'superseded' || error.code === 'cancelled' || error.code === 'engine_restarted');
 }
 
 export interface QueryOptions {
@@ -180,6 +180,7 @@ export class EngineClient {
   private readonly seqs = new Map<string, number>();
   private readonly waiters: Array<(port: MessagePort) => void> = [];
   private readonly listeners = new Set<(event: EngineEvent) => void>();
+  private readonly restartListeners = new Set<() => void>();
   /** In-flight grid pages by (table, view, query, filters), shared by identical requests. */
   private readonly pages = new Map<string, SharedPage>();
 
@@ -355,6 +356,17 @@ export class EngineClient {
     return { table: reply.table, alreadyCached: reply.alreadyCached, sizeBytes: reply.sizeBytes, engineMs: reply.engineMs };
   }
 
+  /**
+   * Done with a table (another file replaced it, or the window is closing).
+   * The engine closes its DuckDB instance once no window holds it; the id
+   * reopens on demand later (undo back to the file). In-flight grid pages of
+   * the table are dropped from the coalescing map.
+   */
+  async closeTable(table: TableId): Promise<void> {
+    for (const [key, page] of this.pages) if (page.table === table) this.pages.delete(key);
+    await this.call({ kind: 'closeTable', table }, 'ack');
+  }
+
   async clearCache(scope: CacheScope = 'all'): Promise<void> {
     await this.call({ kind: 'clearCache', scope }, 'ack');
   }
@@ -380,6 +392,16 @@ export class EngineClient {
   /** Id of the request most recently issued by any method (assigned synchronously on call). */
   get lastRequestId(): string {
     return `req-${this.nextId}`;
+  }
+
+  /**
+   * Called when main hands over a new port after the engine restarted. The
+   * engine reopens tables on demand with their inferred types, so callers
+   * re-send type overrides and re-query their views. Returns an unsubscribe function.
+   */
+  onRestarted(listener: () => void): () => void {
+    this.restartListeners.add(listener);
+    return () => this.restartListeners.delete(listener);
   }
 
   /** Subscribe to engine events (Parquet progress, table updates). Returns an unsubscribe function. */
@@ -461,13 +483,16 @@ export class EngineClient {
   };
 
   private adoptPort(port: MessagePort): void {
+    const restarted = this.port !== null;
     if (this.port) {
       this.port.close();
+      this.pages.clear();
       this.rejectAll(new EngineRequestError('engine_restarted', 'The engine restarted; please retry'));
     }
     this.port = port;
     port.onmessage = (event: MessageEvent) => this.onResponse(event.data);
     for (const waiter of this.waiters.splice(0)) waiter(port);
+    if (restarted) for (const listener of [...this.restartListeners]) listener();
   }
 
   private connectedPort(): Promise<MessagePort> {

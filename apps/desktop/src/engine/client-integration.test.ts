@@ -132,3 +132,30 @@ describe('EngineClient.setColumnTypes', () => {
     expect([...(restored.table.getChild('category') ?? [])]).toEqual(['alpha', 'bravo', 'charlie']);
   });
 });
+
+describe('EngineClient.closeTable', () => {
+  it('frees the table and the id reopens on the next request', async () => {
+    const before = h.service.debugState().tables;
+    await client.closeTable(table);
+    expect(h.service.debugState().tables).toBe(before - 1);
+    const page = await client.fetchPage(table, { offset: 0, limit: 2 });
+    expect(page.table.numRows).toBe(2);
+    expect(h.service.debugState().tables).toBe(before);
+  });
+});
+
+describe('EngineClient.onRestarted', () => {
+  it('rejects pending requests as abandoned and tells listeners once the new port is in', async () => {
+    let restarts = 0;
+    const off = client.onRestarted(() => (restarts += 1));
+    const pending = outcome(client.count(table, { viewId: 'restart-probe', filters: [{ kind: 'notNull', column: 'amount' }] }));
+    const { port1, port2 } = new MessageChannel();
+    port2.on('message', (data: EngineRequest) => session.handle(data));
+    (client as unknown as { adoptPort(port: NodeMessagePort): void }).adoptPort(port1);
+    const result = await pending;
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(isAbandoned(result.error)).toBe(true);
+    expect(restarts).toBe(1);
+    off();
+  });
+});

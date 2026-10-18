@@ -246,6 +246,19 @@ export const SetColumnTypesRequestSchema = z.object({
     .refine((list) => new Set(list.map((entry) => entry.column)).size === list.length, 'Each column may appear once'),
 });
 
+/**
+ * The renderer is done with a table (it opened another file, or its window
+ * is closing). Once no connected renderer holds the table, the engine drops
+ * its indexes and cached results and closes its DuckDB instance (spill
+ * folder included). The id reopens on demand while the file stays
+ * registered, e.g. after undoing back to it. Answered with `ack`.
+ */
+export const CloseTableRequestSchema = z.object({
+  kind: z.literal('closeTable'),
+  requestId: RequestIdSchema,
+  table: TableIdSchema,
+});
+
 export const EngineRequestSchema = z.discriminatedUnion('kind', [
   OpenRequestSchema,
   ProfileRequestSchema,
@@ -257,6 +270,7 @@ export const EngineRequestSchema = z.discriminatedUnion('kind', [
   ClearCacheRequestSchema,
   CacheStatsRequestSchema,
   SetColumnTypesRequestSchema,
+  CloseTableRequestSchema,
 ]);
 export type EngineRequest = z.infer<typeof EngineRequestSchema>;
 export type OpenRequest = z.infer<typeof OpenRequestSchema>;
@@ -269,6 +283,7 @@ export type EnsureParquetCacheRequest = z.infer<typeof EnsureParquetCacheRequest
 export type ClearCacheRequest = z.infer<typeof ClearCacheRequestSchema>;
 export type CacheStatsRequest = z.infer<typeof CacheStatsRequestSchema>;
 export type SetColumnTypesRequest = z.infer<typeof SetColumnTypesRequestSchema>;
+export type CloseTableRequest = z.infer<typeof CloseTableRequestSchema>;
 
 /** Requests subject to per-view ordering and superseding. */
 export type ViewScopedRequest = ProfileRequest | RowsRequest | CountRequest | AggregateRequest;

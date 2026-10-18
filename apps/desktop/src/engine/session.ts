@@ -8,6 +8,7 @@ import {
   quoteIdent,
   scatterAsHeatmap,
   scatterPointLimit,
+  tableIdForFile,
   type AggregateSpec,
   type ChartSpec,
   type CompiledQuery,
@@ -114,6 +115,8 @@ export class EngineSession {
   private readonly id = `s${(nextSessionId += 1)}`;
   private readonly inflight = new Map<string, InFlight>();
   private readonly latestSeq = new Map<string, number>();
+  /** Tables this connection has used (see QueryService.retainTable). */
+  private readonly tables = new Set<TableId>();
   private readonly onEvent = (event: EngineEvent) => this.send({ kind: 'event', event });
   private disposed = false;
 
@@ -175,6 +178,13 @@ export class EngineSession {
       }
     }
 
+    // Tables this connection uses stay open until it closes them or disconnects.
+    const used = request.kind === 'open' ? tableIdForFile(request.file) : 'table' in request ? request.table : null;
+    if (used !== null && !this.tables.has(used)) {
+      this.tables.add(used);
+      void this.service.then((ready) => ready.retainTable(used, this.id), () => undefined);
+    }
+
     const controller = new AbortController();
     this.inflight.set(request.requestId, { controller, viewId, concurrent });
     const ctx = { signal: controller.signal, ...(viewId === undefined ? {} : { viewId: `${this.id}:${viewId}` }) };
@@ -198,6 +208,7 @@ export class EngineSession {
       (ready) => {
         ready.off('event', this.onEvent);
         ready.releaseViews(`${this.id}:`);
+        void ready.releaseHolder(this.id).catch(() => undefined);
       },
       () => undefined,
     );
@@ -273,6 +284,11 @@ export class EngineSession {
           const outcome = await service.setColumnTypes(request.table, request.overrides, ctx);
           return { kind: 'columnTypes', requestId, table: outcome.table, columns: outcome.columns, engineMs: elapsed() };
         }
+        case 'closeTable':
+          // Retained above as this request names the table; releasing drops this connection's hold.
+          this.tables.delete(request.table);
+          await service.releaseTable(request.table, this.id);
+          return { kind: 'ack', requestId };
         case 'cacheStats':
           return {
             kind: 'cacheStats',
