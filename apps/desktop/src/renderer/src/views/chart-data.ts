@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { ChartSpec, Filter, TableId } from '@glassgrid/core';
-import type { BarDatum } from '@glassgrid/ui';
-import { displayValue, filterValue, valueKind } from '../arrow-values';
+import { filterValue, formatterFor, valueKind, type BarDatum } from '@glassgrid/ui';
 import { isAbandoned, type EngineClient } from '../engine-client';
 import { AGGREGATE_MEASURE, type AggregateMeasureDetail } from '../perf';
 import type { FilterValue } from '../types';
@@ -61,12 +60,13 @@ export function useChartData(
           const xVector = result.table.getChildAt(xIndex);
           const yVector = result.table.getChildAt(yIndex);
           const kind = valueKind(fields[xIndex]);
+          const format = formatterFor(kind);
           const rows: BarRow[] = [];
           for (let i = 0; i < result.table.numRows; i += 1) {
             const raw: unknown = xVector?.get(i);
             const fv = filterValue(raw, kind);
             const y: unknown = yVector?.get(i);
-            const label = displayValue(raw, kind);
+            const label = format(raw);
             rows.push({
               key: valueKey(fv),
               label: label ?? 'null',

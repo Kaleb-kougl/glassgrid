@@ -1,7 +1,7 @@
 import { tableFromArrays, Table, vectorFromArray, TimestampMillisecond, DateDay, Utf8, Float64, Int64, Bool, makeData, makeVector, Field, Schema, RecordBatch, Struct } from 'apache-arrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ArrowPagedSource, tableToColumns } from './ArrowPagedSource.js';
-import { formatDate, formatTimestamp, formatValue } from './format.js';
+import { filterValue, formatDate, formatInterval, formatTime, formatTimestamp, formatValue } from './format.js';
 import { isAbortError, PagedGridSource, type PageColumns, type PagedSourceOptions } from './PagedGridSource.js';
 import { MAX_SYNTHETIC_ROWS, syntheticCell, SyntheticSource } from './SyntheticSource.js';
 import type { GridCell, GridColumn, GridSourceChange } from './types.js';
@@ -257,6 +257,48 @@ describe('formatting', () => {
     expect(formatValue(new Date(Date.UTC(2026, 1, 2, 3, 4, 5)), 'timestamp')).toBe('2026-02-02 03:04:05');
     expect(formatValue(BigInt(Date.UTC(2026, 1, 2)), 'timestamp')).toBe('2026-02-02 00:00:00');
     expect(formatValue({ a: 1n }, 'other')).toBe('{"a":"1"}');
+  });
+});
+
+describe('Arrow values (DECIMAL, TIME, INTERVAL)', () => {
+  // Decimal128 values arrive as four little-endian 32-bit words of the unscaled integer.
+  const words = (unscaled: bigint) => {
+    const u = BigInt.asUintN(128, unscaled);
+    return new Uint32Array([0, 1, 2, 3].map((i) => Number((u >> BigInt(32 * i)) & 0xffffffffn)));
+  };
+
+  it('formats dates, timestamps and big integers', () => {
+    expect(formatValue(1_728_000_000_000, 'date')).toBe('2024-10-04');
+    expect(formatTimestamp(1_700_000_000_123.456)).toBe('2023-11-14 22:13:20.123456');
+    expect(formatValue(42n, 'other')).toBe('42');
+    expect(formatValue(null, 'other')).toBeNull();
+  });
+
+  it('formats decimals exactly, including negative 128-bit values', () => {
+    expect(formatValue(words(12_345n), 'decimal:2')).toBe('123.45');
+    expect(formatValue(words(-5n), 'decimal:3')).toBe('-0.005');
+    expect(formatValue(words(-(10n ** 37n) + 1n), 'decimal:0')).toBe('-9999999999999999999999999999999999999');
+    expect(formatValue(words(0n), 'decimal:2')).toBe('0.00');
+    expect(formatValue(null, 'decimal:2')).toBeNull();
+  });
+
+  it('formats times and intervals like DuckDB', () => {
+    expect(formatTime(45_296_789_000n)).toBe('12:34:56.789');
+    expect(formatValue(45_296_000_000_001n, 'timeNs')).toBe('12:34:56.000000001');
+    expect(formatValue(45_296_789_000n, 'time')).toBe('12:34:56.789');
+    expect(formatInterval(new Int32Array([14, 3, 0, 0]))).toBe('1 year 2 months 3 days');
+    expect(formatInterval(new Int32Array([-1, -1, -1_000_000_000, -1]))).toBe('-1 month -1 day -00:00:01');
+    expect(formatInterval(new Int32Array([0, 0, 0, 0]))).toBe('00:00:00');
+    expect(formatValue(new Int32Array([0, 1, 0, 0]), 'interval')).toBe('1 day');
+  });
+
+  it('turns values into filter values the compiler accepts', () => {
+    expect(filterValue(words(150n), 'decimal:2')).toBe(1.5);
+    expect(filterValue(1_728_000_000_000, 'date')).toBe(1_728_000_000_000);
+    expect(filterValue(1_700_000_000_123.5, 'timestamp')).toBe('2023-11-14 22:13:20.1235');
+    expect(filterValue(7n, 'other')).toBe(7);
+    expect(filterValue(45_296_789_000n, 'time')).toBe('12:34:56.789');
+    expect(filterValue(undefined, 'other')).toBeNull();
   });
 });
 

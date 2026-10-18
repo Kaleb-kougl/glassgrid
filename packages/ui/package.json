@@ -11,6 +11,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./tokens": "./src/tokens.ts",
+    "./format": "./src/grid/format.ts",
     "./tokens.css": "./tokens/glassgrid.css",
     "./fonts.css": "./src/fonts.css",
     "./styles.css": "./src/styles.css"

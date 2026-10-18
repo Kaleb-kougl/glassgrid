@@ -68,7 +68,23 @@ export {
   MAX_SYNTHETIC_ROWS,
   type SyntheticSourceOptions,
 } from './grid/SyntheticSource.js';
-export { formatDate, formatTimestamp, formatValue, columnWidthFor, cellKind, type CellKind, type ValueKind } from './grid/format.js';
+export {
+  formatDate,
+  formatTimestamp,
+  formatDecimal,
+  formatTime,
+  formatInterval,
+  decimalUnscaled,
+  formatValue,
+  formatterFor,
+  filterValue,
+  valueKind,
+  kindForType,
+  columnWidthFor,
+  cellKind,
+  type CellKind,
+  type ValueKind,
+} from './grid/format.js';
 export {
   createScrollMapping,
   scrollToVirtual,

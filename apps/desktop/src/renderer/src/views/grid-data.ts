@@ -1,8 +1,19 @@
 import { useCallback, useEffect, useState } from 'react';
 import { MAX_ROWS_PAGE, type Filter, type SortKey, type TableId } from '@glassgrid/core';
-import { pageRows } from '../arrow-values';
+import type { Table } from 'apache-arrow';
+import { formatterFor, valueKind } from '@glassgrid/ui';
 import { isAbandoned, type EngineClient, type RowsResult } from '../engine-client';
 import type { GridCellValue } from '../types';
+
+function pageRows(table: Table, columns: readonly string[]): GridCellValue[][] {
+  const vectors = columns.map((name) => {
+    const index = table.schema.fields.findIndex((field) => field.name === name);
+    return index < 0 ? null : { vector: table.getChildAt(index), format: formatterFor(valueKind(table.schema.fields[index])) };
+  });
+  const rows: GridCellValue[][] = [];
+  for (let r = 0; r < table.numRows; r += 1) rows.push(vectors.map((column) => (column?.vector ? column.format(column.vector.get(r)) : null)));
+  return rows;
+}
 
 export const PAGE_ROWS = MAX_ROWS_PAGE;
 /** Pages kept per view (about 50K rows), least recently used first out. */

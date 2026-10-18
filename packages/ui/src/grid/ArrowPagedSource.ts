@@ -1,5 +1,6 @@
-import { DataType, type Table } from 'apache-arrow';
-import { formatValue, kindForType, type ValueKind } from './format.js';
+import type { Table } from 'apache-arrow';
+import type { ColumnType } from '@glassgrid/core';
+import { formatterFor, kindForType, valueKind } from './format.js';
 import { PagedGridSource, type PageColumns, type PagedSourceOptions } from './PagedGridSource.js';
 import type { GridCell } from './types.js';
 
@@ -34,18 +35,11 @@ export class ArrowPagedSource extends PagedGridSource {
   }
 }
 
-function valueKindOf(table: Table, index: number, fallback: ValueKind): ValueKind {
-  const field = table.schema.fields[index];
-  if (!field) return fallback;
-  if (DataType.isDate(field.type)) return 'date';
-  if (DataType.isTimestamp(field.type)) return 'timestamp';
-  return fallback;
-}
-
 /** Formats the first `limit` rows of `table` into display columns in the order of `columns`. */
-export function tableToColumns(table: Table, columns: readonly { readonly name: string; readonly type: Parameters<typeof kindForType>[0] }[], limit: number): PageColumns {
+export function tableToColumns(table: Table, columns: readonly { readonly name: string; readonly type: ColumnType }[], limit: number): PageColumns {
   const rows = Math.min(limit, table.numRows);
-  const names = table.schema.fields.map((field) => field.name);
+  const fields = table.schema.fields;
+  const names = fields.map((field) => field.name);
   return columns.map((column, position) => {
     let index = names.indexOf(column.name);
     // Unnamed or renamed result columns: fall back to position when the shapes agree.
@@ -56,8 +50,9 @@ export function tableToColumns(table: Table, columns: readonly { readonly name: 
       out.fill(null);
       return out;
     }
-    const kind = valueKindOf(table, index, kindForType(column.type));
-    for (let r = 0; r < rows; r += 1) out[r] = formatValue(vector.get(r), kind);
+    // The Arrow type decides (Decimal128, Time64, Interval, Date, Timestamp); the logical type is the fallback.
+    const format = formatterFor(valueKind(fields[index], kindForType(column.type)));
+    for (let r = 0; r < rows; r += 1) out[r] = format(vector.get(r));
     return out;
   });
 }

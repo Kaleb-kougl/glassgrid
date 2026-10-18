@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { DuckDBInstance } from '@duckdb/node-api';
 import { DataType, IntervalUnit, TimeUnit } from 'apache-arrow';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { displayValue, filterValue, valueKind } from '../renderer/src/arrow-values';
+import { filterValue, formatValue, valueKind } from '@glassgrid/ui/format';
 import { readerToArrowTable } from './arrow';
 import { createHarness, decode, type Harness } from './test-support';
 
@@ -46,7 +46,7 @@ function expectRenderedLikeDuckDB(result: Awaited<ReturnType<typeof typed>>) {
     const kind = valueKind(field);
     result.texts.forEach((row, index) => {
       const expected = row[field.name] ?? null;
-      expect(displayValue(vector?.get(index), kind), `${field.name}[${index}]`).toBe(expected === null ? null : String(expected));
+      expect(formatValue(vector?.get(index), kind), `${field.name}[${index}]`).toBe(expected === null ? null : String(expected));
     });
   }
 }
@@ -90,7 +90,7 @@ describe('TIME', () => {
     const field = page.schema.fields.find((candidate) => candidate.name === 'at');
     expect(field && DataType.isTime(field.type)).toBe(true);
     const at = page.getChild('at');
-    expect([0, 1, 2].map((i) => displayValue(at?.get(i), valueKind(field)))).toEqual(['08:15:00', '17:45:30.25', null]);
+    expect([0, 1, 2].map((i) => formatValue(at?.get(i), valueKind(field)))).toEqual(['08:15:00', '17:45:30.25', null]);
   });
 });
 
