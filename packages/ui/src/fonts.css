@@ -1,0 +1,10 @@
+/*
+ * IBM Plex Sans (400/500/600) and IBM Plex Mono (400/500), bundled locally
+ * from @fontsource (SIL Open Font License 1.1). The desktop renderer's CSP is
+ * `font-src 'self'`, so fonts are never fetched from a CDN.
+ */
+@import '@fontsource/ibm-plex-sans/400.css';
+@import '@fontsource/ibm-plex-sans/500.css';
+@import '@fontsource/ibm-plex-sans/600.css';
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/500.css';

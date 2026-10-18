@@ -1,0 +1,9 @@
+{
+  // Token generator checks and the Vitest config run in Node.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023"],
+    "types": ["node"]
+  },
+  "include": ["tokens/*.ts", "vitest.config.ts"]
+}

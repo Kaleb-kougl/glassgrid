@@ -59,6 +59,12 @@ export default defineConfig(
     extends: [tseslint.configs.disableTypeChecked],
     languageOptions: { globals: globals.node },
   },
+  {
+    // The design-token generator is CommonJS (packages/ui/tokens/package.json).
+    files: ['packages/ui/tokens/*.js'],
+    languageOptions: { sourceType: 'commonjs' },
+    rules: { '@typescript-eslint/no-require-imports': 'off' },
+  },
 
   // --- Runtime environments -------------------------------------------------
   {

@@ -18,3 +18,6 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 *.log
+
+# Claude Design export (reference only; support.js is the Claude Design runtime, not ours to redistribute)
+/design/

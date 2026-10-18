@@ -1,0 +1,568 @@
+{
+  "contrast": [
+    {
+      "label": "Body text on grid",
+      "fg": "text-primary",
+      "bg": "grid-bg",
+      "min": 4.5,
+      "light": 17.12,
+      "dark": 14.74,
+      "pass": "pass"
+    },
+    {
+      "label": "Body text on zebra row",
+      "fg": "text-primary",
+      "bg": "grid-zebra",
+      "min": 4.5,
+      "light": 16.11,
+      "dark": 14.03,
+      "pass": "pass"
+    },
+    {
+      "label": "Body text in selected range",
+      "fg": "text-primary",
+      "bg": "grid-sel-fill",
+      "min": 4.5,
+      "light": 14.97,
+      "dark": 11.56,
+      "pass": "pass"
+    },
+    {
+      "label": "Body text on panel",
+      "fg": "text-primary",
+      "bg": "panel-bg",
+      "min": 4.5,
+      "light": 15.97,
+      "dark": 14.18,
+      "pass": "pass"
+    },
+    {
+      "label": "Body text on card",
+      "fg": "text-primary",
+      "bg": "card-bg",
+      "min": 4.5,
+      "light": 17.12,
+      "dark": 12.77,
+      "pass": "pass"
+    },
+    {
+      "label": "Secondary text on panel",
+      "fg": "text-secondary",
+      "bg": "panel-bg",
+      "min": 4.5,
+      "light": 6.22,
+      "dark": 7.64,
+      "pass": "pass"
+    },
+    {
+      "label": "Secondary text on card",
+      "fg": "text-secondary",
+      "bg": "card-bg",
+      "min": 4.5,
+      "light": 6.66,
+      "dark": 6.88,
+      "pass": "pass"
+    },
+    {
+      "label": "Secondary text on title bar",
+      "fg": "text-secondary",
+      "bg": "ground",
+      "min": 4.5,
+      "light": 5.32,
+      "dark": 8.52,
+      "pass": "pass"
+    },
+    {
+      "label": "Tertiary text on panel",
+      "fg": "text-tertiary",
+      "bg": "panel-bg",
+      "min": 4.5,
+      "light": 5.1,
+      "dark": 6.26,
+      "pass": "pass"
+    },
+    {
+      "label": "Tertiary text on card",
+      "fg": "text-tertiary",
+      "bg": "card-bg",
+      "min": 4.5,
+      "light": 5.47,
+      "dark": 5.64,
+      "pass": "pass"
+    },
+    {
+      "label": "Grid \"null\" on grid",
+      "fg": "grid-null",
+      "bg": "grid-bg",
+      "min": 4.5,
+      "light": 5.47,
+      "dark": 5.89,
+      "pass": "pass"
+    },
+    {
+      "label": "Grid \"null\" on zebra",
+      "fg": "grid-null",
+      "bg": "grid-zebra",
+      "min": 4.5,
+      "light": 5.15,
+      "dark": 5.6,
+      "pass": "pass"
+    },
+    {
+      "label": "Accent text on card",
+      "fg": "accent-text",
+      "bg": "card-bg",
+      "min": 4.5,
+      "light": 6.23,
+      "dark": 7.03,
+      "pass": "pass"
+    },
+    {
+      "label": "Accent text on selected row",
+      "fg": "accent-text",
+      "bg": "selected-bg",
+      "min": 4.5,
+      "light": 5.26,
+      "dark": 6.19,
+      "pass": "pass"
+    },
+    {
+      "label": "Primary button label",
+      "fg": "on-accent",
+      "bg": "accent",
+      "min": 4.5,
+      "light": 5.3,
+      "dark": 6.44,
+      "pass": "pass"
+    },
+    {
+      "label": "Secondary button label",
+      "fg": "text-primary",
+      "bg": "btn-secondary-bg",
+      "min": 4.5,
+      "light": 12.29,
+      "dark": 11.66,
+      "pass": "pass"
+    },
+    {
+      "label": "Shelf chip text",
+      "fg": "chip-text",
+      "bg": "chip-bg",
+      "min": 4.5,
+      "light": 14.74,
+      "dark": 10.87,
+      "pass": "pass"
+    },
+    {
+      "label": "Filter chip text",
+      "fg": "filter-chip-text",
+      "bg": "filter-chip-bg",
+      "min": 4.5,
+      "light": 8.09,
+      "dark": 9.25,
+      "pass": "pass"
+    },
+    {
+      "label": "Chart tick labels on card",
+      "fg": "chart-tick",
+      "bg": "card-bg",
+      "min": 4.5,
+      "light": 6.66,
+      "dark": 6.88,
+      "pass": "pass"
+    },
+    {
+      "label": "Tooltip text",
+      "fg": "tooltip-text",
+      "bg": "tooltip-bg",
+      "min": 4.5,
+      "light": 14.02,
+      "dark": 9.92,
+      "pass": "pass"
+    },
+    {
+      "label": "Tooltip muted text",
+      "fg": "tooltip-muted",
+      "bg": "tooltip-bg",
+      "min": 4.5,
+      "light": 8.92,
+      "dark": 5.85,
+      "pass": "pass"
+    },
+    {
+      "label": "Success text on its fill",
+      "fg": "success",
+      "bg": "success-bg",
+      "min": 4.5,
+      "light": 5.08,
+      "dark": 6.99,
+      "pass": "pass"
+    },
+    {
+      "label": "Warning text on its fill",
+      "fg": "warning",
+      "bg": "warning-bg",
+      "min": 4.5,
+      "light": 5.25,
+      "dark": 7.61,
+      "pass": "pass"
+    },
+    {
+      "label": "Danger text on its fill",
+      "fg": "danger",
+      "bg": "danger-bg",
+      "min": 4.5,
+      "light": 5.01,
+      "dark": 6.31,
+      "pass": "pass"
+    },
+    {
+      "label": "Info text on its fill",
+      "fg": "info",
+      "bg": "info-bg",
+      "min": 4.5,
+      "light": 5.16,
+      "dark": 7.74,
+      "pass": "pass"
+    },
+    {
+      "label": "Danger text on card",
+      "fg": "danger",
+      "bg": "card-bg",
+      "min": 4.5,
+      "light": 6,
+      "dark": 6.35,
+      "pass": "pass"
+    },
+    {
+      "label": "Focus ring vs grid",
+      "fg": "focus",
+      "bg": "grid-bg",
+      "min": 3,
+      "light": 5.3,
+      "dark": 8.12,
+      "pass": "pass"
+    },
+    {
+      "label": "Focus ring vs card",
+      "fg": "focus",
+      "bg": "card-bg",
+      "min": 3,
+      "light": 5.3,
+      "dark": 7.03,
+      "pass": "pass"
+    },
+    {
+      "label": "Focus ring vs title bar",
+      "fg": "focus",
+      "bg": "ground",
+      "min": 3,
+      "light": 4.24,
+      "dark": 8.71,
+      "pass": "pass"
+    },
+    {
+      "label": "Control boundary (strong border) vs card",
+      "fg": "border-strong",
+      "bg": "card-bg",
+      "min": 3,
+      "light": 3.68,
+      "dark": 3.26,
+      "pass": "pass"
+    },
+    {
+      "label": "Toggle track (off) vs card",
+      "fg": "toggle-off",
+      "bg": "card-bg",
+      "min": 3,
+      "light": 3.68,
+      "dark": 3.26,
+      "pass": "pass"
+    },
+    {
+      "label": "Grid selection border vs grid",
+      "fg": "grid-sel-border",
+      "bg": "grid-bg",
+      "min": 3,
+      "light": 5.3,
+      "dark": 6.12,
+      "pass": "pass"
+    },
+    {
+      "label": "Brush edge vs card",
+      "fg": "chart-brush-stroke",
+      "bg": "card-bg",
+      "min": 3,
+      "light": 5.3,
+      "dark": 7.03,
+      "pass": "pass"
+    },
+    {
+      "label": "Selected-mark outline vs card",
+      "fg": "chart-selection-stroke",
+      "bg": "card-bg",
+      "min": 3,
+      "light": 17.12,
+      "dark": 12.77,
+      "pass": "pass"
+    },
+    {
+      "label": "Single-series mark vs card",
+      "fg": "chart-mark",
+      "bg": "card-bg",
+      "min": 3,
+      "light": 5.3,
+      "dark": 5.3,
+      "pass": "pass"
+    },
+    {
+      "label": "Disabled text on panel (exempt)",
+      "fg": "text-disabled",
+      "bg": "panel-bg",
+      "min": 0,
+      "light": 2.41,
+      "dark": 2.99,
+      "pass": "exempt"
+    }
+  ],
+  "cvd": {
+    "light": {
+      "swatches": {
+        "normal": [
+          "#2f6db3",
+          "#a83a0c",
+          "#0b5e52",
+          "#d0609a",
+          "#9a8a1a",
+          "#3d2b80",
+          "#2a9ad8",
+          "#5c2410",
+          "#9aa2ad"
+        ],
+        "protan": [
+          "#4c72b6",
+          "#5a4f01",
+          "#595852",
+          "#6d7a9c",
+          "#988600",
+          "#003c83",
+          "#7c9adb",
+          "#342d0d",
+          "#9ea2ae"
+        ],
+        "deutan": [
+          "#3866b2",
+          "#756802",
+          "#4f5053",
+          "#8b8e97",
+          "#9d8c23",
+          "#00387e",
+          "#658bd7",
+          "#413a0e",
+          "#9ca0ad"
+        ],
+        "tritan": [
+          "#007d87",
+          "#b91832",
+          "#00605a",
+          "#dd5c76",
+          "#a77f76",
+          "#254051",
+          "#00aab0",
+          "#661720",
+          "#96a4a5"
+        ]
+      },
+      "minDeltaE": {
+        "normal": 16.8,
+        "protan": 9,
+        "deutan": 6.1,
+        "tritan": 11.7
+      },
+      "worstPair": {
+        "normal": [
+          "2",
+          "8"
+        ],
+        "protan": [
+          "1",
+          "4"
+        ],
+        "deutan": [
+          "4",
+          "other"
+        ],
+        "tritan": [
+          "1",
+          "3"
+        ]
+      },
+      "contrastOnCard": [
+        {
+          "name": "1",
+          "hex": "#2f6db3",
+          "ratio": 5.3
+        },
+        {
+          "name": "2",
+          "hex": "#a83a0c",
+          "ratio": 6.41
+        },
+        {
+          "name": "3",
+          "hex": "#0b5e52",
+          "ratio": 7.67
+        },
+        {
+          "name": "4",
+          "hex": "#d0609a",
+          "ratio": 3.61
+        },
+        {
+          "name": "5",
+          "hex": "#9a8a1a",
+          "ratio": 3.49
+        },
+        {
+          "name": "6",
+          "hex": "#3d2b80",
+          "ratio": 11.32
+        },
+        {
+          "name": "7",
+          "hex": "#2a9ad8",
+          "ratio": 3.13
+        },
+        {
+          "name": "8",
+          "hex": "#5c2410",
+          "ratio": 12.25
+        },
+        {
+          "name": "other",
+          "hex": "#9aa2ad",
+          "ratio": 2.58
+        }
+      ]
+    },
+    "dark": {
+      "swatches": {
+        "normal": [
+          "#6b9ad6",
+          "#cc8344",
+          "#238673",
+          "#eb9ebd",
+          "#e6cf3e",
+          "#7a69b8",
+          "#9fd8f5",
+          "#ac5f39",
+          "#5f6772"
+        ],
+        "protan": [
+          "#829dd9",
+          "#998a3e",
+          "#817d72",
+          "#a6acbe",
+          "#e3c924",
+          "#5076bb",
+          "#cad6f7",
+          "#746935",
+          "#636773"
+        ],
+        "deutan": [
+          "#7593d5",
+          "#aa9a44",
+          "#737474",
+          "#b9b9bb",
+          "#e9d248",
+          "#5273b6",
+          "#bdccf5",
+          "#877a38",
+          "#616572"
+        ],
+        "tritan": [
+          "#38a7af",
+          "#de7375",
+          "#008880",
+          "#f69ba9",
+          "#f8c0b3",
+          "#6b7888",
+          "#81e0e1",
+          "#bc5056",
+          "#5a696a"
+        ]
+      },
+      "minDeltaE": {
+        "normal": 13.9,
+        "protan": 11.7,
+        "deutan": 8.1,
+        "tritan": 10.3
+      },
+      "worstPair": {
+        "normal": [
+          "2",
+          "8"
+        ],
+        "protan": [
+          "4",
+          "7"
+        ],
+        "deutan": [
+          "3",
+          "other"
+        ],
+        "tritan": [
+          "6",
+          "other"
+        ]
+      },
+      "contrastOnCard": [
+        {
+          "name": "1",
+          "hex": "#6b9ad6",
+          "ratio": 5.3
+        },
+        {
+          "name": "2",
+          "hex": "#cc8344",
+          "ratio": 5.06
+        },
+        {
+          "name": "3",
+          "hex": "#238673",
+          "ratio": 3.47
+        },
+        {
+          "name": "4",
+          "hex": "#eb9ebd",
+          "ratio": 7.46
+        },
+        {
+          "name": "5",
+          "hex": "#e6cf3e",
+          "ratio": 9.81
+        },
+        {
+          "name": "6",
+          "hex": "#7a69b8",
+          "ratio": 3.33
+        },
+        {
+          "name": "7",
+          "hex": "#9fd8f5",
+          "ratio": 9.99
+        },
+        {
+          "name": "8",
+          "hex": "#ac5f39",
+          "ratio": 3.27
+        },
+        {
+          "name": "other",
+          "hex": "#5f6772",
+          "ratio": 2.69
+        }
+      ]
+    }
+  }
+}

@@ -1,9 +1,6 @@
 {
-  "extends": "../../tsconfig.base.json",
-  "compilerOptions": {
-    "lib": ["ES2023", "DOM", "DOM.Iterable"],
-    "jsx": "react-jsx",
-    "types": []
-  },
-  "include": ["src"]
+  // Solution file for editors and typescript-eslint's project service.
+  // `pnpm typecheck` checks each referenced project separately.
+  "files": [],
+  "references": [{ "path": "./tsconfig.lib.json" }, { "path": "./tsconfig.node.json" }]
 }

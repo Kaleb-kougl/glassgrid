@@ -1,0 +1,1444 @@
+{
+  "$description": "Glassgrid design tokens (W3C Design Tokens Community Group format). Theme-dependent tokens live under theme.light and theme.dark with identical paths.",
+  "color": {
+    "neutral": {
+      "0": {
+        "$type": "color",
+        "$value": "#ffffff"
+      },
+      "25": {
+        "$type": "color",
+        "$value": "#f6f7f9"
+      },
+      "50": {
+        "$type": "color",
+        "$value": "#f0f2f5"
+      },
+      "75": {
+        "$type": "color",
+        "$value": "#eceef2"
+      },
+      "100": {
+        "$type": "color",
+        "$value": "#e8ebef"
+      },
+      "150": {
+        "$type": "color",
+        "$value": "#e3e6ea"
+      },
+      "200": {
+        "$type": "color",
+        "$value": "#d9dde3"
+      },
+      "250": {
+        "$type": "color",
+        "$value": "#d1d6dd"
+      },
+      "300": {
+        "$type": "color",
+        "$value": "#b4bbc5"
+      },
+      "400": {
+        "$type": "color",
+        "$value": "#8a939f"
+      },
+      "500": {
+        "$type": "color",
+        "$value": "#6b7480"
+      },
+      "600": {
+        "$type": "color",
+        "$value": "#555d68"
+      },
+      "650": {
+        "$type": "color",
+        "$value": "#4d5560"
+      },
+      "700": {
+        "$type": "color",
+        "$value": "#434a54"
+      },
+      "800": {
+        "$type": "color",
+        "$value": "#343b44"
+      },
+      "825": {
+        "$type": "color",
+        "$value": "#2f3640"
+      },
+      "850": {
+        "$type": "color",
+        "$value": "#2a3038"
+      },
+      "875": {
+        "$type": "color",
+        "$value": "#262c34"
+      },
+      "900": {
+        "$type": "color",
+        "$value": "#20252c"
+      },
+      "925": {
+        "$type": "color",
+        "$value": "#181c21"
+      },
+      "950": {
+        "$type": "color",
+        "$value": "#15181d"
+      },
+      "975": {
+        "$type": "color",
+        "$value": "#0d1013"
+      }
+    },
+    "blue": {
+      "50": {
+        "$type": "color",
+        "$value": "#eef4fb"
+      },
+      "100": {
+        "$type": "color",
+        "$value": "#e3edf9"
+      },
+      "200": {
+        "$type": "color",
+        "$value": "#c3d7f1"
+      },
+      "300": {
+        "$type": "color",
+        "$value": "#8cb2e2"
+      },
+      "400": {
+        "$type": "color",
+        "$value": "#6b9ad6"
+      },
+      "500": {
+        "$type": "color",
+        "$value": "#3f76bc"
+      },
+      "600": {
+        "$type": "color",
+        "$value": "#2f6db3"
+      },
+      "700": {
+        "$type": "color",
+        "$value": "#2862a4"
+      },
+      "800": {
+        "$type": "color",
+        "$value": "#1d4677"
+      },
+      "900": {
+        "$type": "color",
+        "$value": "#1e2f45"
+      }
+    }
+  },
+  "font": {
+    "family": {
+      "ui": {
+        "$type": "fontFamily",
+        "$value": [
+          "IBM Plex Sans",
+          "system-ui",
+          "-apple-system",
+          "Segoe UI",
+          "sans-serif"
+        ]
+      },
+      "mono": {
+        "$type": "fontFamily",
+        "$value": [
+          "IBM Plex Mono",
+          "ui-monospace",
+          "SF Mono",
+          "Consolas",
+          "monospace"
+        ]
+      }
+    }
+  },
+  "typography": {
+    "ui-xs": {
+      "$type": "typography",
+      "$description": "Counts, hints, tick labels",
+      "$value": {
+        "fontFamily": "{font.family.ui}",
+        "fontSize": "11px",
+        "lineHeight": "16px",
+        "fontWeight": 400,
+        "letterSpacing": "0em"
+      },
+      "$extensions": {
+        "app.glassgrid": {
+          "fontFeatureSettings": "\"tnum\" 1"
+        }
+      }
+    },
+    "ui-sm": {
+      "$type": "typography",
+      "$description": "Secondary UI, chips, buttons (small)",
+      "$value": {
+        "fontFamily": "{font.family.ui}",
+        "fontSize": "12px",
+        "lineHeight": "16px",
+        "fontWeight": 400,
+        "letterSpacing": "0em"
+      },
+      "$extensions": {
+        "app.glassgrid": {
+          "fontFeatureSettings": "\"tnum\" 1"
+        }
+      }
+    },
+    "ui-md": {
+      "$type": "typography",
+      "$description": "Default UI text",
+      "$value": {
+        "fontFamily": "{font.family.ui}",
+        "fontSize": "13px",
+        "lineHeight": "20px",
+        "fontWeight": 400,
+        "letterSpacing": "0em"
+      },
+      "$extensions": {
+        "app.glassgrid": {
+          "fontFeatureSettings": "\"tnum\" 1"
+        }
+      }
+    },
+    "ui-md-strong": {
+      "$type": "typography",
+      "$description": "Buttons, emphasised labels",
+      "$value": {
+        "fontFamily": "{font.family.ui}",
+        "fontSize": "13px",
+        "lineHeight": "20px",
+        "fontWeight": 500,
+        "letterSpacing": "0em"
+      },
+      "$extensions": {
+        "app.glassgrid": {
+          "fontFeatureSettings": "\"tnum\" 1"
+        }
+      }
+    },
+    "label-caps": {
+      "$type": "typography",
+      "$description": "Panel labels, uppercase",
+      "$value": {
+        "fontFamily": "{font.family.ui}",
+        "fontSize": "11px",
+        "lineHeight": "16px",
+        "fontWeight": 600,
+        "letterSpacing": "0.06em"
+      },
+      "$extensions": {
+        "app.glassgrid": {
+          "fontFeatureSettings": "\"tnum\" 1"
+        }
+      }
+    },
+    "heading-sm": {
+      "$type": "typography",
+      "$description": "Card titles",
+      "$value": {
+        "fontFamily": "{font.family.ui}",
+        "fontSize": "13px",
+        "lineHeight": "20px",
+        "fontWeight": 600,
+        "letterSpacing": "0em"
+      },
+      "$extensions": {
+        "app.glassgrid": {
+          "fontFeatureSettings": "\"tnum\" 1"
+        }
+      }
+    },
+    "heading-md": {
+      "$type": "typography",
+      "$description": "Panel and dialog titles",
+      "$value": {
+        "fontFamily": "{font.family.ui}",
+        "fontSize": "16px",
+        "lineHeight": "24px",
+        "fontWeight": 600,
+        "letterSpacing": "0em"
+      },
+      "$extensions": {
+        "app.glassgrid": {
+          "fontFeatureSettings": "\"tnum\" 1"
+        }
+      }
+    },
+    "heading-lg": {
+      "$type": "typography",
+      "$description": "Empty state",
+      "$value": {
+        "fontFamily": "{font.family.ui}",
+        "fontSize": "22px",
+        "lineHeight": "28px",
+        "fontWeight": 600,
+        "letterSpacing": "-0.005em"
+      },
+      "$extensions": {
+        "app.glassgrid": {
+          "fontFeatureSettings": "\"tnum\" 1"
+        }
+      }
+    },
+    "grid-cell": {
+      "$type": "typography",
+      "$description": "Text cells",
+      "$value": {
+        "fontFamily": "{font.family.ui}",
+        "fontSize": "13px",
+        "lineHeight": "20px",
+        "fontWeight": 400,
+        "letterSpacing": "0em"
+      },
+      "$extensions": {
+        "app.glassgrid": {
+          "fontFeatureSettings": "\"tnum\" 1"
+        }
+      }
+    },
+    "grid-cell-num": {
+      "$type": "typography",
+      "$description": "Numeric and timestamp cells, tabular",
+      "$value": {
+        "fontFamily": "{font.family.mono}",
+        "fontSize": "12.5px",
+        "lineHeight": "20px",
+        "fontWeight": 400,
+        "letterSpacing": "0em"
+      },
+      "$extensions": {
+        "app.glassgrid": {
+          "fontFeatureSettings": "\"tnum\" 1"
+        }
+      }
+    },
+    "grid-header": {
+      "$type": "typography",
+      "$description": "Column headers",
+      "$value": {
+        "fontFamily": "{font.family.ui}",
+        "fontSize": "12px",
+        "lineHeight": "16px",
+        "fontWeight": 500,
+        "letterSpacing": "0em"
+      },
+      "$extensions": {
+        "app.glassgrid": {
+          "fontFeatureSettings": "\"tnum\" 1"
+        }
+      }
+    },
+    "chart-tick": {
+      "$type": "typography",
+      "$description": "Axis tick labels",
+      "$value": {
+        "fontFamily": "{font.family.ui}",
+        "fontSize": "11px",
+        "lineHeight": "14px",
+        "fontWeight": 400,
+        "letterSpacing": "0em"
+      },
+      "$extensions": {
+        "app.glassgrid": {
+          "fontFeatureSettings": "\"tnum\" 1"
+        }
+      }
+    },
+    "chart-label": {
+      "$type": "typography",
+      "$description": "Category labels",
+      "$value": {
+        "fontFamily": "{font.family.ui}",
+        "fontSize": "12px",
+        "lineHeight": "16px",
+        "fontWeight": 400,
+        "letterSpacing": "0em"
+      },
+      "$extensions": {
+        "app.glassgrid": {
+          "fontFeatureSettings": "\"tnum\" 1"
+        }
+      }
+    },
+    "chart-value": {
+      "$type": "typography",
+      "$description": "Exact value labels, tabular",
+      "$value": {
+        "fontFamily": "{font.family.ui}",
+        "fontSize": "11.5px",
+        "lineHeight": "16px",
+        "fontWeight": 500,
+        "letterSpacing": "0em"
+      },
+      "$extensions": {
+        "app.glassgrid": {
+          "fontFeatureSettings": "\"tnum\" 1"
+        }
+      }
+    },
+    "code": {
+      "$type": "typography",
+      "$description": "Shelf expressions, tool calls",
+      "$value": {
+        "fontFamily": "{font.family.mono}",
+        "fontSize": "11.5px",
+        "lineHeight": "16px",
+        "fontWeight": 400,
+        "letterSpacing": "0em"
+      },
+      "$extensions": {
+        "app.glassgrid": {
+          "fontFeatureSettings": "\"tnum\" 1"
+        }
+      }
+    }
+  },
+  "space": {
+    "0": {
+      "$type": "dimension",
+      "$value": "0px"
+    },
+    "1": {
+      "$type": "dimension",
+      "$value": "4px"
+    },
+    "2": {
+      "$type": "dimension",
+      "$value": "8px"
+    },
+    "3": {
+      "$type": "dimension",
+      "$value": "12px"
+    },
+    "4": {
+      "$type": "dimension",
+      "$value": "16px"
+    },
+    "5": {
+      "$type": "dimension",
+      "$value": "20px"
+    },
+    "6": {
+      "$type": "dimension",
+      "$value": "24px"
+    },
+    "8": {
+      "$type": "dimension",
+      "$value": "32px"
+    },
+    "10": {
+      "$type": "dimension",
+      "$value": "40px"
+    },
+    "12": {
+      "$type": "dimension",
+      "$value": "48px"
+    },
+    "16": {
+      "$type": "dimension",
+      "$value": "64px"
+    }
+  },
+  "radius": {
+    "control": {
+      "$type": "dimension",
+      "$value": "4px"
+    },
+    "badge": {
+      "$type": "dimension",
+      "$value": "3px"
+    },
+    "card": {
+      "$type": "dimension",
+      "$value": "8px"
+    },
+    "panel": {
+      "$type": "dimension",
+      "$value": "8px"
+    },
+    "chip": {
+      "$type": "dimension",
+      "$value": "999px"
+    }
+  },
+  "layout": {
+    "panel-gap": {
+      "$type": "dimension",
+      "$value": "8px"
+    },
+    "titlebar-height": {
+      "$type": "dimension",
+      "$value": "44px"
+    },
+    "titlebar-inset-macos": {
+      "$type": "dimension",
+      "$value": "80px"
+    },
+    "column-list-width": {
+      "$type": "dimension",
+      "$value": "240px"
+    },
+    "chart-canvas-width": {
+      "$type": "dimension",
+      "$value": "480px"
+    }
+  },
+  "border": {
+    "width": {
+      "hairline": {
+        "$type": "dimension",
+        "$value": "1px"
+      },
+      "focus": {
+        "$type": "dimension",
+        "$value": "2px"
+      },
+      "focus-offset": {
+        "$type": "dimension",
+        "$value": "2px"
+      }
+    }
+  },
+  "grid": {
+    "row-height": {
+      "$type": "dimension",
+      "$value": "32px"
+    },
+    "header-height": {
+      "$type": "dimension",
+      "$value": "32px"
+    },
+    "cell-padding-x": {
+      "$type": "dimension",
+      "$value": "10px"
+    },
+    "rownum-width": {
+      "$type": "dimension",
+      "$value": "52px"
+    }
+  },
+  "chart": {
+    "line-width": {
+      "$type": "dimension",
+      "$value": "1.75px"
+    },
+    "brush-handle-width": {
+      "$type": "dimension",
+      "$value": "4px"
+    },
+    "selection-stroke-width": {
+      "$type": "dimension",
+      "$value": "1.5px"
+    }
+  },
+  "motion": {
+    "duration": {
+      "instant": {
+        "$type": "duration",
+        "$value": "0ms"
+      },
+      "fast": {
+        "$type": "duration",
+        "$value": "90ms"
+      },
+      "base": {
+        "$type": "duration",
+        "$value": "160ms"
+      },
+      "slow": {
+        "$type": "duration",
+        "$value": "240ms"
+      }
+    },
+    "delay": {
+      "loading": {
+        "$type": "duration",
+        "$value": "300ms"
+      }
+    },
+    "easing": {
+      "standard": {
+        "$type": "cubicBezier",
+        "$value": [
+          0.2,
+          0,
+          0,
+          1
+        ]
+      },
+      "enter": {
+        "$type": "cubicBezier",
+        "$value": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "exit": {
+        "$type": "cubicBezier",
+        "$value": [
+          0.3,
+          0,
+          1,
+          1
+        ]
+      }
+    }
+  },
+  "theme": {
+    "light": {
+      "surface": {
+        "ground": {
+          "$type": "color",
+          "$value": "{color.neutral.150}",
+          "$description": "App background behind panels and the title bar"
+        },
+        "panel": {
+          "$type": "color",
+          "$value": "{color.neutral.25}",
+          "$description": "Column list, activity panel"
+        },
+        "grid": {
+          "$type": "color",
+          "$value": "{color.neutral.0}",
+          "$description": "Data grid body"
+        },
+        "canvas": {
+          "$type": "color",
+          "$value": "{color.neutral.50}",
+          "$description": "Chart canvas behind cards"
+        },
+        "card": {
+          "$type": "color",
+          "$value": "{color.neutral.0}",
+          "$description": "Chart cards"
+        },
+        "raised": {
+          "$type": "color",
+          "$value": "{color.neutral.0}",
+          "$description": "Menus, popovers, toasts"
+        }
+      },
+      "border": {
+        "subtle": {
+          "$type": "color",
+          "$value": "#e1e4e9",
+          "$description": "Card outlines, separators"
+        },
+        "default": {
+          "$type": "color",
+          "$value": "{color.neutral.200}",
+          "$description": "Inputs, dividers inside controls"
+        },
+        "strong": {
+          "$type": "color",
+          "$value": "#7d8693",
+          "$description": "Control boundaries that must meet 3:1"
+        }
+      },
+      "state": {
+        "hover": {
+          "$type": "color",
+          "$value": "#e9ecf0",
+          "$description": "Hover fill for rows and ghost controls"
+        },
+        "selected": {
+          "$type": "color",
+          "$value": "{color.blue.100}",
+          "$description": "Selected list row"
+        }
+      },
+      "text": {
+        "primary": {
+          "$type": "color",
+          "$value": "{color.neutral.925}"
+        },
+        "secondary": {
+          "$type": "color",
+          "$value": "{color.neutral.600}"
+        },
+        "tertiary": {
+          "$type": "color",
+          "$value": "#626a75",
+          "$description": "Counts, hints"
+        },
+        "disabled": {
+          "$type": "color",
+          "$value": "#9aa2ad",
+          "$description": "Disabled controls (WCAG-exempt)"
+        },
+        "on-accent": {
+          "$type": "color",
+          "$value": "{color.neutral.0}",
+          "$description": "Text on accent fills"
+        }
+      },
+      "accent": {
+        "default": {
+          "$type": "color",
+          "$value": "{color.blue.600}",
+          "$description": "The one accent"
+        },
+        "hover": {
+          "$type": "color",
+          "$value": "#275c98"
+        },
+        "pressed": {
+          "$type": "color",
+          "$value": "#1f4a7c"
+        },
+        "subtle": {
+          "$type": "color",
+          "$value": "{color.blue.100}"
+        },
+        "text": {
+          "$type": "color",
+          "$value": "{color.blue.700}",
+          "$description": "Accent used as text or links"
+        }
+      },
+      "status": {
+        "success": {
+          "fg": {
+            "$type": "color",
+            "$value": "#1d7348"
+          },
+          "bg": {
+            "$type": "color",
+            "$value": "#e3f3ea"
+          }
+        },
+        "warning": {
+          "fg": {
+            "$type": "color",
+            "$value": "#8a5a00"
+          },
+          "bg": {
+            "$type": "color",
+            "$value": "#fbf0dc"
+          }
+        },
+        "danger": {
+          "fg": {
+            "$type": "color",
+            "$value": "#b73228"
+          },
+          "bg": {
+            "$type": "color",
+            "$value": "#fbe6e4"
+          }
+        },
+        "info": {
+          "fg": {
+            "$type": "color",
+            "$value": "#1f6a8a"
+          },
+          "bg": {
+            "$type": "color",
+            "$value": "#e1f0f7"
+          }
+        }
+      },
+      "control": {
+        "secondary": {
+          "$type": "color",
+          "$value": "#d6dbe1",
+          "$description": "Secondary button fill"
+        },
+        "secondary-hover": {
+          "$type": "color",
+          "$value": "#cbd1d8"
+        },
+        "chip": {
+          "$type": "color",
+          "$value": "{color.neutral.75}",
+          "$description": "Shelf chip"
+        },
+        "chip-text": {
+          "$type": "color",
+          "$value": "{color.neutral.925}"
+        },
+        "filter-chip": {
+          "$type": "color",
+          "$value": "{color.blue.100}"
+        },
+        "filter-chip-text": {
+          "$type": "color",
+          "$value": "{color.blue.800}"
+        },
+        "type-badge": {
+          "$type": "color",
+          "$value": "#e5e8ec",
+          "$description": "Column type badge"
+        },
+        "toggle-off": {
+          "$type": "color",
+          "$value": "#7d8693"
+        },
+        "toggle-on": {
+          "$type": "color",
+          "$value": "{color.blue.600}"
+        },
+        "knob": {
+          "$type": "color",
+          "$value": "{color.neutral.0}"
+        }
+      },
+      "focus": {
+        "ring": {
+          "$type": "color",
+          "$value": "{color.blue.600}",
+          "$description": "2px keyboard focus ring"
+        }
+      },
+      "grid": {
+        "header": {
+          "$type": "color",
+          "$value": "{color.neutral.0}"
+        },
+        "line": {
+          "$type": "color",
+          "$value": "{color.neutral.100}",
+          "$description": "Horizontal and vertical cell rules"
+        },
+        "line-strong": {
+          "$type": "color",
+          "$value": "{color.neutral.200}",
+          "$description": "Header rule"
+        },
+        "zebra": {
+          "$type": "color",
+          "$value": "#f7f8fa",
+          "$description": "Every second row"
+        },
+        "selection-fill": {
+          "$type": "color",
+          "$value": "rgba(47,109,179,0.10)"
+        },
+        "selection-border": {
+          "$type": "color",
+          "$value": "{color.blue.600}"
+        },
+        "header-selected": {
+          "$type": "color",
+          "$value": "{color.blue.100}",
+          "$description": "Header of a column in the selection"
+        },
+        "null": {
+          "$type": "color",
+          "$value": "#626a75",
+          "$description": "Italic \"null\""
+        }
+      },
+      "chart": {
+        "mark": {
+          "$type": "color",
+          "$value": "{color.blue.600}",
+          "$description": "Single-series marks"
+        },
+        "axis": {
+          "$type": "color",
+          "$value": "{color.neutral.300}"
+        },
+        "gridline": {
+          "$type": "color",
+          "$value": "#eceef1"
+        },
+        "tick": {
+          "$type": "color",
+          "$value": "{color.neutral.600}",
+          "$description": "Tick labels"
+        },
+        "brush-fill": {
+          "$type": "color",
+          "$value": "rgba(47,109,179,0.12)"
+        },
+        "brush-stroke": {
+          "$type": "color",
+          "$value": "{color.blue.600}"
+        },
+        "selection-stroke": {
+          "$type": "color",
+          "$value": "{color.neutral.925}",
+          "$description": "Outline on selected marks"
+        },
+        "skeleton": {
+          "$type": "color",
+          "$value": "{color.neutral.100}",
+          "$description": "Loading placeholder"
+        },
+        "categorical": {
+          "1": {
+            "$type": "color",
+            "$value": "{color.blue.600}",
+            "$description": "Blue"
+          },
+          "2": {
+            "$type": "color",
+            "$value": "#a83a0c",
+            "$description": "Orange"
+          },
+          "3": {
+            "$type": "color",
+            "$value": "#0b5e52",
+            "$description": "Teal"
+          },
+          "4": {
+            "$type": "color",
+            "$value": "#d0609a",
+            "$description": "Pink"
+          },
+          "5": {
+            "$type": "color",
+            "$value": "#9a8a1a",
+            "$description": "Ochre"
+          },
+          "6": {
+            "$type": "color",
+            "$value": "#3d2b80",
+            "$description": "Indigo"
+          },
+          "7": {
+            "$type": "color",
+            "$value": "#2a9ad8",
+            "$description": "Sky"
+          },
+          "8": {
+            "$type": "color",
+            "$value": "#5c2410",
+            "$description": "Rust"
+          },
+          "other": {
+            "$type": "color",
+            "$value": "#9aa2ad",
+            "$description": "\"Other\" bucket"
+          }
+        },
+        "sequential": {
+          "1": {
+            "$type": "color",
+            "$value": "{color.blue.50}"
+          },
+          "2": {
+            "$type": "color",
+            "$value": "{color.blue.200}"
+          },
+          "3": {
+            "$type": "color",
+            "$value": "#93b8e3"
+          },
+          "4": {
+            "$type": "color",
+            "$value": "{color.blue.400}"
+          },
+          "5": {
+            "$type": "color",
+            "$value": "{color.blue.500}"
+          },
+          "6": {
+            "$type": "color",
+            "$value": "#2a5a96"
+          },
+          "7": {
+            "$type": "color",
+            "$value": "#1c3f6b"
+          }
+        },
+        "diverging": {
+          "1": {
+            "$type": "color",
+            "$value": "#8f4210"
+          },
+          "2": {
+            "$type": "color",
+            "$value": "#c4601c"
+          },
+          "3": {
+            "$type": "color",
+            "$value": "#eab48c"
+          },
+          "4": {
+            "$type": "color",
+            "$value": "#eceef1"
+          },
+          "5": {
+            "$type": "color",
+            "$value": "#a9c6ea"
+          },
+          "6": {
+            "$type": "color",
+            "$value": "{color.blue.500}"
+          },
+          "7": {
+            "$type": "color",
+            "$value": "#1c3f6b"
+          }
+        }
+      },
+      "tooltip": {
+        "bg": {
+          "$type": "color",
+          "$value": "#22272e"
+        },
+        "text": {
+          "$type": "color",
+          "$value": "{color.neutral.25}"
+        },
+        "muted": {
+          "$type": "color",
+          "$value": "#c2c8d0"
+        }
+      },
+      "opacity": {
+        "chart-unselected": {
+          "$type": "number",
+          "$value": 0.32,
+          "$description": "Marks outside the current selection"
+        }
+      },
+      "shadow": {
+        "raised": {
+          "$type": "shadow",
+          "$value": "0 1px 2px rgba(17,20,24,0.08)",
+          "$description": "Menus, chips while dragging"
+        },
+        "overlay": {
+          "$type": "shadow",
+          "$value": "0 4px 14px rgba(17,20,24,0.14)",
+          "$description": "Tooltips, toasts, popovers"
+        }
+      }
+    },
+    "dark": {
+      "surface": {
+        "ground": {
+          "$type": "color",
+          "$value": "{color.neutral.975}",
+          "$description": "App background behind panels and the title bar"
+        },
+        "panel": {
+          "$type": "color",
+          "$value": "{color.neutral.925}",
+          "$description": "Column list, activity panel"
+        },
+        "grid": {
+          "$type": "color",
+          "$value": "{color.neutral.950}",
+          "$description": "Data grid body"
+        },
+        "canvas": {
+          "$type": "color",
+          "$value": "{color.neutral.925}",
+          "$description": "Chart canvas behind cards"
+        },
+        "card": {
+          "$type": "color",
+          "$value": "{color.neutral.900}",
+          "$description": "Chart cards"
+        },
+        "raised": {
+          "$type": "color",
+          "$value": "{color.neutral.875}",
+          "$description": "Menus, popovers, toasts"
+        }
+      },
+      "border": {
+        "subtle": {
+          "$type": "color",
+          "$value": "{color.neutral.850}",
+          "$description": "Card outlines, separators"
+        },
+        "default": {
+          "$type": "color",
+          "$value": "{color.neutral.800}",
+          "$description": "Inputs, dividers inside controls"
+        },
+        "strong": {
+          "$type": "color",
+          "$value": "{color.neutral.500}",
+          "$description": "Control boundaries that must meet 3:1"
+        }
+      },
+      "state": {
+        "hover": {
+          "$type": "color",
+          "$value": "#252a31",
+          "$description": "Hover fill for rows and ghost controls"
+        },
+        "selected": {
+          "$type": "color",
+          "$value": "{color.blue.900}",
+          "$description": "Selected list row"
+        }
+      },
+      "text": {
+        "primary": {
+          "$type": "color",
+          "$value": "#e7eaee"
+        },
+        "secondary": {
+          "$type": "color",
+          "$value": "#a6aeb9"
+        },
+        "tertiary": {
+          "$type": "color",
+          "$value": "#959daa",
+          "$description": "Counts, hints"
+        },
+        "disabled": {
+          "$type": "color",
+          "$value": "#5f6772",
+          "$description": "Disabled controls (WCAG-exempt)"
+        },
+        "on-accent": {
+          "$type": "color",
+          "$value": "#0b1220",
+          "$description": "Text on accent fills"
+        }
+      },
+      "accent": {
+        "default": {
+          "$type": "color",
+          "$value": "{color.blue.400}",
+          "$description": "The one accent"
+        },
+        "hover": {
+          "$type": "color",
+          "$value": "#82abe0"
+        },
+        "pressed": {
+          "$type": "color",
+          "$value": "#5888c7"
+        },
+        "subtle": {
+          "$type": "color",
+          "$value": "{color.blue.900}"
+        },
+        "text": {
+          "$type": "color",
+          "$value": "{color.blue.300}",
+          "$description": "Accent used as text or links"
+        }
+      },
+      "status": {
+        "success": {
+          "fg": {
+            "$type": "color",
+            "$value": "#5cc28f"
+          },
+          "bg": {
+            "$type": "color",
+            "$value": "#15291f"
+          }
+        },
+        "warning": {
+          "fg": {
+            "$type": "color",
+            "$value": "#e0b25a"
+          },
+          "bg": {
+            "$type": "color",
+            "$value": "#2e2614"
+          }
+        },
+        "danger": {
+          "fg": {
+            "$type": "color",
+            "$value": "#f08a80"
+          },
+          "bg": {
+            "$type": "color",
+            "$value": "#3a1d1b"
+          }
+        },
+        "info": {
+          "fg": {
+            "$type": "color",
+            "$value": "#7cc3e6"
+          },
+          "bg": {
+            "$type": "color",
+            "$value": "#15283a"
+          }
+        }
+      },
+      "control": {
+        "secondary": {
+          "$type": "color",
+          "$value": "{color.neutral.875}",
+          "$description": "Secondary button fill"
+        },
+        "secondary-hover": {
+          "$type": "color",
+          "$value": "{color.neutral.825}"
+        },
+        "chip": {
+          "$type": "color",
+          "$value": "#2b3139",
+          "$description": "Shelf chip"
+        },
+        "chip-text": {
+          "$type": "color",
+          "$value": "#e7eaee"
+        },
+        "filter-chip": {
+          "$type": "color",
+          "$value": "{color.blue.900}"
+        },
+        "filter-chip-text": {
+          "$type": "color",
+          "$value": "{color.blue.200}"
+        },
+        "type-badge": {
+          "$type": "color",
+          "$value": "{color.neutral.875}",
+          "$description": "Column type badge"
+        },
+        "toggle-off": {
+          "$type": "color",
+          "$value": "{color.neutral.500}"
+        },
+        "toggle-on": {
+          "$type": "color",
+          "$value": "{color.blue.400}"
+        },
+        "knob": {
+          "$type": "color",
+          "$value": "{color.neutral.0}"
+        }
+      },
+      "focus": {
+        "ring": {
+          "$type": "color",
+          "$value": "{color.blue.300}",
+          "$description": "2px keyboard focus ring"
+        }
+      },
+      "grid": {
+        "header": {
+          "$type": "color",
+          "$value": "{color.neutral.950}"
+        },
+        "line": {
+          "$type": "color",
+          "$value": "#22272e",
+          "$description": "Horizontal and vertical cell rules"
+        },
+        "line-strong": {
+          "$type": "color",
+          "$value": "{color.neutral.825}",
+          "$description": "Header rule"
+        },
+        "zebra": {
+          "$type": "color",
+          "$value": "#191d22",
+          "$description": "Every second row"
+        },
+        "selection-fill": {
+          "$type": "color",
+          "$value": "rgba(107,154,214,0.16)"
+        },
+        "selection-border": {
+          "$type": "color",
+          "$value": "{color.blue.400}"
+        },
+        "header-selected": {
+          "$type": "color",
+          "$value": "{color.blue.900}",
+          "$description": "Header of a column in the selection"
+        },
+        "null": {
+          "$type": "color",
+          "$value": "#8d95a1",
+          "$description": "Italic \"null\""
+        }
+      },
+      "chart": {
+        "mark": {
+          "$type": "color",
+          "$value": "{color.blue.400}",
+          "$description": "Single-series marks"
+        },
+        "axis": {
+          "$type": "color",
+          "$value": "{color.neutral.650}"
+        },
+        "gridline": {
+          "$type": "color",
+          "$value": "{color.neutral.850}"
+        },
+        "tick": {
+          "$type": "color",
+          "$value": "#a6aeb9",
+          "$description": "Tick labels"
+        },
+        "brush-fill": {
+          "$type": "color",
+          "$value": "rgba(107,154,214,0.18)"
+        },
+        "brush-stroke": {
+          "$type": "color",
+          "$value": "{color.blue.300}"
+        },
+        "selection-stroke": {
+          "$type": "color",
+          "$value": "#e7eaee",
+          "$description": "Outline on selected marks"
+        },
+        "skeleton": {
+          "$type": "color",
+          "$value": "{color.neutral.850}",
+          "$description": "Loading placeholder"
+        },
+        "categorical": {
+          "1": {
+            "$type": "color",
+            "$value": "{color.blue.400}",
+            "$description": "Blue"
+          },
+          "2": {
+            "$type": "color",
+            "$value": "#cc8344",
+            "$description": "Orange"
+          },
+          "3": {
+            "$type": "color",
+            "$value": "#238673",
+            "$description": "Teal"
+          },
+          "4": {
+            "$type": "color",
+            "$value": "#eb9ebd",
+            "$description": "Pink"
+          },
+          "5": {
+            "$type": "color",
+            "$value": "#e6cf3e",
+            "$description": "Ochre"
+          },
+          "6": {
+            "$type": "color",
+            "$value": "#7a69b8",
+            "$description": "Indigo"
+          },
+          "7": {
+            "$type": "color",
+            "$value": "#9fd8f5",
+            "$description": "Sky"
+          },
+          "8": {
+            "$type": "color",
+            "$value": "#ac5f39",
+            "$description": "Rust"
+          },
+          "other": {
+            "$type": "color",
+            "$value": "#5f6772",
+            "$description": "\"Other\" bucket"
+          }
+        },
+        "sequential": {
+          "1": {
+            "$type": "color",
+            "$value": "#1a2533"
+          },
+          "2": {
+            "$type": "color",
+            "$value": "#1d3550"
+          },
+          "3": {
+            "$type": "color",
+            "$value": "#24497a"
+          },
+          "4": {
+            "$type": "color",
+            "$value": "{color.blue.600}"
+          },
+          "5": {
+            "$type": "color",
+            "$value": "#5089cf"
+          },
+          "6": {
+            "$type": "color",
+            "$value": "#82abe0"
+          },
+          "7": {
+            "$type": "color",
+            "$value": "{color.blue.200}"
+          }
+        },
+        "diverging": {
+          "1": {
+            "$type": "color",
+            "$value": "#f0a46e"
+          },
+          "2": {
+            "$type": "color",
+            "$value": "#c4703a"
+          },
+          "3": {
+            "$type": "color",
+            "$value": "#6e4630"
+          },
+          "4": {
+            "$type": "color",
+            "$value": "{color.neutral.850}"
+          },
+          "5": {
+            "$type": "color",
+            "$value": "#2a4a72"
+          },
+          "6": {
+            "$type": "color",
+            "$value": "#4f86cc"
+          },
+          "7": {
+            "$type": "color",
+            "$value": "#a9c6ea"
+          }
+        }
+      },
+      "tooltip": {
+        "bg": {
+          "$type": "color",
+          "$value": "{color.neutral.800}"
+        },
+        "text": {
+          "$type": "color",
+          "$value": "#eef0f3"
+        },
+        "muted": {
+          "$type": "color",
+          "$value": "{color.neutral.300}"
+        }
+      },
+      "opacity": {
+        "chart-unselected": {
+          "$type": "number",
+          "$value": 0.36,
+          "$description": "Marks outside the current selection"
+        }
+      },
+      "shadow": {
+        "raised": {
+          "$type": "shadow",
+          "$value": "0 1px 2px rgba(0,0,0,0.35)",
+          "$description": "Menus, chips while dragging"
+        },
+        "overlay": {
+          "$type": "shadow",
+          "$value": "0 6px 18px rgba(0,0,0,0.5)",
+          "$description": "Tooltips, toasts, popovers"
+        }
+      }
+    }
+  }
+}
