@@ -5,7 +5,7 @@ import { DataType } from 'apache-arrow';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { compileWhere, tableIdForFile, toFileHandle, type EngineResponse, type FileHandle, type TableId } from '@glassgrid/core';
 import { EngineSession, runAggregate, toFragment } from './session';
-import { columnValues, createHarness, decode, type Harness } from './test-support';
+import { columnValues, createHarness, decode, writeFixtureCsv, type Harness } from './test-support';
 
 /*
  * setColumnTypes: TRY_CAST per overridden column, failed-cast counts, cache
@@ -186,5 +186,24 @@ describe('setColumnTypes errors and atomicity', () => {
       table: { id: table, typeOverrides: [{ column: 'code', type: 'float' }] },
     });
     expect(sent.some((m) => m.kind === 'event' && m.event.type === 'tableUpdated')).toBe(true);
+  });
+});
+
+describe('pages racing a type change', () => {
+  it('never serves a page read with other column types, even after the types change back', async () => {
+    const big = join(h.dir, 'race.csv');
+    await writeFixtureCsv(big, 300_000);
+    const { file, table } = h.register(big);
+    await h.service.open(file, { parquet: 'never' });
+    for (let round = 0; round < 6; round += 1) {
+      const offset = 100_000 + round * 1_000;
+      // A page, then text and back while it runs; the page's own result may be either, but nothing stale is cached.
+      const racing = h.service.rows(table, { offset, limit: 1_000 }).catch(() => null);
+      const toText = h.service.setColumnTypes(table, [{ column: 'amount', type: 'text' }]);
+      const back = h.service.setColumnTypes(table, []);
+      await Promise.all([racing, toText, back]);
+      const page = decode((await h.service.rows(table, { offset, limit: 1_000 })).value);
+      expect(DataType.isFloat(page.schema.fields.find((field) => field.name === 'amount')?.type), `round ${round}`).toBe(true);
+    }
   });
 });

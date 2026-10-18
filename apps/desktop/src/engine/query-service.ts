@@ -147,8 +147,14 @@ interface TableState {
   overrides: Map<string, ColumnType>;
   /** Columns with overrides applied (what queries, the compiler and the profile see). */
   columns: ColumnInfo[];
-  /** '' without overrides, else a digest of them; part of every cache key and index name. */
+  /**
+   * '' before any type change, else a digest of the overrides and `typeGeneration`; part of every cache
+   * key and index name. Never repeats after a change, so a query that raced a change (keyed by the old
+   * version, run against the new views) is never served once the types change back.
+   */
   version: string;
+  /** Type changes applied so far. */
+  typeGeneration: number;
   rowCount: number | undefined;
   /** Profile statistics per `name + DuckDB type`, so a type change rescans only that column. */
   stats: Map<string, ColumnStats>;
@@ -331,6 +337,7 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
       overrides: new Map(),
       columns: [],
       version: '',
+      typeGeneration: 0,
       rowCount: undefined,
       stats: new Map(),
       failedCasts: new Map(),
@@ -387,7 +394,9 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
     });
     const entries = [...state.overrides.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
     state.version =
-      entries.length === 0 ? '' : createHash('sha256').update(JSON.stringify(entries)).digest('hex').slice(0, 16);
+      entries.length === 0 && state.typeGeneration === 0
+        ? ''
+        : createHash('sha256').update(JSON.stringify([entries, state.typeGeneration])).digest('hex').slice(0, 16);
   }
 
   /** The SELECT list of `view`: every column, cast where overridden. */
@@ -539,6 +548,7 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
     if (changed) {
       const previous = state.overrides;
       state.overrides = next;
+      state.typeGeneration += 1;
       this.applyOverrides(state);
       try {
         await this.withConnection(state, undefined, (connection) => this.createViews(connection, state));
