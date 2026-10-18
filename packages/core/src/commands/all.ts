@@ -5,6 +5,14 @@ import { addFilter, brush, clearFilter, setFilter } from './builtins/filters.js'
 import { copySelection, reorderColumn, resizeColumn, setSelection, sortGrid } from './builtins/grid.js';
 import { openFile, setColumnProfiles } from './builtins/open-file.js';
 import { setColumnType } from './builtins/set-column-type.js';
+import {
+  listRecentWorkspaces,
+  loadWorkspace,
+  markWorkspaceSaved,
+  openWorkspace,
+  saveWorkspace,
+  saveWorkspaceAs,
+} from './builtins/workspace.js';
 import type { AnyCommand } from './define.js';
 import { type CommandPolicy, CommandRegistry } from './registry.js';
 import { WorkspaceStore, type WorkspaceStoreOptions } from './store.js';
@@ -31,6 +39,12 @@ export const ALL_COMMANDS: readonly AnyCommand[] = Object.freeze([
   renameChart,
   setShelf,
   setMark,
+  saveWorkspace,
+  saveWorkspaceAs,
+  openWorkspace,
+  listRecentWorkspaces,
+  loadWorkspace,
+  markWorkspaceSaved,
   undo,
   redo,
 ]);

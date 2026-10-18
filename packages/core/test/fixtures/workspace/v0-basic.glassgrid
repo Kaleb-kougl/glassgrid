@@ -1,0 +1,41 @@
+{
+  "formatVersion": 0,
+  "savedAt": "2026-10-16T17:42:10.000Z",
+  "data": {
+    "fileName": "trips.csv",
+    "path": "/home/ada/data/trips.csv",
+    "fingerprint": {
+      "sizeBytes": 52428800,
+      "mtimeMs": 1759000000000,
+      "headTailSha256": "0e5751c026e543b2e8ab2eb06099daa1d1e5df47778f7787faab45cdf12fe3a8",
+      "key": "6c3e2a1b0f9d8c7b6a5f4e3d2c1b0a99"
+    }
+  },
+  "workspace": {
+    "columns": [
+      { "name": "pickup_at", "inferredType": "timestamp", "typeOverride": null },
+      { "name": "fare_amount", "inferredType": "float", "typeOverride": null },
+      { "name": "vendor_id", "inferredType": "integer", "typeOverride": "text" }
+    ],
+    "charts": [
+      { "id": "chart_1", "spec": { "mark": "histogram", "x": { "column": "fare_amount", "bin": "auto" } } },
+      { "id": "chart_2", "spec": { "mark": "bar", "x": { "column": "vendor_id" } } }
+    ],
+    "filters": {
+      "chart_1": [{ "kind": "range", "column": "fare_amount", "min": 5, "max": 20, "maxInclusive": false }],
+      "chart_2": [],
+      "grid": [
+        { "kind": "in", "column": "vendor_id", "values": ["1", "2"] },
+        { "kind": "notNull", "column": "pickup_at" },
+        { "kind": "isNull", "column": "fare_amount" }
+      ]
+    },
+    "grid": { "sort": [{ "column": "pickup_at", "direction": "desc" }] },
+    "layout": {
+      "cards": [
+        { "chartId": "chart_1", "x": 0, "y": 0, "w": 1, "h": 1 },
+        { "chartId": "chart_2", "x": 1, "y": 0, "w": 1, "h": 1 }
+      ]
+    }
+  }
+}

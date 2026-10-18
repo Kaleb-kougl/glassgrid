@@ -1,0 +1,227 @@
+{
+  "formatVersion": 1,
+  "app": {
+    "name": "Glassgrid",
+    "version": "1.0.0"
+  },
+  "savedAt": "2026-10-18T09:30:00.000Z",
+  "data": {
+    "fileName": "trips 2026.csv",
+    "absolutePath": "/Users/ada/data/trips 2026.csv",
+    "relativePath": "../data/trips 2026.csv",
+    "fingerprint": {
+      "sizeBytes": 1284533771,
+      "mtimeMs": 1760000000000,
+      "headTailSha256": "3f1d9c0b6a2e4f8d7c5b3a1908e7d6c5b4a39281706f5e4d3c2b1a0918273645",
+      "key": "9b2f0c4d1e3a5b7c9d0e1f2a3b4c5d6e"
+    }
+  },
+  "workspace": {
+    "columns": [
+      {
+        "name": "pickup_at",
+        "inferredType": "timestamp",
+        "typeOverride": null
+      },
+      {
+        "name": "fare_amount",
+        "inferredType": "float",
+        "typeOverride": null
+      },
+      {
+        "name": "passenger_count",
+        "inferredType": "integer",
+        "typeOverride": null
+      },
+      {
+        "name": "payment_type",
+        "inferredType": "text",
+        "typeOverride": null
+      },
+      {
+        "name": "vendor_id",
+        "inferredType": "integer",
+        "typeOverride": "text"
+      },
+      {
+        "name": "zone \"east\"",
+        "inferredType": "text",
+        "typeOverride": null
+      }
+    ],
+    "charts": [
+      {
+        "id": "chart_1",
+        "spec": {
+          "mark": "line",
+          "x": {
+            "column": "pickup_at",
+            "timeUnit": "day"
+          },
+          "y": {
+            "column": "fare_amount",
+            "aggregate": "sum"
+          },
+          "filters": []
+        },
+        "title": "Fares per day"
+      },
+      {
+        "id": "chart_2",
+        "spec": {
+          "mark": "pie",
+          "x": {
+            "column": "fare_amount",
+            "bin": "auto"
+          },
+          "filters": []
+        }
+      },
+      {
+        "id": "chart_3",
+        "spec": {
+          "mark": "bar",
+          "x": {
+            "column": "payment_type"
+          },
+          "filters": [],
+          "limit": 20,
+          "other": true
+        }
+      },
+      {
+        "id": "chart_4",
+        "spec": {
+          "mark": "heatmap",
+          "x": {
+            "column": "fare_amount",
+            "bin": 10
+          },
+          "y": {
+            "column": "passenger_count",
+            "bin": 1
+          },
+          "filters": []
+        },
+        "title": "Fare × passengers"
+      }
+    ],
+    "selections": {
+      "chart_2": {
+        "source": "brush",
+        "clauses": [
+          {
+            "channel": "x",
+            "filter": {
+              "kind": "range",
+              "column": "fare_amount",
+              "min": 10,
+              "max": 40,
+              "minInclusive": true,
+              "maxInclusive": false
+            }
+          }
+        ]
+      },
+      "chart_3": {
+        "source": "click",
+        "clauses": [
+          {
+            "channel": "x",
+            "filter": {
+              "kind": "in",
+              "column": "payment_type",
+              "values": [
+                "card",
+                "cash",
+                null
+              ]
+            }
+          }
+        ]
+      },
+      "grid": {
+        "source": "filter",
+        "clauses": [
+          {
+            "channel": null,
+            "filter": {
+              "kind": "notIn",
+              "column": "zone \"east\"",
+              "values": [
+                "Airport"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "userFilters": [
+      {
+        "id": "filter_1",
+        "filter": {
+          "kind": "notNull",
+          "column": "passenger_count"
+        }
+      }
+    ],
+    "grid": {
+      "sort": [
+        {
+          "column": "fare_amount",
+          "direction": "desc"
+        },
+        {
+          "column": "pickup_at",
+          "direction": "asc"
+        }
+      ],
+      "columnOrder": [
+        "fare_amount",
+        "pickup_at"
+      ],
+      "columnWidths": [
+        {
+          "column": "zone \"east\"",
+          "width": 240
+        },
+        {
+          "column": "fare_amount",
+          "width": 96
+        }
+      ]
+    },
+    "layout": {
+      "cards": [
+        {
+          "chartId": "chart_1",
+          "x": 0,
+          "y": 0,
+          "w": 2,
+          "h": 1
+        },
+        {
+          "chartId": "chart_2",
+          "x": 2,
+          "y": 0,
+          "w": 1,
+          "h": 1
+        },
+        {
+          "chartId": "chart_3",
+          "x": 0,
+          "y": 1,
+          "w": 1,
+          "h": 1
+        },
+        {
+          "chartId": "chart_4",
+          "x": 1,
+          "y": 1,
+          "w": 2,
+          "h": 2
+        }
+      ]
+    }
+  }
+}

@@ -1,4 +1,15 @@
 import type { OpenCsvResult } from './bridge.js';
+import type {
+  CloseAnswer,
+  ExternalOpenRequest,
+  OpenWorkspaceRequest,
+  OpenWorkspaceResult,
+  RecentWorkspace,
+  RecoverySnapshotInfo,
+  RecoveryUpdate,
+  SaveWorkspaceRequest,
+  SaveWorkspaceResult,
+} from './workspace.js';
 
 /*
  * Renderer <-> main contract exposed through the preload bridge. Kept tiny on
@@ -27,7 +38,53 @@ export const IpcChannel = {
   menuCommand: 'glassgrid:menu-command',
   /** invoke: put plain text on the system clipboard (the `copySelection` command). */
   clipboardWriteText: 'glassgrid:clipboard-write-text',
+
+  // --- Workspace files (M4; see docs/m4-persistence.md) ---------------------
+  /** invoke(SaveWorkspaceRequest): save to the document's file, or Save As when it has none. */
+  workspaceSave: 'glassgrid:workspace-save',
+  /** invoke(SaveWorkspaceRequest): native save dialog, then save. */
+  workspaceSaveAs: 'glassgrid:workspace-save-as',
+  /** invoke(OpenWorkspaceRequest): open from the dialog, the recent list or an OS hand-off token. */
+  workspaceOpen: 'glassgrid:workspace-open',
+  /** invoke (preload only): open a dropped `.glassgrid` file; the preload resolves its path. */
+  workspaceOpenDropped: 'glassgrid:workspace-open-dropped',
+  /** invoke(token): ask the person to locate a workspace's missing data file. */
+  workspaceLocateData: 'glassgrid:workspace-locate-data',
+  /** invoke(token): forget a pending open. */
+  workspaceCancelOpen: 'glassgrid:workspace-cancel-open',
+  /** invoke: the recent workspaces (pruned of files that disappeared). */
+  workspaceListRecent: 'glassgrid:workspace-list-recent',
+  /** invoke: crash-recovery snapshots newer than their saved file. */
+  workspaceListRecovery: 'glassgrid:workspace-list-recovery',
+  /** invoke(id): open a recovery snapshot. */
+  workspaceRestoreRecovery: 'glassgrid:workspace-restore-recovery',
+  /** invoke(id): delete a recovery snapshot. */
+  workspaceDiscardRecovery: 'glassgrid:workspace-discard-recovery',
+  /** send(RecoveryUpdate | null): the window's unsaved work for the autosaver; null when clean. */
+  workspaceRecoveryUpdate: 'glassgrid:workspace-recovery-update',
+  /** invoke: start receiving OS open requests; returns the ones queued so far. */
+  workspaceOpenRequestsListen: 'glassgrid:workspace-open-requests-listen',
+  /** main -> preload: a workspace file handed over by the OS (ExternalOpenRequest). */
+  workspaceOpenRequest: 'glassgrid:workspace-open-request',
+  /** main -> preload: the window is closing; reply on `workspaceCloseReply` with the same request id. */
+  workspaceCloseQuery: 'glassgrid:workspace-close-query',
+  /** send(CloseReply): the renderer's answer to `workspaceCloseQuery`. */
+  workspaceCloseReply: 'glassgrid:workspace-close-reply',
+  /** main -> preload: a File-menu workspace command (WorkspaceMenuCommand). */
+  workspaceMenuCommand: 'glassgrid:workspace-menu-command',
 } as const;
+
+/** File-menu workspace commands main forwards to the focused window (Open Workspace…, Save, Save As…). */
+export type WorkspaceMenuCommand =
+  | { readonly kind: 'openWorkspace' }
+  | { readonly kind: 'saveWorkspace' }
+  | { readonly kind: 'saveWorkspaceAs' };
+
+export function isWorkspaceMenuCommand(value: unknown): value is WorkspaceMenuCommand {
+  if (typeof value !== 'object' || value === null) return false;
+  const kind = (value as { kind?: unknown }).kind;
+  return kind === 'openWorkspace' || kind === 'saveWorkspace' || kind === 'saveWorkspaceAs';
+}
 
 /** Largest text `clipboard.writeText` accepts (UTF-16 code units); copies are capped well below this. */
 export const MAX_CLIPBOARD_TEXT = 64 * 1024 * 1024;
@@ -75,4 +132,40 @@ export interface GlassgridBridge {
   readonly clipboard: {
     writeText(text: string): Promise<void>;
   };
+}
+
+/**
+ * `window.glassgrid.workspace`: `.glassgrid` files through main. Paths never
+ * reach the page; documents, recent entries, pending opens and recovery
+ * snapshots are named by opaque ids. See docs/m4-persistence.md for the flows.
+ */
+export interface WorkspaceBridge {
+  /** Save to the document's file (`request.documentId`); behaves like `saveAs` when it has none. */
+  save(request: SaveWorkspaceRequest): Promise<SaveWorkspaceResult>;
+  /** Native save dialog (default name from the data file, `.glassgrid` filter), then save. */
+  saveAs(request: SaveWorkspaceRequest): Promise<SaveWorkspaceResult>;
+  /** Open a workspace file and relink its data (relative path, absolute path, else `needsData`). */
+  open(request: OpenWorkspaceRequest): Promise<OpenWorkspaceResult>;
+  /** Open a `.glassgrid` file dropped on the window (a DOM `File`). */
+  openDropped(file: DroppedFile): Promise<OpenWorkspaceResult>;
+  /** After `needsData`: native open dialog for the data file, then fingerprint check. Cancelling keeps the token. */
+  locateData(token: string): Promise<OpenWorkspaceResult>;
+  /** Forget a pending open (`needsData` the person dismissed). */
+  cancelOpen(token: string): Promise<void>;
+  listRecent(): Promise<RecentWorkspace[]>;
+  /** Unsaved work left by a crash, newest first; offer "Restore unsaved work" at launch. */
+  listRecovery(): Promise<RecoverySnapshotInfo[]>;
+  restoreRecovery(id: string): Promise<OpenWorkspaceResult>;
+  discardRecovery(id: string): Promise<void>;
+  /** Report the window's unsaved work (null when clean); main writes it to the recovery folder every few seconds. */
+  updateRecovery(update: RecoveryUpdate | null): void;
+  /** Workspace files the OS hands the app (double-click, Open with, second launch). Queued ones are delivered on subscribe. */
+  onOpenRequest(listener: (request: ExternalOpenRequest) => void): () => void;
+  /**
+   * Answer main's "may this window close?". One handler per window (a new one
+   * replaces the old). Without a handler the window closes without asking.
+   */
+  onCloseRequest(handler: () => CloseAnswer | Promise<CloseAnswer>): () => void;
+  /** File-menu workspace commands (Open Workspace…, Save, Save As…). */
+  onMenuCommand(listener: (command: WorkspaceMenuCommand) => void): () => void;
 }
