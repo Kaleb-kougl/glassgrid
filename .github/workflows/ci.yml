@@ -44,6 +44,9 @@ jobs:
       - name: Install Chromium for the engine worker test
         run: pnpm --filter @glassgrid/engine exec playwright install --with-deps chromium
       - run: pnpm --filter @glassgrid/engine e2e
+      # The web demo: first-load budget, then its production build in Chromium with vercel.json's headers.
+      - run: pnpm --filter @glassgrid/web size
+      - run: pnpm --filter @glassgrid/web exec playwright test
 
   e2e:
     name: Build + E2E (${{ matrix.os }})

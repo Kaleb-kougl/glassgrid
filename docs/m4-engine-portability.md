@@ -250,6 +250,12 @@ configuration, from `extensionRepository`. The design therefore serves
 the signed extension from the app's own origin, for example by copying it
 into the web build. Unsigned extensions stay refused.
 
+**Update (branch `m4-web`):** verified. The extension is served from
+`apps/web/public/duckdb-extensions/`, and the engine's Chromium suite and the
+web demo's E2E load it and read Parquet (including the OPFS Parquet cache).
+See [m4-web-demo.md](m4-web-demo.md#parquet-on-duckdb-wasm-verified). The
+Node `wasm` project still skips its Parquet variants.
+
 **Not verified on this branch.** The sandbox's egress proxy blocks
 extensions.duckdb.org, so the extension could not be downloaded or tested
 here. On this branch DuckDB-WASM runs CSV only:
