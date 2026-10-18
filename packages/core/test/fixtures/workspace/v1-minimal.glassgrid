@@ -1,0 +1,44 @@
+{
+  "formatVersion": 1,
+  "app": {
+    "name": "Glassgrid",
+    "version": "0.4.0"
+  },
+  "savedAt": "2026-10-18T11:05:00+02:00",
+  "data": {
+    "fileName": "sales.csv",
+    "absolutePath": "C:\\Users\\Ada\\Documents\\sales.csv",
+    "relativePath": "sales.csv",
+    "fingerprint": {
+      "sizeBytes": 2048,
+      "mtimeMs": 1759999999000,
+      "headTailSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "key": "dddddddddddddddddddddddddddddddd"
+    }
+  },
+  "workspace": {
+    "columns": [
+      {
+        "name": "id",
+        "inferredType": "integer",
+        "typeOverride": null
+      },
+      {
+        "name": "region",
+        "inferredType": "text",
+        "typeOverride": null
+      }
+    ],
+    "charts": [],
+    "selections": {},
+    "userFilters": [],
+    "grid": {
+      "sort": [],
+      "columnOrder": [],
+      "columnWidths": []
+    },
+    "layout": {
+      "cards": []
+    }
+  }
+}

@@ -26,6 +26,16 @@ asarUnpack:
 npmRebuild: false
 nodeGypRebuild: false
 
+# `.glassgrid` workspaces open in Glassgrid (double-click, "Open with"). main
+# handles them through `open-file` (macOS) and argv / `second-instance`
+# (Windows, Linux); see docs/m4-persistence.md.
+fileAssociations:
+  - ext: glassgrid
+    name: Glassgrid Workspace
+    description: Glassgrid workspace
+    mimeType: application/vnd.glassgrid.workspace+json
+    role: Editor
+
 mac:
   target:
     - target: dmg

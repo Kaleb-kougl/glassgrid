@@ -1,11 +1,19 @@
 import { stat } from 'node:fs/promises';
 import { basename, isAbsolute, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { app, BrowserWindow, clipboard, dialog, ipcMain, nativeTheme, type OpenDialogOptions } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, nativeTheme, webContents, type OpenDialogOptions } from 'electron';
 import { APP_NAME, IpcChannel, isThemePreference, MAX_CLIPBOARD_TEXT, type OpenCsvResult } from '@glassgrid/core';
-import { applyE2EOverrides, e2eEngineOverrides, e2eOpenPath } from './e2e';
+import { fingerprintFile } from '@glassgrid/engine';
+import { nodeFiles } from '@glassgrid/engine/native';
+import { applyE2EOverrides, e2eEngineOverrides, e2eOpenPath, isE2E } from './e2e';
 import { EngineHost } from './engine-host';
 import { applyTheme, installAppMenu } from './menu';
+import { AppStateStore } from './persistence/app-state';
+import { CloseGuard } from './persistence/close-guard';
+import { OpenRequestQueue, workspacePathsFromArgv } from './persistence/external-open';
+import { registerWorkspaceIpc } from './persistence/ipc';
+import { RecoveryStore } from './persistence/recovery';
+import { WorkspaceService, type WindowRef } from './persistence/workspace-service';
 import { createSenderGuard, installSecurityPolicies } from './security';
 
 const devServerUrl = process.env['ELECTRON_RENDERER_URL'];
@@ -20,6 +28,68 @@ const engine = new EngineHost(() => ({
   ...e2eEngineOverrides(),
 }));
 const assertTrustedSender = createSenderGuard((url) => url.startsWith(rendererOrigin));
+
+// --- Workspace files (docs/m4-persistence.md) ---------------------------------
+
+const workspaces = new WorkspaceService<BrowserWindow | null>({
+  app: { name: APP_NAME, version: app.getVersion() },
+  dialogs: {
+    showSaveDialog: (owner, options) => (owner ? dialog.showSaveDialog(owner, options) : dialog.showSaveDialog(options)),
+    showOpenDialog: (owner, options) => (owner ? dialog.showOpenDialog(owner, options) : dialog.showOpenDialog(options)),
+  },
+  registerFile: (path) => engine.registerFile(path),
+  pathOfHandle: (handle) => engine.pathOf(handle),
+  // The engine's own fingerprint function, so a relinked file is compared exactly as the Parquet cache keys it.
+  fingerprint: (path) => fingerprintFile(nodeFiles, path),
+  appState: new AppStateStore(join(app.getPath('userData'), 'state.json')),
+  recovery: new RecoveryStore(join(app.getPath('userData'), 'recovery')),
+  addRecentDocument: (path) => app.addRecentDocument(path),
+});
+
+const windowRef = (win: BrowserWindow): WindowRef<BrowserWindow | null> => ({ key: win.webContents.id, owner: win });
+
+const openRequests = new OpenRequestQueue(() => BrowserWindow.getFocusedWindow()?.webContents.id ?? null);
+
+/** True between `before-quit` and the last window closing; cleared when the person cancels a close. */
+let quitting = false;
+
+const closeGuard = new CloseGuard<BrowserWindow>({
+  showMessageBox: (win, options) => dialog.showMessageBox(win, options),
+  showErrorBox: (title, content) => dialog.showErrorBox(title, content),
+  save: (win, answer) => workspaces.save(windowRef(win), { documentId: answer.documentId, snapshot: answer.snapshot }),
+  closed: (win, clean) => workspaces.windowClosed(windowRef(win), clean),
+  displayName: (_win, answer) => {
+    const path = workspaces.documentPath(answer.documentId);
+    return path === undefined ? `the workspace for ${answer.snapshot.dataSource.fileName}` : basename(path);
+  },
+  decided: (_win, closed) => {
+    if (!closed) quitting = false;
+    else if (quitting) setImmediate(() => app.quit());
+  },
+});
+
+/** Workspace files handed over by the OS before the app was ready. */
+const earlyOpens: string[] = [];
+let ready = false;
+
+function requestExternalOpen(path: string): void {
+  if (!ready) {
+    earlyOpens.push(path);
+    return;
+  }
+  openRequests.push(workspaces.externalOpen(path));
+  const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+  if (win) {
+    if (win.isMinimized()) win.restore();
+    win.focus();
+  }
+}
+
+// macOS: double-click / "Open with" (also before `ready`, at launch).
+app.on('open-file', (event, path) => {
+  event.preventDefault();
+  requestExternalOpen(path);
+});
 
 /** `--gg-ground` of each theme, so the window never flashes the wrong colour before the page paints. */
 const GROUND = { light: '#e3e6ea', dark: '#0d1013' } as const;
@@ -50,6 +120,9 @@ function createMainWindow(): BrowserWindow {
   });
 
   win.once('ready-to-show', () => win.show());
+  closeGuard.attach(win);
+  const contentsId = win.webContents.id;
+  win.on('closed', () => openRequests.remove(contentsId));
 
   if (devServerUrl) {
     void win.loadURL(devServerUrl);
@@ -114,6 +187,22 @@ function registerIpcHandlers(): void {
     assertTrustedSender(event);
     engine.connectRenderer(event.sender);
   });
+
+  registerWorkspaceIpc<BrowserWindow | null>({
+    ipcMain,
+    service: workspaces,
+    closeGuard,
+    openRequests,
+    assertTrustedSender,
+    windowOf: (event) => {
+      const contents = webContents.fromId(event.sender.id);
+      return { key: event.sender.id, owner: contents ? BrowserWindow.fromWebContents(contents) : null };
+    },
+    sendOpenRequest: (key, request) => {
+      const win = BrowserWindow.getAllWindows().find((candidate) => candidate.webContents.id === key);
+      if (win && !win.isDestroyed()) win.webContents.send(IpcChannel.workspaceOpenRequest, request);
+    },
+  });
 }
 
 engine.on('restarted', () => {
@@ -122,23 +211,51 @@ engine.on('restarted', () => {
   }
 });
 
-app.whenReady().then(() => {
-  installSecurityPolicies();
-  installAppMenu();
-  registerIpcHandlers();
-  engine.start();
-  createMainWindow();
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
+// Windows and Linux hand a double-clicked workspace to a second launch; send it to the running app instead.
+// (E2E runs get their own userData and may overlap while one shuts down, so they skip the lock.)
+const primary = isE2E || app.requestSingleInstanceLock();
+if (!primary) {
+  app.quit();
+} else {
+  app.on('second-instance', (_event, argv, workingDirectory) => {
+    for (const path of workspacePathsFromArgv(argv, workingDirectory)) requestExternalOpen(path);
+    const win = BrowserWindow.getAllWindows()[0];
+    if (win) {
+      if (win.isMinimized()) win.restore();
+      win.focus();
+    }
   });
-}, (error: unknown) => {
-  console.error('[main] failed to start', error);
-  app.exit(1);
+
+  app.whenReady().then(() => {
+    installSecurityPolicies();
+    installAppMenu();
+    registerIpcHandlers();
+    engine.start();
+    workspaces.autosaver.start();
+    createMainWindow();
+
+    ready = true;
+    for (const path of [...workspacePathsFromArgv(process.argv, process.cwd()), ...earlyOpens.splice(0)]) requestExternalOpen(path);
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
+    });
+  }, (error: unknown) => {
+    console.error('[main] failed to start', error);
+    app.exit(1);
+  });
+}
+
+app.on('before-quit', () => {
+  quitting = true;
 });
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-app.on('before-quit', () => engine.stop());
+// Only once every window agreed to close: a cancelled "Save changes?" keeps the engine running.
+app.on('will-quit', () => {
+  workspaces.autosaver.stop();
+  engine.stop();
+});

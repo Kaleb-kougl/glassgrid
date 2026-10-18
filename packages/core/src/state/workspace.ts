@@ -190,6 +190,29 @@ export type UserFilter = z.infer<typeof UserFilterSchema>;
 /** Most filters not tied to a view a workspace may hold. */
 export const MAX_USER_FILTERS = 64;
 
+/** Main's opaque id for a `.glassgrid` file a window opened or saved. The path stays in main. */
+export const DocumentIdSchema = z.string().regex(/^doc_[A-Za-z0-9-]{8,64}$/, 'Invalid document id');
+export type DocumentId = z.infer<typeof DocumentIdSchema>;
+
+/** Digest of a workspace's persisted subset (`persistedDigest`): 16 lowercase hex digits. */
+export const WorkspaceDigestSchema = z.string().regex(/^[0-9a-f]{16}$/, 'Invalid workspace digest');
+
+/**
+ * Which `.glassgrid` file the workspace belongs to and what it held when last
+ * saved or opened, so `isWorkspaceDirty` can tell whether there is unsaved
+ * work. Set by `openFile` (untitled, clean), `loadWorkspace` and
+ * `markWorkspaceSaved`; never written to the file itself.
+ */
+export const WorkspaceDocumentSchema = z.strictObject({
+  /** The file's id in main, or null for an untitled workspace. */
+  id: DocumentIdSchema.nullable(),
+  /** The file's display name (e.g. `sales.glassgrid`), or null for an untitled workspace. */
+  fileName: z.string().min(1).max(1024).nullable(),
+  /** `persistedDigest` of the workspace as last saved or opened; null when it has never been saved (always dirty). */
+  savedDigest: WorkspaceDigestSchema.nullable(),
+});
+export type WorkspaceDocument = z.infer<typeof WorkspaceDocumentSchema>;
+
 export const WorkspaceStateSchema = z.strictObject({
   dataSource: DataSourceSchema.nullable(),
   columns: z.array(ColumnStateSchema),
@@ -203,6 +226,12 @@ export const WorkspaceStateSchema = z.strictObject({
   userFilters: z.array(UserFilterSchema).max(MAX_USER_FILTERS),
   grid: GridStateSchema,
   layout: LayoutStateSchema,
+  /**
+   * The workspace file this state belongs to (see `WorkspaceDocumentSchema`).
+   * Absent until a file is opened; an absent document with a data source
+   * counts as unsaved work.
+   */
+  document: WorkspaceDocumentSchema.optional(),
 });
 export type WorkspaceState = z.infer<typeof WorkspaceStateSchema>;
 

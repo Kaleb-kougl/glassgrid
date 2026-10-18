@@ -194,6 +194,7 @@ export class CommandRegistry {
     // Commands without arguments may be called without an input object.
     const parsed = command.input.safeParse(rawInput === undefined ? {} : rawInput);
     if (!parsed.success) throw invalidInput(name, parsed.error);
+    if (command.kind === 'effect') command.checkCaller?.(parsed.data, caller);
     return { command, input: parsed.data, caller };
   }
 

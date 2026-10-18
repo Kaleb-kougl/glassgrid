@@ -1,3 +1,4 @@
+import { current } from 'immer';
 import { z } from 'zod';
 import { FileHandleSchema } from '../../ids.js';
 import { ColumnTypeSchema, ProfileValueSchema } from '../../spec/column.js';
@@ -5,6 +6,7 @@ import { FingerprintSchema } from '../../protocol/engine.js';
 import { ColumnNameSchema, createInitialGridState } from '../../state/workspace.js';
 import { defineCommand } from '../define.js';
 import { MCP_EXEMPTIONS } from '../mcp-exemptions.js';
+import { persistedDigest } from '../../workspace-file/persisted.js';
 
 export const OpenFileInputSchema = z.strictObject({
   handleId: FileHandleSchema,
@@ -26,7 +28,9 @@ export type OpenFileInput = z.infer<typeof OpenFileInputSchema>;
  * pattern: the renderer's `openFileAction` asks main for a handle (native
  * dialog or drag-drop), asks the engine for the fingerprint and inferred
  * columns, and only then dispatches `openFile` with the results. Opening a
- * file starts a fresh workspace; undo restores the previous one.
+ * file starts a fresh, untitled workspace that is clean until something
+ * changes (so closing it right away does not ask to save); undo restores
+ * the previous one.
  */
 export const openFile = defineCommand({
   name: 'openFile',
@@ -47,6 +51,9 @@ export const openFile = defineCommand({
     draft.userFilters = [];
     draft.grid = createInitialGridState();
     draft.layout = { cards: [] };
+    // An untitled workspace that is clean until the person changes something.
+    draft.document = { id: null, fileName: null, savedDigest: null };
+    draft.document.savedDigest = persistedDigest(current(draft));
   },
 });
 

@@ -184,6 +184,12 @@ describe('registration and listing', () => {
       'renameChart',
       'setShelf',
       'setMark',
+      'saveWorkspace',
+      'saveWorkspaceAs',
+      'openWorkspace',
+      'listRecentWorkspaces',
+      'loadWorkspace',
+      'markWorkspaceSaved',
       'undo',
       'redo',
     ]);

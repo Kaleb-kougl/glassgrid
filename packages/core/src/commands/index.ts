@@ -11,3 +11,4 @@ export * from './builtins/history.js';
 export * from './builtins/grid.js';
 export * from './builtins/filters.js';
 export * from './builtins/charts.js';
+export * from './builtins/workspace.js';

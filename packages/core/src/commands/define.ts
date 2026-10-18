@@ -99,6 +99,13 @@ export interface EffectCommand<S extends z.ZodType = z.ZodType> {
   readonly input: S;
   readonly tier: Tier;
   readonly mcp: McpExposure;
+  /**
+   * Optional per-input caller rule, checked after validation and before the
+   * tier policy and the host's handler. Throw `CommandError('forbidden', …)`
+   * to refuse, e.g. `openWorkspace` lets AI callers open only recent
+   * workspaces. Core declares it so every host enforces the same rule.
+   */
+  checkCaller?(input: z.output<S>, caller: Caller): void;
 }
 
 export type AnyCommand = StateCommand | HistoryCommand | EffectCommand;

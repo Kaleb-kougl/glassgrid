@@ -2,12 +2,23 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import {
   ENGINE_PORT_WINDOW_MESSAGE,
   IpcChannel,
+  isExternalOpenRequest,
   isMenuCommand,
+  isWorkspaceMenuCommand,
+  type CloseAnswer,
+  type CloseReply,
   type DroppedFile,
+  type ExternalOpenRequest,
   type GlassgridBridge,
   type MenuCommand,
   type OpenCsvResult,
+  type OpenWorkspaceResult,
+  type RecentWorkspace,
+  type RecoverySnapshotInfo,
+  type SaveWorkspaceResult,
   type ThemePreference,
+  type WorkspaceBridge,
+  type WorkspaceMenuCommand,
 } from '@glassgrid/core';
 
 /*
@@ -27,6 +38,15 @@ ipcRenderer.on(IpcChannel.menuCommand, (_event, command: unknown) => {
   for (const listener of menuListeners) listener(command);
 });
 
+/** The path of a dropped DOM File, or '' for one the page constructed itself. */
+function pathOfDroppedFile(file: DroppedFile): string {
+  try {
+    return webUtils.getPathForFile(file as File);
+  } catch {
+    return '';
+  }
+}
+
 /**
  * Drag-and-drop keeps the M0 rule that the page never sees a path: the page
  * hands over the dropped File, this isolated preload resolves its path and
@@ -34,17 +54,95 @@ ipcRenderer.on(IpcChannel.menuCommand, (_event, command: unknown) => {
  * constructed itself has no path and is refused here.
  */
 function openDroppedFile(file: DroppedFile): Promise<OpenCsvResult> {
-  let path: string;
-  try {
-    path = webUtils.getPathForFile(file as File);
-  } catch {
-    path = '';
-  }
+  const path = pathOfDroppedFile(file);
   if (path === '') {
     return Promise.resolve({ status: 'failed', message: `${file.name} is not a file on this computer` });
   }
   return ipcRenderer.invoke(IpcChannel.openDropped, path) as Promise<OpenCsvResult>;
 }
+
+// --- Workspace files ----------------------------------------------------------
+
+const workspaceMenuListeners = new Set<(command: WorkspaceMenuCommand) => void>();
+ipcRenderer.on(IpcChannel.workspaceMenuCommand, (_event, command: unknown) => {
+  if (!isWorkspaceMenuCommand(command)) return;
+  for (const listener of workspaceMenuListeners) listener(command);
+});
+
+/*
+ * OS open requests: main queues them until the page subscribes, then pushes
+ * new ones. The first subscription asks main for the queue.
+ */
+const openRequestListeners = new Set<(request: ExternalOpenRequest) => void>();
+let listeningForOpenRequests = false;
+function deliverOpenRequest(request: unknown): void {
+  if (!isExternalOpenRequest(request)) return;
+  for (const listener of openRequestListeners) listener(request);
+}
+ipcRenderer.on(IpcChannel.workspaceOpenRequest, (_event, request: unknown) => deliverOpenRequest(request));
+
+/*
+ * Close prompt: main asks before closing the window. Without a handler (or
+ * if it throws) the answer is null and main closes without asking; the
+ * autosaved recovery snapshot, if any, is kept.
+ */
+let closeHandler: (() => CloseAnswer | Promise<CloseAnswer>) | null = null;
+ipcRenderer.on(IpcChannel.workspaceCloseQuery, (_event, requestId: unknown) => {
+  if (typeof requestId !== 'string') return;
+  const reply = (answer: CloseAnswer | null) => {
+    const message: CloseReply = { requestId, answer };
+    ipcRenderer.send(IpcChannel.workspaceCloseReply, message);
+  };
+  const handler = closeHandler;
+  if (handler === null) {
+    reply(null);
+    return;
+  }
+  Promise.resolve()
+    .then(handler)
+    .then(reply, (error: unknown) => {
+      console.error('[preload] close handler failed', error);
+      reply(null);
+    });
+});
+
+const workspace: WorkspaceBridge = {
+  save: (request) => ipcRenderer.invoke(IpcChannel.workspaceSave, request) as Promise<SaveWorkspaceResult>,
+  saveAs: (request) => ipcRenderer.invoke(IpcChannel.workspaceSaveAs, request) as Promise<SaveWorkspaceResult>,
+  open: (request) => ipcRenderer.invoke(IpcChannel.workspaceOpen, request) as Promise<OpenWorkspaceResult>,
+  openDropped: (file) => {
+    const path = pathOfDroppedFile(file);
+    if (path === '') return Promise.resolve({ status: 'failed', code: 'io', message: `${file.name} is not a file on this computer` });
+    return ipcRenderer.invoke(IpcChannel.workspaceOpenDropped, path) as Promise<OpenWorkspaceResult>;
+  },
+  locateData: (token) => ipcRenderer.invoke(IpcChannel.workspaceLocateData, token) as Promise<OpenWorkspaceResult>,
+  cancelOpen: (token) => ipcRenderer.invoke(IpcChannel.workspaceCancelOpen, token) as Promise<void>,
+  listRecent: () => ipcRenderer.invoke(IpcChannel.workspaceListRecent) as Promise<RecentWorkspace[]>,
+  listRecovery: () => ipcRenderer.invoke(IpcChannel.workspaceListRecovery) as Promise<RecoverySnapshotInfo[]>,
+  restoreRecovery: (id) => ipcRenderer.invoke(IpcChannel.workspaceRestoreRecovery, id) as Promise<OpenWorkspaceResult>,
+  discardRecovery: (id) => ipcRenderer.invoke(IpcChannel.workspaceDiscardRecovery, id) as Promise<void>,
+  updateRecovery: (update) => ipcRenderer.send(IpcChannel.workspaceRecoveryUpdate, update),
+  onOpenRequest: (listener) => {
+    openRequestListeners.add(listener);
+    if (!listeningForOpenRequests) {
+      listeningForOpenRequests = true;
+      void (ipcRenderer.invoke(IpcChannel.workspaceOpenRequestsListen) as Promise<unknown>).then((queued) => {
+        if (Array.isArray(queued)) for (const request of queued) deliverOpenRequest(request);
+      });
+    }
+    return () => openRequestListeners.delete(listener);
+  },
+  onCloseRequest: (handler) => {
+    closeHandler = handler;
+    return () => {
+      if (closeHandler === handler) closeHandler = null;
+    };
+  },
+  onMenuCommand: (listener) => {
+    workspaceMenuListeners.add(listener);
+    return () => workspaceMenuListeners.delete(listener);
+  },
+};
 
 const bridge: GlassgridBridge = {
   platform: process.platform,
@@ -60,6 +158,7 @@ const bridge: GlassgridBridge = {
   clipboard: {
     writeText: (text: string) => ipcRenderer.invoke(IpcChannel.clipboardWriteText, text) as Promise<void>,
   },
+  workspace,
 };
 
 contextBridge.exposeInMainWorld('glassgrid', bridge);

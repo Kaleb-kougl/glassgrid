@@ -101,6 +101,11 @@ export class EngineHost extends EventEmitter<EngineHostEvents> {
     contents.postMessage(IpcChannel.enginePort, null, [port2]);
   }
 
+  /** The path behind a handle this host registered (main only; never sent to the renderer). */
+  pathOf(handle: FileHandle): string | undefined {
+    return this.sources.get(handle);
+  }
+
   /** Register a file with the engine and resolve with its opaque handle. */
   registerFile(path: string): Promise<RegisteredFile> {
     this.start();
