@@ -2,19 +2,23 @@ import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { arch, cpus, platform, tmpdir, totalmem } from 'node:os';
 import { basename, join, resolve } from 'node:path';
+import AxeBuilder from '@axe-core/playwright';
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import {
   AGGREGATE_MEASURE,
   COUNT_ROWS_MEASURE,
   OPEN_TO_FIRST_ROWS_MEASURE,
   PROFILE_MEASURE,
+  SORT_TO_FIRST_ROWS_MEASURE,
   type AggregateMeasureDetail,
   type CountRowsMeasureDetail,
   type OpenToFirstRowsMeasureDetail,
   type ProfileMeasureDetail,
+  type SortToFirstRowsMeasureDetail,
 } from '../src/renderer/src/perf';
 import { e2eRowCount } from './config';
 import { CATEGORIES, writeFixtureCsv } from './csv-fixture';
+import { fling, scrollSweep, type FlingResult, type MemorySample } from './grid-perf';
 
 const APP_DIR = resolve(__dirname, '..');
 const RESULTS_DIR = join(APP_DIR, 'e2e-results');
@@ -114,6 +118,76 @@ async function screenshot(page: Page, name: string): Promise<string> {
 }
 
 const digits = (text: string | null) => text?.replace(/\D/g, '') ?? '';
+
+/** axe-core on the whole window. Legacy mode runs in the page itself (an Electron context cannot open the extra page axe would use). */
+async function axe(page: Page, name: string) {
+  const results = await new AxeBuilder({ page }).setLegacyMode(true).analyze();
+  await test.info().attach(`axe-${name}`, { body: JSON.stringify(results.violations, null, 2), contentType: 'application/json' });
+  return results.violations.map((violation) => ({
+    id: violation.id,
+    impact: violation.impact,
+    nodes: violation.nodes.map((node) => `${node.target.join(' ')}: ${node.failureSummary ?? ''}`),
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// The canvas grid: assertions read its ARIA mirror; pointer input goes to the canvas at computed positions.
+
+const ROW_HEIGHT = 32;
+const HEADER_HEIGHT = 32;
+
+function mirror(page: Page) {
+  return page.getByTestId('grid-mirror');
+}
+
+/** Cell texts of a mirrored data row (0 = first row on screen). */
+function mirrorRow(page: Page, index: number) {
+  return mirror(page).getByRole('row').nth(index + 1).getByRole('gridcell');
+}
+
+function mirrorHeader(page: Page, name: string) {
+  return mirror(page).getByRole('columnheader', { name: new RegExp(`^${name}(,|$)`) });
+}
+
+/** Where the grid is on screen and where its columns start and end (published on the scroll spacer). */
+async function gridGeometry(page: Page) {
+  const box = await page.getByTestId('grid').boundingBox();
+  if (!box) throw new Error('grid has no box');
+  const edges = await page.getByTestId('grid-scroller').evaluate((scroller) => {
+    const spacer = scroller.firstElementChild as HTMLElement | null;
+    return (spacer?.dataset['columnEdges'] ?? '').split(' ').map(Number);
+  });
+  return {
+    box,
+    /** Centre of display column `col`'s header. */
+    header: (col: number) => ({ x: box.x + ((edges[col] ?? 0) + (edges[col + 1] ?? 0)) / 2, y: box.y + HEADER_HEIGHT / 2 }),
+    /** Centre of the cell at on-screen row `row` (0 = first body row) and display column `col`. */
+    cell: (row: number, col: number) => ({
+      x: box.x + ((edges[col] ?? 0) + (edges[col + 1] ?? 0)) / 2,
+      y: box.y + HEADER_HEIGHT + row * ROW_HEIGHT + ROW_HEIGHT / 2,
+    }),
+  };
+}
+
+/** Every mirrored cell has its value (no page still loading). */
+async function rowsLoaded(page: Page): Promise<void> {
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const cells = [...document.querySelectorAll('[data-testid="grid-mirror"] [role="gridcell"]')];
+        return cells.length > 0 && cells.every((cell) => cell.textContent !== 'Loading');
+      }),
+    )
+    .toBe(true);
+}
+
+/** What the M2 exit gate measured in this run, written by the last test. */
+const exitGate: {
+  firstRows?: { ms: number; firstPageEngineMs: number; openEngineMs: number };
+  scroll?: Record<string, FlingResult>;
+  memory?: { samples: MemorySample[]; before: MemorySample; afterDown: MemorySample; afterUp: MemorySample; sweepMs: number; pagesLanded: number };
+  sort?: { ms: number; firstPageEngineMs: number; cached: boolean; sort: string };
+} = {};
 
 async function machineInfo(app: ElectronApplication | undefined) {
   if (!app) throw new Error('Electron app failed to launch');
@@ -216,10 +290,11 @@ test.describe('data path', () => {
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setContentSize(1440, 900));
     await expect(page.getByTestId('empty-state')).toBeVisible();
 
-    // State B (empty) in both themes.
+    // State B (empty) in both themes, checked with axe.
     for (const theme of ['dark', 'light'] as const) {
       await setTheme(app, page, theme);
       await screenshot(page, `main-empty-${theme}`);
+      expect(await axe(page, `empty-${theme}`), `axe violations, empty state, ${theme}`).toEqual([]);
     }
     await setTheme(app, page, 'dark');
 
@@ -243,9 +318,12 @@ test.describe('data path', () => {
     const firstPageWallMs = performance.now() - clickedAt;
     await expect(page.getByTestId('file-name')).toHaveText(basename(csvPath));
     expect(firstPage.detail).toMatchObject({ rows: 1000, columns: 4, usingParquetCache: false });
-    const grid = page.getByTestId('grid');
-    await expect(grid.getByRole('columnheader')).toHaveText(['', 'id', 'category', 'amount', 'created_on']);
-    await expect(grid.getByRole('row').nth(1).getByRole('gridcell')).toHaveText(['1', 'alpha', '0', '2026-01-01']);
+    // M2 exit gate (a): open -> first rows painted on the canvas in under 2 s.
+    expect(firstPage.duration).toBeLessThan(2_000);
+    exitGate.firstRows = { ms: firstPage.duration, firstPageEngineMs: firstPage.detail.firstPageEngineMs, openEngineMs: firstPage.detail.openEngineMs };
+    await expect(mirror(page).getByRole('columnheader')).toHaveText(['Row', 'id', 'category', 'amount', 'created_on']);
+    await expect(mirrorRow(page, 0)).toHaveText(['1', 'alpha', '0', '2026-01-01']);
+    await expect(mirror(page)).toHaveAttribute('aria-rowcount', String(ROWS + 1));
 
     const profiled = await nextMeasure(page, PROFILE_MEASURE, previousProfile);
     const profile = { duration: profiled.duration, detail: profiled.detail as ProfileMeasureDetail };
@@ -258,21 +336,23 @@ test.describe('data path', () => {
     expect(rendererErrors, 'renderer console errors (CSP violations, exceptions)').toEqual([]);
 
     const baseline = {
-      benchmark: 'open-to-first-page',
-      /** M1 exit gate: "open-to-first-query baseline recorded" (docs/technical-design.md). */
-      milestone: 'M1',
+      benchmark: 'open-to-first-rows',
+      /** M2 exit gate (a): "first rows in < 2 s" (docs/technical-design.md). */
+      milestone: 'M2',
       exitGate: {
-        name: 'open-to-first-query',
-        firstQuery: `first ${firstPage.detail.rows}-row page`,
+        name: 'open-to-first-rows-painted',
+        firstRows: `first ${firstPage.detail.rows}-row page painted on the canvas grid`,
         roundTripMs: firstPage.duration,
+        budgetMs: 2_000,
+        met: firstPage.duration < 2_000,
       },
       recordedAt: new Date().toISOString(),
       rows: ROWS,
       fileBytes,
       csvGenerationMs,
       ...(await machineInfo(app)),
-      openToFirstPage: {
-        /** Renderer measure: Open click -> first 1,000-row page decoded. */
+      openToFirstRows: {
+        /** Renderer measure: Open click -> first canvas frame showing rows (first 1,000-row page decoded and formatted). */
         roundTripMs: firstPage.duration,
         openEngineMs: firstPage.detail.openEngineMs,
         firstPageEngineMs: firstPage.detail.firstPageEngineMs,
@@ -284,9 +364,9 @@ test.describe('data path', () => {
         engineMs: profile.detail.engineMs,
       },
     };
-    const outFile = await writeBaseline('open-to-first-page', baseline);
+    const outFile = await writeBaseline('open-to-first-rows', baseline);
     console.log(
-      `open-to-first-page ${ROWS} rows: ${firstPage.duration.toFixed(1)} ms ` +
+      `open-to-first-rows ${ROWS} rows: ${firstPage.duration.toFixed(1)} ms ` +
         `(open ${firstPage.detail.openEngineMs.toFixed(1)} ms, page ${firstPage.detail.firstPageEngineMs.toFixed(1)} ms); ` +
         `profile ${profile.duration.toFixed(1)} ms (engine ${profile.detail.engineMs.toFixed(1)} ms) -> ${outFile}`,
     );
@@ -326,8 +406,21 @@ test.describe('data path', () => {
     await expect(amount).toHaveAttribute('data-type', 'float');
     await expect(page.getByTestId('redo')).toBeEnabled();
 
-    // The data views are untouched by state-only commands.
-    await expect(page.getByTestId('grid').getByRole('row').nth(1).getByRole('gridcell')).toHaveText(['1', 'alpha', '0', '2026-01-01']);
+    await expect(page.getByTestId('retyping')).toHaveCount(0);
+    await expect(mirrorRow(page, 0)).toHaveText(['1', 'alpha', '0', '2026-01-01']);
+
+    // The engine reads overrides with TRY_CAST: text that is not a number reads as null, and the app says so.
+    const category = page.getByTestId('column-category-type');
+    await category.click();
+    await page.getByRole('menuitemradio', { name: /Integer/ }).click();
+    const toast = page.getByRole('status').filter({ hasText: 'couldn’t be read as integer' });
+    await expect(toast).toContainText(`${ROWS.toLocaleString('en-US')} values in category couldn’t be read as integer and show as null`, {
+      timeout: 120_000,
+    });
+    await expect(mirrorRow(page, 0)).toHaveText(['1', 'null (empty value)', '0', '2026-01-01']);
+    await toast.getByRole('button', { name: /Undo/ }).click();
+    await expect(category).toHaveAttribute('data-type', 'text');
+    await expect(mirrorRow(page, 0)).toHaveText(['1', 'alpha', '0', '2026-01-01'], { timeout: 120_000 });
     expect(rendererErrors, 'renderer console errors (CSP violations, exceptions)').toEqual([]);
   });
 
@@ -366,26 +459,43 @@ test.describe('data path', () => {
     const chip = page.getByTestId('filter-category');
     await expect(chip).toHaveText(`category= ${selected.category}×`);
     await expect.poll(async () => digits(await page.getByTestId('row-count').textContent())).toBe(`${selected.count}${ROWS}`);
-    const firstRow = page.getByTestId('grid').getByRole('row').nth(1).getByRole('gridcell');
-    await expect(firstRow.nth(1)).toHaveText(selected.category);
+    await expect(mirrorRow(page, 0).nth(1)).toHaveText(selected.category);
 
-    // State A: sort by id, select a range of cells and focus one, as in the design frame.
-    await page.getByTestId('grid-header-id').click();
-    await expect(page.getByTestId('grid-header-id')).toHaveAttribute('aria-sort', 'ascending');
-    await expect(firstRow.nth(0)).toHaveText(String(CATEGORIES.indexOf(selected.category) + 1));
-    await expect(page.getByTestId('grid').locator('.gg-grid__cell--placeholder')).toHaveCount(0);
-    const cell = (row: number, col: number) => page.getByTestId('grid').getByRole('row').nth(row).getByRole('gridcell').nth(col);
-    await cell(7, 2).hover();
+    // State A: sort by id with a click on its header, as in the design frame.
+    const grid = await gridGeometry(page);
+    const idHeader = grid.header(0);
+    await page.mouse.click(idHeader.x, idHeader.y);
+    await expect(mirrorHeader(page, 'id')).toHaveAttribute('aria-sort', 'ascending');
+    await expect(mirrorRow(page, 0).nth(0)).toHaveText(String(CATEGORIES.indexOf(selected.category) + 1));
+    await rowsLoaded(page);
+
+    // Drag a range on the canvas (category..amount, rows 7..10), then shrink it from the keyboard.
+    const from = grid.cell(6, 1);
+    const to = grid.cell(9, 2);
+    await page.mouse.move(from.x, from.y);
     await page.mouse.down();
-    await cell(10, 3).hover();
+    await page.mouse.move(to.x, to.y, { steps: 4 });
     await page.mouse.up();
     await page.keyboard.press('Shift+ArrowUp');
     await expect(page.getByTestId('column-amount')).toHaveAttribute('data-selected', 'true');
+    await expect(page.getByTestId('column-category')).toHaveAttribute('data-selected', 'true');
+    await expect(page.getByTestId('column-id')).toHaveAttribute('data-selected', 'false');
+    await expect(mirror(page).locator('[aria-selected="true"]')).toHaveCount(6);
+
+    // Copy: copySelection through the registry and the preload clipboard.
+    await page.keyboard.press(`${process.platform === 'darwin' ? 'Meta' : 'Control'}+KeyC`);
+    await expect(page.getByRole('status').filter({ hasText: 'Copied 3 rows × 2 columns.' })).toBeVisible();
+    const copied = await app.evaluate(({ clipboard }) => clipboard.readText());
+    const copiedRows = copied.split('\n').map((line) => line.split('\t'));
+    expect(copiedRows).toHaveLength(3);
+    expect(copiedRows.every((cells) => cells.length === 2 && cells[0] === selected.category)).toBe(true);
+
     await page.mouse.move(box.x + box.width / 2, box.y + index * 26 + 10);
     await expect(page.getByRole('tooltip')).toContainText(selected.category);
     for (const theme of ['dark', 'light'] as const) {
       await setTheme(app, page, theme);
       await screenshot(page, `main-populated-${theme}`);
+      expect(await axe(page, `populated-${theme}`), `axe violations, populated, ${theme}`).toEqual([]);
     }
     await setTheme(app, page, 'dark');
     expect(rendererErrors, 'renderer console errors (CSP violations, exceptions)').toEqual([]);
@@ -439,5 +549,103 @@ test.describe('data path', () => {
       `count-rows ${ROWS} rows: cold ${cold.roundTripMs.toFixed(1)} ms (engine ${cold.engineMs.toFixed(1)} ms), ` +
         `warm ${warm.roundTripMs.toFixed(1)} ms (result cache) -> ${outFile}`,
     );
+  });
+
+  test(`scrolls ${ROWS.toLocaleString('en-US')} rows: fling frame times and flat memory (M2 exit gate b, c)`, async () => {
+    if (!app) throw new Error('Electron app failed to launch');
+    // File order (the header cycles asc -> desc -> none) and the view loaded at the top.
+    const grid = await gridGeometry(page);
+    const idHeader = grid.header(0);
+    for (let i = 0; i < 3 && (await mirrorHeader(page, 'id').getAttribute('aria-sort')) !== null; i += 1) {
+      const before = await mirrorHeader(page, 'id').getAttribute('aria-sort');
+      await page.mouse.click(idHeader.x, idHeader.y);
+      await expect(mirrorHeader(page, 'id')).not.toHaveAttribute('aria-sort', before ?? '');
+    }
+    await expect(mirrorHeader(page, 'id')).not.toHaveAttribute('aria-sort', /.+/);
+    await expect(mirrorRow(page, 0)).toHaveText(['1', 'alpha', '0', '2026-01-01']);
+    await page.mouse.move(grid.cell(5, 1).x, grid.cell(5, 1).y);
+
+    exitGate.scroll = await fling(app, page);
+    exitGate.memory = await scrollSweep(app, page);
+    for (const [name, run] of Object.entries(exitGate.scroll)) {
+      console.log(
+        `fling ${name}: rAF interval p50/p95 ${run.rafIntervals.p50.toFixed(1)}/${run.rafIntervals.p95.toFixed(1)} ms, ` +
+          `main thread per frame p95 ${run.mainThreadPerFrame.p95.toFixed(2)} ms, rAF work p95 ${run.rafWork.p95.toFixed(2)} ms, ` +
+          `presented p95 ${run.presentedIntervals.p95.toFixed(1)} ms, longest task ${run.longestTaskMs.toFixed(1)} ms, landed row ${run.landedRow}`,
+      );
+    }
+    const mb = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+    const { before, afterDown, afterUp, samples } = exitGate.memory;
+    const peak = Math.max(...samples.map((sample) => sample.workingSetBytes));
+    console.log(
+      `memory: working set ${mb(before.workingSetBytes)} before, ${mb(afterDown.workingSetBytes)} at the bottom, ${mb(afterUp.workingSetBytes)} back at the top, peak ${mb(peak)}; ` +
+        `JS heap ${mb(before.jsHeapBytes)} / ${mb(afterDown.jsHeapBytes)} / ${mb(afterUp.jsHeapBytes)} (${samples.length} samples)`,
+    );
+    // Flat: a full scroll down and back leaves the renderer where it started (within 50 MB), under the 300 MB budget.
+    expect(afterUp.workingSetBytes - before.workingSetBytes).toBeLessThan(50 * 1024 * 1024);
+    expect(peak).toBeLessThan(300 * 1024 * 1024);
+    expect(rendererErrors, 'renderer console errors (CSP violations, exceptions)').toEqual([]);
+  });
+
+  test(`sorts ${ROWS.toLocaleString('en-US')} rows and paints the first sorted rows (M2 exit gate d)`, async () => {
+    const previous = await measureCount(page, SORT_TO_FIRST_ROWS_MEASURE);
+    const grid = await gridGeometry(page);
+    const amountHeader = grid.header(2);
+    await page.mouse.click(amountHeader.x, amountHeader.y);
+    const measured = await nextMeasure(page, SORT_TO_FIRST_ROWS_MEASURE, previous);
+    const detail = measured.detail as SortToFirstRowsMeasureDetail;
+    exitGate.sort = { ms: measured.duration, ...detail };
+    console.log(`sort ${detail.sort}: first rows painted in ${measured.duration.toFixed(1)} ms (engine ${detail.firstPageEngineMs.toFixed(1)} ms)`);
+    expect(detail).toMatchObject({ sort: 'amount asc', cached: false });
+    await expect(mirrorHeader(page, 'amount')).toHaveAttribute('aria-sort', 'ascending');
+    await expect(mirrorRow(page, 0)).toHaveText(['1', 'alpha', '0', '2026-01-01']);
+    // The first sorted rows come from the engine's top-K path in well under a second.
+    expect(measured.duration).toBeLessThan(1_000);
+  });
+
+  test('records the M2 exit gate', async () => {
+    const { firstRows, scroll, memory, sort } = exitGate;
+    if (!firstRows || !scroll || !memory || !sort) throw new Error('an exit-gate measurement is missing');
+    const worst = (pick: (run: FlingResult) => number) => Math.max(...Object.values(scroll).map(pick));
+    const scrollP95 = worst((run) => run.rafIntervals.p95);
+    const workP95 = worst((run) => run.mainThreadPerFrame.p95);
+    const peak = Math.max(...memory.samples.map((sample) => sample.workingSetBytes));
+    const gate = {
+      firstRows: { ms: firstRows.ms, budgetMs: 2_000, met: firstRows.ms < 2_000 },
+      scroll: {
+        /** Worst scenario; rAF intervals are vsync-quantised, so the budget is one vsync plus 1 ms jitter. */
+        rafIntervalP95Ms: scrollP95,
+        mainThreadPerFrameP95Ms: workP95,
+        rafWorkP95Ms: worst((run) => run.rafWork.p95),
+        presentedIntervalP95Ms: worst((run) => run.presentedIntervals.p95),
+        budget: 'p95 rAF interval <= 17.7 ms and p95 main-thread work per frame < 16.7 ms',
+        met: scrollP95 <= 17.7 && workP95 < 16.7,
+      },
+      memory: {
+        beforeBytes: memory.before.workingSetBytes,
+        bottomBytes: memory.afterDown.workingSetBytes,
+        afterBytes: memory.afterUp.workingSetBytes,
+        peakBytes: peak,
+        jsHeapBeforeBytes: memory.before.jsHeapBytes,
+        jsHeapAfterBytes: memory.afterUp.jsHeapBytes,
+        budget: 'flat (after - before < 50 MB) and peak < 300 MB',
+        met: memory.afterUp.workingSetBytes - memory.before.workingSetBytes < 50 * 1024 * 1024 && peak < 300 * 1024 * 1024,
+      },
+      sortFirstRows: { ms: sort.ms, sort: sort.sort, firstPageEngineMs: sort.firstPageEngineMs, budgetMs: 1_000, met: sort.ms < 1_000 },
+    };
+    const outFile = await writeBaseline('m2-exit-gate', {
+      benchmark: 'm2-exit-gate',
+      milestone: 'M2',
+      exitGate: { name: 'first rows < 2 s, scroll p95 < 16.7 ms, flat memory, sorted first rows < 1 s', ...gate, met: Object.values(gate).every((part) => part.met) },
+      recordedAt: new Date().toISOString(),
+      rows: ROWS,
+      fileBytes,
+      ...(await machineInfo(app)),
+      openToFirstRows: firstRows,
+      scroll,
+      memory,
+      sort,
+    });
+    console.log(`m2-exit-gate ${ROWS} rows -> ${outFile}`);
   });
 });
