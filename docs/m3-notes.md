@@ -94,6 +94,74 @@ brush end / bar click ──▶ brush { viewId, selection | null }   (one undo e
   (`none`/`converting`/`ready`). Shared E2E helpers moved to
   `e2e/support.ts`.
 
+### Chart-create fixes after the first exit-gate run
+
+The first exit-gate run (below, "before") missed chart create for line and
+heatmap. Three changes, same results:
+
+- **Integer time-bucket keys** (compiler). On a zone-less `TIMESTAMP`
+  column, line/area, histogram and heatmap time axes group hour buckets on
+  `floor(epoch_us(ts) / 3.6e9)` (a `CASE` on the sign, since BIGINT `//`
+  truncates; ±infinity get sentinel keys) and day buckets on
+  `CAST(ts AS DATE)`, and turn the key back into the bucket start
+  (`make_timestamp`, `CAST(… AS TIMESTAMP)`) on the aggregated rows only.
+  The profile now tells the compiler the column's DuckDB type
+  (`CompileColumn.duckdbType`, optional); TIMESTAMPTZ (whose `date_trunc`
+  follows the session time zone), DATE, months, bar charts and callers
+  without a type keep `date_trunc`. Bare GROUP BY on the 10M Parquet copy,
+  2 threads: `date_trunc('hour')` 175–190 ms, the integer key 118 ms
+  (truncating `//` alone 105 ms but wrong before 1970; `%`-based floors
+  157–163 ms; `time_bucket` 190 ms); days 132 → 76 ms. See
+  [m1-compiler.md](m1-compiler.md#group-keys).
+- **One heatmap cell key** (compiler). When the profile bounds both numeric
+  axes within ±2^24 bins, the heatmap groups on `gx * 2^26 + gy` (an exact
+  DOUBLE) and decodes `gx`, `gy` after the GROUP BY; otherwise two keys as
+  before. 10–15% off the heatmap query.
+- **The hidden data table renders after the chart is painted** (ui).
+  `ChartFrame` renders the screen-reader table (up to 300 formatted rows)
+  through `useDeferredValue`: a new chart is drawn first, new data repaints
+  the chart before the table follows. It was 10–25 ms of every line and
+  heatmap create (drop → drawn minus engine time fell from 15–36 ms to
+  7–10 ms) and of every cross-filter repaint of those charts (per-chart p95
+  81.9 → 74.6 ms).
+
+Engine query, measured in Node through `QueryService` + `runAggregate`
+(the engine host's path) on the 10M Parquet copy, 25 fresh `fare_amount ≥ k`
+filters, before/after alternated twice, p50 (p95):
+
+| Chart | Before | After |
+| --- | ---: | ---: |
+| line, `hour(pickup_at)`, M4 at 600 px | 211 ms (250) | **138 ms** (166) |
+| line, `day(pickup_at)` | 152 ms (190) | **89 ms** (115) |
+| heatmap, distance × fare (360 cells) | 202 ms (264) | **178 ms** (220) |
+| histogram / bar (unchanged SQL) | 140 / 50 ms | 133 / 52 ms |
+
+What else was checked on the aggregate path, without a change:
+
+- **Engine overhead** around the query is under 2 ms: the profile is cached
+  per table, compiling is sub-millisecond, and the Arrow build of ≤ 744 rows
+  is negligible; `runAggregate` times equal the bare query's.
+- **Nothing runs beside a create.** With every engine request and index
+  build logged during the exit gate, each create's aggregate ran alone; the
+  grid's filtered index build finishes about 3.5 s after a filter is added
+  (1.5 s delay + ~2 s), well inside the test's 6 s wait (kept).
+- **Threads:** 2 (the default, one per core) is best: 1 thread is 80%
+  slower, 4 threads 35% slower on the heatmap.
+- **Caches and format:** `parquet_metadata_cache`, the external file cache
+  (on, off, unvalidated) made no difference; a Parquet copy without
+  dictionary encoding is 25–80% slower; a native in-memory DuckDB table
+  (600 MB) is no faster for the heatmap. The heatmap is compute-bound: per
+  EXPLAIN ANALYZE about 40 ms scan, 70 ms for the cell key (six vector ops)
+  and 60 ms hash aggregation (wall, 2 threads).
+- **Heatmap alternatives that were not faster:** two INTEGER or BIGINT
+  keys, a combined BIGINT key, multiplying by the reciprocal, `fdiv`,
+  `floor((x - lo) / w)` in a CTE (also not exact). DuckDB groups a single
+  raw dictionary-encoded column about 4× faster (`GROUP BY trip_distance`
+  44 ms; unary `floor`/`ceil`/`round(x, n)` keep that path), but any binary
+  operation (`x / w`, even `x + 0`) or a second key loses it, and a heatmap
+  needs both; perfect-hash aggregation needs column statistics, which
+  DuckDB does not propagate through `floor(x / w)`.
+
 ## Exit gate
 
 > Every v1 budget in Performance budgets green in CI, including chart create
@@ -122,16 +190,17 @@ software rendering under Xvfb; Electron 44.9.0, Chrome 152, DuckDB 1.5.6).
   shown, the grid's first rows painted). 20 brushes after a first one,
   300 ms apart, each a different range (wide, narrow, in the tail).
 
-| 10M rows, Parquet, medians of 3 runs | p50 | p95 | Budget |
-| --- | ---: | ---: | --- |
-| Chart create, bar (`payment_type`) | **73.6 ms** | **87.2 ms** | < 250 ms ✓ |
-| Chart create, histogram (`trip_distance`) | **157.2 ms** | **190.9 ms** | < 250 ms ✓ |
-| Chart create, line (`pickup_at`, hourly, M4) | 244.5 ms | 288.8 ms | < 250 ms ✗ (p95) |
-| Chart create, heatmap (distance × fare) | 238.4 ms | 266.0 ms | < 250 ms ✗ (p95) |
-| Cross-filter, 20 brushes | **70.7 ms** | **98.8 ms** | p95 < 100 ms ✓ (runs: 82.0, 98.8, 100.5) |
-| per view p95: charts / count / first page | | 81.9 / 54.6 / 90.4 ms | |
-| First brush, cubes built at pointer down | 349.6 ms | | (runs: 349.6, 611.5, 283.5) |
-| Cubes ready after pointer down | 781 ms | | 4 cubes: 17,343 / 153 / 360 / 31 cells |
+| 10M rows, Parquet, medians of 3 runs | p50 | p95 | Budget | Before the fixes (p50 / p95) |
+| --- | ---: | ---: | --- | --- |
+| Chart create, bar (`payment_type`) | **62.2 ms** | **88.8 ms** | < 250 ms ✓ | 73.6 / 87.2 ms |
+| Chart create, histogram (`trip_distance`) | **153.6 ms** | **206.1 ms** | < 250 ms ✓ | 157.2 / 190.9 ms |
+| Chart create, line (`pickup_at`, hourly, M4) | **166.8 ms** | **196.5 ms** | < 250 ms ✓ (runs 194.5, 196.8, 196.5) | 244.5 / 288.8 ms |
+| Chart create, heatmap (distance × fare) | **198.7 ms** | 257.1 ms | < 250 ms ✗ at p95 (runs 257.1, 245.1, 261.0) | 238.4 / 266.0 ms |
+| engine time per create (p50): line / bar / histogram / heatmap | 158 / 59 / 151 / 186 ms | | | 229 / 66 / 162 / 209 ms |
+| Cross-filter, 20 brushes | **66.0 ms** | **80.5 ms** | p95 < 100 ms ✓ (runs: 94.7, 79.4, 80.5) | 70.7 / 98.8 ms |
+| per view p95: charts / count / first page | | 74.6 / 48.0 / 79.3 ms | | 81.9 / 54.6 / 90.4 ms |
+| First brush, cubes built at pointer down | 248.8 ms | | (runs: 263.1, 248.8, 197.9) | 349.6 ms |
+| Cubes ready after pointer down | 681 ms | | 4 cubes: 17,343 / 153 / 360 / 31 cells | 781 ms |
 
 80 of every 100 view answers came from cubes (the three charts and the
 count; the grid's rows cannot be pre-aggregated).
@@ -141,9 +210,9 @@ file): chart create is one cold sample per mark and run, so p50 = p95.
 
 | 10M rows, raw CSV, medians of 3 runs | p50 | p95 |
 | --- | ---: | ---: |
-| Chart create: line / bar / histogram / heatmap | 1,273 / 869 / 877 / 1,042 ms | (n = 1 per run) |
-| Cross-filter, 20 brushes | 69.0 ms | 83.5 ms (runs 99.2, 78.2, 83.5) |
-| First brush, cubes built at pointer down | 5,355 ms | cubes ready after 5,902 ms |
+| Chart create: line / bar / histogram / heatmap | 1,123 / 830 / 817 / 1,086 ms | (n = 1 per run) |
+| Cross-filter, 20 brushes | 67.6 ms | 93.6 ms (runs 74.6, 93.6, 111.5) |
+| First brush, cubes built at pointer down | 5,037 ms | cubes ready after 5,568 ms |
 
 On the raw CSV the cubes carry the brushes: once built (one full parse of
 the file, 5–6 s), charts and count answer from them, and the grid's first
@@ -152,41 +221,46 @@ that 1,000 matches sit deep in the file still costs a parse of most of it
 (1.6–1.9 s in the m3-xfilter bench); that only happens before the Parquet
 copy is ready.
 
-**Result: cross-filter met; chart create met for bar and histogram, not
-for line and heatmap** (p50 just under, p95 over). Both are bound by the
-aggregate itself on this machine, not by the app: the engine reports 200–
-290 ms for the line and 190–310 ms for the heatmap; rendering adds 15–45 ms.
-Measured directly in DuckDB on the same Parquet file (2 threads):
-`date_trunc('hour', pickup_at)` grouping alone takes 180–220 ms of the
-line's time, where grouping by an integer hour key
-(`epoch_us(pickup_at) // 3600000000`, the timestamp rebuilt after the
-GROUP BY) takes 105 ms; the heatmap's `floor(x / w), floor(y / w)` GROUP BY
-takes 155–260 ms with no cheaper equivalent found (integer casts, one
-combined key and multiplication were all as slow or slower). The budget
-table's own definition ("bar on 30-value category") is met with room.
-These budgets are set for the CI macOS arm64 runners; they should be
-re-measured there.
+**Result: cross-filter met with room (p95 80.5 ms); chart create met for
+bar, histogram and line; heatmap met at p50 (198.7 ms) but not at p95
+(257.1 ms median; 245–261 ms).** The line went from 245 / 289 ms to
+167 / 197 ms. The heatmap's p95 is the slowest of six samples per run,
+and on this VM one heatmap query in six or so takes 220–250 ms in the
+engine instead of 175–190 ms: the run-to-run noise of a 2-vCPU VM (the
+same spikes appear in the Node bench with nothing else running; the
+engine logs show no concurrent work). Rendering is now 7–10 ms of a
+heatmap create, so the query is the budget: the heatmap's aggregate is
+compute-bound at about 175 ms on two 2.1 GHz cores (see "What else was
+checked"), and no cheaper exact SQL was found. What it would take on this
+VM: about 30 ms more off the heatmap query (DuckDB evaluating `x / w` over
+a dictionary's values, as it already does for unary `floor`, would make it
+a ~60 ms query), or a faster machine — these budgets are set for the CI
+macOS arm64 runners and should be re-measured there. An app-side option
+is to start the default chart's query when the drag starts (the spec is
+known then), which hides the query behind the gesture for people but adds
+queries for drags that end elsewhere.
 
 Other figures from the same runs (no M2 regression): open → first rows
-241–383 ms, sort → first sorted rows 161–184 ms, wheel/thumb fling p95 rAF
-interval 16.7/16.8 ms, renderer working set 181–184 MB before and 183–187
-MB after a full scroll. 1M default run (`pnpm e2e`, the raw CSV: below the
-conversion size), last run: chart create p95 113–217 ms per mark (the cold
-first create is the slowest), cross-filter p50 60.4 ms, p95 73.6 ms, first
-brush 75 ms.
+259–273 ms, sort → first sorted rows 173–201 ms, wheel/thumb fling p95 rAF
+interval 16.7/16.7–16.8 ms, renderer working set 179–182 MB before and
+181–184 MB after a full scroll. 1M default run (`pnpm e2e`, the raw CSV:
+below the conversion size), last run: chart create p95 111–188 ms per mark
+(the cold first create is the slowest), cross-filter p50 65.1 ms, p95
+77.5 ms, first brush 64 ms.
 
 JSON in [benchmarks/m3/](benchmarks/m3/): `m3-exit-gate-medians-linux-x64.json`
-(the three runs, medians) and the last run's
-`m3-exit-gate-10000000-linux-x64.json` (milestone `M3`, `exitGate` and
-`rawCsv` blocks, every sample with its per-view timings).
+(the three runs after the fixes, medians, with each mark's engine p50) and
+the last run's `m3-exit-gate-10000000-linux-x64.json` (milestone `M3`,
+`exitGate` and `rawCsv` blocks, every sample with its per-view timings).
+The numbers before the fixes are in git history (commit 316dad6).
 
 ## Tests
 
 | Suite | Count | Result |
 | --- | ---: | --- |
-| `packages/core` | 198 tests, 15 files | pass |
-| `packages/ui` | 222 tests, 28 files | pass |
-| `apps/desktop` (engine on real DuckDB, renderer on jsdom) | 186 tests, 20 files (+2 opt-in benches skipped) | pass |
+| `packages/core` | 212 tests, 16 files | pass |
+| `packages/ui` | 223 tests, 28 files | pass |
+| `apps/desktop` (engine on real DuckDB, renderer on jsdom) | 187 tests, 20 files (+2 opt-in benches skipped) | pass |
 | E2E, 1M rows (`pnpm e2e`) | 11 tests (+1 skipped: the raw-CSV launch only runs at 10M) | pass |
 | E2E, 10M rows (`pnpm e2e:10m`) | 12 tests | pass |
 
@@ -209,6 +283,24 @@ New in integration:
   and pixel widths; ui tests for `onDrawn`, the "Other" bar and the card's
   name and data region.
 
+New with the chart-create fixes:
+
+- `packages/core/test/fast-keys.property.test.ts`: the line/area,
+  histogram and heatmap reference properties rerun with DuckDB types in
+  the profile (integer keys, one cell key), and their cube answers against
+  the plain query; old vs new SQL compared exactly (column names, DuckDB
+  types, every value, order) on edge data: microseconds either side of
+  hour/day/month edges and of the epoch, 1900 and leap days, years 1 to
+  9999, DuckDB's first and last timestamps (where a bucket end overflows,
+  both fail), ±infinity, NULLs, empty and single-row tables. Mutating the
+  floor branch or the cell stride fails them.
+- Compiler snapshots and shape tests for the new keys (and that
+  TIMESTAMPTZ, DATE, months, bars and untyped profiles keep `date_trunc`;
+  that unbounded or time heatmap axes keep two keys); an engine test that
+  the real profile carries `TIMESTAMP` and that hour/day buckets match UTC
+  buckets on both sides of the epoch; a ui test that a chart is drawn
+  before its hidden table renders.
+
 ## Deviations
 
 - **Selections are drawn from the store after the command snapped them**,
@@ -228,15 +320,16 @@ New in integration:
 
 ## Gaps for M4 and later
 
-- **Chart create for line and heatmap on 10M rows** misses 250 ms at p95
-  on the 2-core VM (above). Candidates: integer time-bucket keys for
-  TIMESTAMP hour/day axes in the compiler (halves the line's GROUP BY; the
-  cube and property tests must move with it, and TIMESTAMPTZ/NS columns
-  need care), and measuring on the CI runners the budgets are set for.
-- **Cross-filter p95 is at the edge** (98.8 ms median; one run 100.5 ms).
-  The grid's first page is the slowest view (p95 90 ms). App-side time per
-  view is 17–38 ms (reply, decode, render, paint); sending the queries from
-  layout effects instead of effects made no measurable difference.
+- **Heatmap chart create on 10M rows** misses 250 ms at p95 on the 2-core
+  VM (257 ms median of three runs; p50 199 ms). The query is the cost
+  (above); remaining options: measure on the CI runners the budgets are
+  set for, start the default chart's query at drag start, or a DuckDB that
+  evaluates `x / w` over dictionaries. A two-stage histogram (GROUP BY the
+  raw dictionary-encoded column, then bin its few thousand values) would
+  take the histogram from ~140 to ~50 ms; not done, since it only pays
+  for low-cardinality columns and the histogram meets its budget.
+- **Cross-filter p95** has room now (80.5 ms median of three; one run
+  94.7 ms). The grid's first page is still the slowest view (p95 79 ms).
 - **The first brush waits for its cubes**; a plain query for the first
   commit while cubes build (and hints once `crossfilterPrepared` arrives)
   would make the first brush as fast as the SQL path at the cost of two

@@ -503,7 +503,7 @@ Result: met on the Linux dev VM (medians of three 10M-row E2E runs): first rows 
 
 **Demo:** four linked charts and the grid on the NYC taxi dataset.
 
-Result: partly met on the Linux dev VM (medians of three 10M-row E2E runs on the Parquet copy, four charts + grid): cross-filter p50 70.7 ms, **p95 98.8 ms** (cubes; raw CSV p95 83.5 ms once its cubes are built, first brush 5.4 s); chart create p50/p95 bar 74/87 ms and histogram 157/191 ms met, **line 245/289 ms and heatmap 238/266 ms missed** at p95 (bound by the aggregate on two cores); first brush including cube build 350 ms. The `FilterStore` is the workspace's `selections` + `userFilters` (core's cross-filter model). The demo runs on a taxi-like fixture; see [M3 notes](m3-notes.md).
+Result: partly met on the Linux dev VM (medians of three 10M-row E2E runs on the Parquet copy, four charts + grid): cross-filter p50 66.0 ms, **p95 80.5 ms** (cubes; raw CSV p95 93.6 ms once its cubes are built, first brush 5.0 s); chart create p50/p95 bar 62/89 ms, histogram 154/206 ms and line 167/197 ms met (line was 245/289 ms before integer time-bucket keys), **heatmap 199/257 ms missed** at p95 (a ~175 ms compute-bound aggregate on two cores plus VM noise; was 238/266 ms); first brush including cube build 249 ms. The `FilterStore` is the workspace's `selections` + `userFilters` (core's cross-filter model). The demo runs on a taxi-like fixture; see [M3 notes](m3-notes.md).
 
 ### M4 · Persistence and web demo (week 4)
 

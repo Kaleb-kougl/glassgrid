@@ -8,41 +8,41 @@
       "perMark": {
         "line": {
           "n": 6,
-          "min": 224.90000000037253,
-          "p50": 247.7000000011176,
-          "p95": 319.1000000014901,
-          "max": 319.1000000014901,
-          "mean": 258.5000000003104,
+          "min": 143.69999999925494,
+          "p50": 179.39999999850988,
+          "p95": 196.5,
+          "max": 196.5,
+          "mean": 173.9499999998758,
           "budgetMs": 250,
-          "met": false
+          "met": true
         },
         "bar": {
           "n": 6,
-          "min": 62.59999999962747,
-          "p50": 73.59999999962747,
-          "p95": 79.59999999962747,
-          "max": 79.59999999962747,
-          "mean": 73.86666666654249,
+          "min": 55.399999998509884,
+          "p50": 62.19999999925494,
+          "p95": 84.19999999925494,
+          "max": 84.19999999925494,
+          "mean": 68.16666666666667,
           "budgetMs": 250,
           "met": true
         },
         "histogram": {
           "n": 6,
-          "min": 154.09999999962747,
-          "p50": 168.2000000011176,
-          "p95": 186.30000000074506,
-          "max": 186.30000000074506,
-          "mean": 170.71666666679084,
+          "min": 138.89999999850988,
+          "p50": 153.60000000149012,
+          "p95": 221.80000000074506,
+          "max": 221.80000000074506,
+          "mean": 168.1999999998758,
           "budgetMs": 250,
           "met": true
         },
         "heatmap": {
           "n": 6,
-          "min": 216.30000000074506,
-          "p50": 224.5,
-          "p95": 301.40000000037253,
-          "max": 301.40000000037253,
-          "mean": 240.6666666669771,
+          "min": 171.10000000149012,
+          "p50": 186.09999999776483,
+          "p95": 261,
+          "max": 261,
+          "mean": 201.1333333334575,
           "budgetMs": 250,
           "met": false
         }
@@ -51,45 +51,45 @@
     },
     "crossfilter": {
       "n": 20,
-      "min": 55.09999999962747,
-      "p50": 70.69999999925494,
-      "p95": 100.5,
-      "max": 131.5,
-      "mean": 75.94500000001862,
+      "min": 44.100000001490116,
+      "p50": 67,
+      "p95": 80.5,
+      "max": 127,
+      "mean": 69.6050000006333,
       "budgetMs": 100,
-      "met": false,
+      "met": true,
       "viewsFromCube": 80,
       "views": 100,
       "perView": {
-        "grid:count": {
-          "n": 20,
-          "min": 23.40000000037253,
-          "p50": 34.90000000037253,
-          "p95": 54.59999999962747,
-          "max": 63.59999999962747,
-          "mean": 37.27500000018627
-        },
         "chart": {
           "n": 60,
-          "min": 29.40000000037253,
-          "p50": 53.40000000037253,
-          "p95": 84.19999999925494,
-          "max": 100.5,
-          "mean": 55.726666666722544
+          "min": 22.199999999254942,
+          "p50": 49.900000002235174,
+          "p95": 73.40000000223517,
+          "max": 127,
+          "mean": 50.45166666687776
+        },
+        "grid:count": {
+          "n": 20,
+          "min": 24.899999998509884,
+          "p50": 37.600000001490116,
+          "p95": 48.100000001490116,
+          "max": 48.19999999925494,
+          "mean": 37.4
         },
         "grid:rows": {
           "n": 20,
-          "min": 44.90000000037253,
-          "p50": 67.09999999962747,
-          "p95": 93.59999999962747,
-          "max": 131.5,
-          "mean": 68.76500000013039
+          "min": 36.19999999925494,
+          "p50": 62.70000000298023,
+          "p95": 75,
+          "max": 75.90000000223517,
+          "mean": 62.03000000026077
         }
       }
     },
     "firstBrush": {
-      "ms": 283.5,
-      "cubesReadyMs": 756.8000000007451,
+      "ms": 197.90000000223517,
+      "cubesReadyMs": 659.3999999985099,
       "cubes": [
         {
           "status": "ready",
@@ -117,41 +117,41 @@
       "perMark": {
         "line": {
           "n": 1,
-          "min": 1220.6000000014901,
-          "p50": 1220.6000000014901,
-          "p95": 1220.6000000014901,
-          "max": 1220.6000000014901,
-          "mean": 1220.6000000014901,
+          "min": 1078.8999999985099,
+          "p50": 1078.8999999985099,
+          "p95": 1078.8999999985099,
+          "max": 1078.8999999985099,
+          "mean": 1078.8999999985099,
           "budgetMs": 250,
           "met": false
         },
         "bar": {
           "n": 1,
-          "min": 819.5,
-          "p50": 819.5,
-          "p95": 819.5,
-          "max": 819.5,
-          "mean": 819.5,
+          "min": 812.6999999992549,
+          "p50": 812.6999999992549,
+          "p95": 812.6999999992549,
+          "max": 812.6999999992549,
+          "mean": 812.6999999992549,
           "budgetMs": 250,
           "met": false
         },
         "histogram": {
           "n": 1,
-          "min": 877.1999999992549,
-          "p50": 877.1999999992549,
-          "p95": 877.1999999992549,
-          "max": 877.1999999992549,
-          "mean": 877.1999999992549,
+          "min": 932.4000000022352,
+          "p50": 932.4000000022352,
+          "p95": 932.4000000022352,
+          "max": 932.4000000022352,
+          "mean": 932.4000000022352,
           "budgetMs": 250,
           "met": false
         },
         "heatmap": {
           "n": 1,
-          "min": 1059.2000000011176,
-          "p50": 1059.2000000011176,
-          "p95": 1059.2000000011176,
-          "max": 1059.2000000011176,
-          "mean": 1059.2000000011176,
+          "min": 1086,
+          "p50": 1086,
+          "p95": 1086,
+          "max": 1086,
+          "mean": 1086,
           "budgetMs": 250,
           "met": false
         }
@@ -160,45 +160,45 @@
     },
     "crossfilter": {
       "n": 20,
-      "min": 47.09999999962747,
-      "p50": 66.69999999925494,
-      "p95": 83.5,
-      "max": 108.29999999888241,
-      "mean": 70.15999999949709,
+      "min": 50.899999998509884,
+      "p50": 67.60000000149012,
+      "p95": 111.5,
+      "max": 117.09999999776483,
+      "mean": 70.91999999955297,
       "budgetMs": 100,
-      "met": true,
+      "met": false,
       "viewsFromCube": 80,
       "views": 100,
       "perView": {
-        "grid:count": {
-          "n": 20,
-          "min": 27.199999999254942,
-          "p50": 39.79999999888241,
-          "p95": 52.5,
-          "max": 60.59999999962747,
-          "mean": 40.389999999757855
-        },
         "chart": {
           "n": 60,
-          "min": 22.399999998509884,
-          "p50": 53.59999999962747,
-          "p95": 81.80000000074506,
-          "max": 108.29999999888241,
-          "mean": 54.67999999982615
+          "min": 26.199999999254942,
+          "p50": 54.30000000074506,
+          "p95": 74.69999999925494,
+          "max": 80.09999999776483,
+          "mean": 53.17499999975165
+        },
+        "grid:count": {
+          "n": 20,
+          "min": 28.800000000745058,
+          "p50": 36.19999999925494,
+          "p95": 55.5,
+          "max": 56.19999999925494,
+          "mean": 39.174999999441205
         },
         "grid:rows": {
           "n": 20,
-          "min": 41.899999998509884,
-          "p50": 61.80000000074506,
-          "p95": 78.90000000037253,
-          "max": 89.09999999962747,
-          "mean": 64.10999999959022
+          "min": 43.5,
+          "p50": 63,
+          "p95": 111.39999999850988,
+          "max": 117.09999999776483,
+          "mean": 65.59499999992549
         }
       }
     },
     "firstBrush": {
-      "ms": 5355.300000000745,
-      "cubesReadyMs": 5901.699999999255,
+      "ms": 5037,
+      "cubesReadyMs": 5568.39999999851,
       "cubes": [
         {
           "status": "ready",
@@ -219,7 +219,7 @@
       ]
     }
   },
-  "recordedAt": "2026-10-18T15:22:26.948Z",
+  "recordedAt": "2026-10-18T16:56:33.870Z",
   "rows": 10000000,
   "fileBytes": 406530704,
   "machine": {
@@ -243,192 +243,192 @@
       "creates": [
         {
           "mark": "line",
-          "ms": 264.19999999925494,
-          "engineMs": 224.19572599999992,
+          "ms": 188.19999999925494,
+          "engineMs": 161.74510199999986,
           "cached": false,
           "rows": 744,
           "filtered": false
         },
         {
           "mark": "bar",
-          "ms": 69.59999999962747,
-          "engineMs": 48.38131799999974,
+          "ms": 62.19999999925494,
+          "engineMs": 51.54230900000039,
           "cached": false,
           "rows": 5,
           "filtered": false
         },
         {
           "mark": "histogram",
-          "ms": 168.2000000011176,
-          "engineMs": 154.51538400000027,
+          "ms": 153.60000000149012,
+          "engineMs": 142.90325500000017,
           "cached": false,
           "rows": 31,
           "filtered": false
         },
         {
           "mark": "heatmap",
-          "ms": 301.40000000037253,
-          "engineMs": 261.71119999999974,
+          "ms": 261,
+          "engineMs": 241.16500300000007,
           "cached": false,
           "rows": 360,
           "filtered": false
         },
         {
           "mark": "line",
-          "ms": 224.90000000037253,
-          "engineMs": 209.10125799999878,
+          "ms": 143.69999999925494,
+          "engineMs": 131.0771679999998,
           "cached": false,
           "rows": 744,
           "filtered": true
         },
         {
           "mark": "bar",
-          "ms": 73.59999999962747,
-          "engineMs": 66.36610100000325,
+          "ms": 55.399999998509884,
+          "engineMs": 50.35512000000017,
           "cached": false,
           "rows": 5,
           "filtered": true
         },
         {
           "mark": "histogram",
-          "ms": 176,
-          "engineMs": 169.0631489999978,
+          "ms": 221.80000000074506,
+          "engineMs": 213.41378700000132,
           "cached": false,
           "rows": 31,
           "filtered": true
         },
         {
           "mark": "heatmap",
-          "ms": 232.40000000037253,
-          "engineMs": 208.04029600000285,
+          "ms": 182.5,
+          "engineMs": 173.69453799999974,
           "cached": false,
           "rows": 360,
           "filtered": true
         },
         {
           "mark": "line",
-          "ms": 319.1000000014901,
-          "engineMs": 296.91384200000175,
+          "ms": 180,
+          "engineMs": 170.095441999998,
           "cached": false,
           "rows": 744,
           "filtered": true
         },
         {
           "mark": "bar",
-          "ms": 79.59999999962747,
-          "engineMs": 72.12895999999455,
+          "ms": 70.5,
+          "engineMs": 61.84417499999836,
           "cached": false,
           "rows": 5,
           "filtered": true
         },
         {
           "mark": "histogram",
-          "ms": 162,
-          "engineMs": 154.3003779999999,
+          "ms": 165.80000000074506,
+          "engineMs": 158.05459600000177,
           "cached": false,
           "rows": 31,
           "filtered": true
         },
         {
           "mark": "heatmap",
-          "ms": 249.30000000074506,
-          "engineMs": 215.58014099999855,
+          "ms": 188.5,
+          "engineMs": 177.02658999999403,
           "cached": false,
           "rows": 360,
           "filtered": true
         },
         {
           "mark": "line",
-          "ms": 269.59999999962747,
-          "engineMs": 250.9432089999973,
+          "ms": 179.39999999850988,
+          "engineMs": 168.03751600000396,
           "cached": false,
           "rows": 744,
           "filtered": true
         },
         {
           "mark": "bar",
-          "ms": 62.59999999962747,
-          "engineMs": 57.26267099999677,
+          "ms": 59.20000000298023,
+          "engineMs": 53.54040900000109,
           "cached": false,
           "rows": 5,
           "filtered": true
         },
         {
           "mark": "histogram",
-          "ms": 186.30000000074506,
-          "engineMs": 173.54821499999525,
+          "ms": 138.89999999850988,
+          "engineMs": 131.75267200000235,
           "cached": false,
           "rows": 31,
           "filtered": true
         },
         {
           "mark": "heatmap",
-          "ms": 216.30000000074506,
-          "engineMs": 200.07900500000687,
+          "ms": 186.09999999776483,
+          "engineMs": 176.46260800000164,
           "cached": false,
           "rows": 360,
           "filtered": true
         },
         {
           "mark": "line",
-          "ms": 225.5,
-          "engineMs": 211.94939200000226,
+          "ms": 196.5,
+          "engineMs": 187.1791379999995,
           "cached": false,
           "rows": 744,
           "filtered": true
         },
         {
           "mark": "bar",
-          "ms": 79.5,
-          "engineMs": 73.71277900000132,
+          "ms": 77.5,
+          "engineMs": 70.53603000000294,
           "cached": false,
           "rows": 5,
           "filtered": true
         },
         {
           "mark": "histogram",
-          "ms": 154.09999999962747,
-          "engineMs": 144.9037640000024,
+          "ms": 183,
+          "engineMs": 175.46352399999887,
           "cached": false,
           "rows": 31,
           "filtered": true
         },
         {
           "mark": "heatmap",
-          "ms": 220.09999999962747,
-          "engineMs": 197.28227399999741,
+          "ms": 217.60000000149012,
+          "engineMs": 208.25859299999865,
           "cached": false,
           "rows": 359,
           "filtered": true
         },
         {
           "mark": "line",
-          "ms": 247.7000000011176,
-          "engineMs": 233.8792070000054,
+          "ms": 155.90000000223517,
+          "engineMs": 146.22027499999967,
           "cached": false,
           "rows": 744,
           "filtered": true
         },
         {
           "mark": "bar",
-          "ms": 78.30000000074506,
-          "engineMs": 65.87990400000126,
+          "ms": 84.19999999925494,
+          "engineMs": 75.04209600000468,
           "cached": false,
           "rows": 5,
           "filtered": true
         },
         {
           "mark": "histogram",
-          "ms": 177.69999999925494,
-          "engineMs": 168.8919770000066,
+          "ms": 146.09999999776483,
+          "engineMs": 137.5574190000043,
           "cached": false,
           "rows": 31,
           "filtered": true
         },
         {
           "mark": "heatmap",
-          "ms": 224.5,
-          "engineMs": 209.38729800000146,
+          "ms": 171.10000000149012,
+          "engineMs": 163.19878999999491,
           "cached": false,
           "rows": 357,
           "filtered": true
@@ -436,41 +436,41 @@
       ],
       "brushes": [
         {
-          "ms": 82.10000000149012,
+          "ms": 67,
           "rowCount": 294743,
           "views": [
             {
+              "view": "chart:chart_05ab664f-8307-4f5e-8945-94c99151669f",
+              "ms": 26.100000001490116,
+              "engineMs": 16.12843299999804,
+              "fromCube": true,
+              "cached": false
+            },
+            {
               "view": "grid:count",
-              "ms": 23.40000000037253,
-              "engineMs": 10.843087000001105,
+              "ms": 35.69999999925494,
+              "engineMs": 19.092496000004758,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
-              "ms": 29.40000000037253,
-              "engineMs": 23.49324900000647,
-              "fromCube": true,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
-              "ms": 41.20000000111759,
-              "engineMs": 27.68418300000485,
+              "view": "chart:chart_effbccad-5cc9-44b4-bccf-333f02e4ddb7",
+              "ms": 37.69999999925494,
+              "engineMs": 19.94973200000095,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:rows",
-              "ms": 76.20000000111759,
-              "engineMs": 44.28918999999587,
+              "ms": 46.80000000074506,
+              "engineMs": 32.06080899999506,
               "fromCube": false,
               "cached": false
             },
             {
-              "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
-              "ms": 82.10000000149012,
-              "engineMs": 71.63362799999595,
+              "view": "chart:chart_e47c3a69-d505-4612-9d08-f594bfaec9a4",
+              "ms": 67,
+              "engineMs": 52.77102799999557,
               "fromCube": true,
               "cached": false
             }
@@ -487,41 +487,41 @@
           ]
         },
         {
-          "ms": 100.5,
+          "ms": 60.19999999925494,
           "rowCount": 3659919,
           "views": [
             {
-              "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
-              "ms": 43.29999999888241,
-              "engineMs": 21.994160999995074,
-              "fromCube": true,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
-              "ms": 52.09999999962747,
-              "engineMs": 25.398004000002402,
-              "fromCube": true,
-              "cached": false
-            },
-            {
               "view": "grid:count",
-              "ms": 54.59999999962747,
-              "engineMs": 18.737779000002774,
+              "ms": 38.30000000074506,
+              "engineMs": 22.96715899999981,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:rows",
-              "ms": 67.09999999962747,
-              "engineMs": 28.69419200000266,
+              "ms": 53.600000001490116,
+              "engineMs": 26.54975099999865,
               "fromCube": false,
               "cached": false
             },
             {
-              "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
-              "ms": 100.5,
-              "engineMs": 88.76450099999784,
+              "view": "chart:chart_05ab664f-8307-4f5e-8945-94c99151669f",
+              "ms": 56.19999999925494,
+              "engineMs": 26.272811000002548,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_e47c3a69-d505-4612-9d08-f594bfaec9a4",
+              "ms": 59.69999999925494,
+              "engineMs": 40.06214100000216,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_effbccad-5cc9-44b4-bccf-333f02e4ddb7",
+              "ms": 60.19999999925494,
+              "engineMs": 34.4320130000051,
               "fromCube": true,
               "cached": false
             }
@@ -538,42 +538,42 @@
           ]
         },
         {
-          "ms": 72.70000000111759,
+          "ms": 127,
           "rowCount": 449618,
           "views": [
             {
-              "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
-              "ms": 33.80000000074506,
-              "engineMs": 22.03052399999433,
-              "fromCube": true,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
-              "ms": 44.5,
-              "engineMs": 19.43617500000255,
-              "fromCube": true,
-              "cached": false
-            },
-            {
               "view": "grid:count",
-              "ms": 48.70000000111759,
-              "engineMs": 18.539489000002504,
+              "ms": 35.399999998509884,
+              "engineMs": 20.10494800000015,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
-              "ms": 65.70000000111759,
-              "engineMs": 49.39604200000031,
+              "view": "chart:chart_05ab664f-8307-4f5e-8945-94c99151669f",
+              "ms": 46.30000000074506,
+              "engineMs": 30.78812900000048,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_effbccad-5cc9-44b4-bccf-333f02e4ddb7",
+              "ms": 60.19999999925494,
+              "engineMs": 44.995774999995774,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:rows",
-              "ms": 72.70000000111759,
-              "engineMs": 32.902196999995795,
+              "ms": 64.69999999925494,
+              "engineMs": 33.50763999999617,
               "fromCube": false,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_e47c3a69-d505-4612-9d08-f594bfaec9a4",
+              "ms": 127,
+              "engineMs": 112.74526499999774,
+              "fromCube": true,
               "cached": false
             }
           ],
@@ -589,42 +589,42 @@
           ]
         },
         {
-          "ms": 61.5,
+          "ms": 74.30000000074506,
           "rowCount": 3026505,
           "views": [
             {
               "view": "grid:count",
-              "ms": 35.20000000111759,
-              "engineMs": 9.319583999997121,
+              "ms": 42,
+              "engineMs": 27.621573999997054,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
-              "ms": 46.5,
-              "engineMs": 20.662789999994857,
+              "view": "chart:chart_05ab664f-8307-4f5e-8945-94c99151669f",
+              "ms": 56,
+              "engineMs": 31.35992200000328,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
-              "ms": 49.100000001490116,
-              "engineMs": 20.94802200000413,
+              "view": "chart:chart_effbccad-5cc9-44b4-bccf-333f02e4ddb7",
+              "ms": 58,
+              "engineMs": 31.73913899999752,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_e47c3a69-d505-4612-9d08-f594bfaec9a4",
+              "ms": 62.100000001490116,
+              "engineMs": 48.013424000004306,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:rows",
-              "ms": 54.100000001490116,
-              "engineMs": 22.63833099999465,
+              "ms": 74.30000000074506,
+              "engineMs": 34.25798399999621,
               "fromCube": false,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
-              "ms": 61.5,
-              "engineMs": 43.25810999999521,
-              "fromCube": true,
               "cached": false
             }
           ],
@@ -640,41 +640,41 @@
           ]
         },
         {
-          "ms": 57.20000000111759,
+          "ms": 73.40000000223517,
           "rowCount": 954578,
           "views": [
             {
+              "view": "chart:chart_effbccad-5cc9-44b4-bccf-333f02e4ddb7",
+              "ms": 39.19999999925494,
+              "engineMs": 24.50119700000505,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_05ab664f-8307-4f5e-8945-94c99151669f",
+              "ms": 43.80000000074506,
+              "engineMs": 32.967522999999346,
+              "fromCube": true,
+              "cached": false
+            },
+            {
               "view": "grid:count",
-              "ms": 32.30000000074506,
-              "engineMs": 16.18508799999836,
-              "fromCube": true,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
-              "ms": 38.40000000037253,
-              "engineMs": 19.20770800000173,
-              "fromCube": true,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
-              "ms": 41,
-              "engineMs": 19.559603000001516,
+              "ms": 48.19999999925494,
+              "engineMs": 28.856791999998677,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:rows",
-              "ms": 51.30000000074506,
-              "engineMs": 22.54312899999786,
+              "ms": 63.5,
+              "engineMs": 36.23120899999776,
               "fromCube": false,
               "cached": false
             },
             {
-              "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
-              "ms": 57.20000000111759,
-              "engineMs": 43.08194700000604,
+              "view": "chart:chart_e47c3a69-d505-4612-9d08-f594bfaec9a4",
+              "ms": 73.40000000223517,
+              "engineMs": 53.77139900000475,
               "fromCube": true,
               "cached": false
             }
@@ -691,41 +691,41 @@
           ]
         },
         {
-          "ms": 70.30000000074506,
+          "ms": 69.5,
           "rowCount": 4639306,
           "views": [
             {
+              "view": "chart:chart_05ab664f-8307-4f5e-8945-94c99151669f",
+              "ms": 30.100000001490116,
+              "engineMs": 15.63067100000626,
+              "fromCube": true,
+              "cached": false
+            },
+            {
               "view": "grid:count",
-              "ms": 31.100000001490116,
-              "engineMs": 16.311145999992732,
+              "ms": 32.900000002235174,
+              "engineMs": 17.66550200000347,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
-              "ms": 38.30000000074506,
-              "engineMs": 21.597695000004023,
+              "view": "chart:chart_effbccad-5cc9-44b4-bccf-333f02e4ddb7",
+              "ms": 39.5,
+              "engineMs": 26.38574100000551,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
-              "ms": 55.80000000074506,
-              "engineMs": 42.91507000000274,
-              "fromCube": true,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
-              "ms": 56.20000000111759,
-              "engineMs": 40.515220000001136,
+              "view": "chart:chart_e47c3a69-d505-4612-9d08-f594bfaec9a4",
+              "ms": 49.900000002235174,
+              "engineMs": 40.161017999998876,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:rows",
-              "ms": 70.30000000074506,
-              "engineMs": 34.28133699999307,
+              "ms": 69.30000000074506,
+              "engineMs": 28.633010000005015,
               "fromCube": false,
               "cached": false
             }
@@ -742,41 +742,41 @@
           ]
         },
         {
-          "ms": 74,
+          "ms": 66.5,
           "rowCount": 45965,
           "views": [
             {
               "view": "grid:count",
-              "ms": 44.40000000037253,
-              "engineMs": 24.052385000002687,
+              "ms": 39.20000000298023,
+              "engineMs": 28.51454800000647,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
-              "ms": 54.69999999925494,
-              "engineMs": 34.91726500001096,
+              "view": "chart:chart_05ab664f-8307-4f5e-8945-94c99151669f",
+              "ms": 49.900000002235174,
+              "engineMs": 31.946498000004794,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
-              "ms": 59.69999999925494,
-              "engineMs": 30.950148000003537,
+              "view": "chart:chart_e47c3a69-d505-4612-9d08-f594bfaec9a4",
+              "ms": 53.5,
+              "engineMs": 33.74958200000401,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
-              "ms": 60.09999999962747,
-              "engineMs": 32.8778389999934,
+              "view": "chart:chart_effbccad-5cc9-44b4-bccf-333f02e4ddb7",
+              "ms": 53.900000002235174,
+              "engineMs": 34.09724699999788,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:rows",
-              "ms": 74,
-              "engineMs": 34.25924400000076,
+              "ms": 66.5,
+              "engineMs": 37.02474700000312,
               "fromCube": false,
               "cached": false
             }
@@ -793,42 +793,42 @@
           ]
         },
         {
-          "ms": 62.40000000037253,
+          "ms": 44.100000001490116,
           "rowCount": 1696070,
           "views": [
             {
-              "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
-              "ms": 37.5,
-              "engineMs": 14.854403000004822,
-              "fromCube": true,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
-              "ms": 43,
-              "engineMs": 21.616571000005933,
-              "fromCube": true,
-              "cached": false
-            },
-            {
               "view": "grid:count",
-              "ms": 45,
-              "engineMs": 14.4918539999926,
+              "ms": 24.899999998509884,
+              "engineMs": 15.613988999990397,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
-              "ms": 57,
-              "engineMs": 36.94761999999173,
+              "view": "chart:chart_effbccad-5cc9-44b4-bccf-333f02e4ddb7",
+              "ms": 26.699999999254942,
+              "engineMs": 16.43159999999625,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_05ab664f-8307-4f5e-8945-94c99151669f",
+              "ms": 29.5,
+              "engineMs": 16.979106999991927,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:rows",
-              "ms": 62.40000000037253,
-              "engineMs": 28.718860000008135,
+              "ms": 36.19999999925494,
+              "engineMs": 18.081728999997722,
               "fromCube": false,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_e47c3a69-d505-4612-9d08-f594bfaec9a4",
+              "ms": 44.100000001490116,
+              "engineMs": 36.169601999994484,
+              "fromCube": true,
               "cached": false
             }
           ],
@@ -844,41 +844,41 @@
           ]
         },
         {
-          "ms": 131.5,
+          "ms": 74.80000000074506,
           "rowCount": 11506,
           "views": [
             {
               "view": "grid:count",
-              "ms": 43.40000000037253,
-              "engineMs": 23.61100799999258,
+              "ms": 29.199999999254942,
+              "engineMs": 11.75358600000618,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
-              "ms": 60.30000000074506,
-              "engineMs": 29.084656999999424,
+              "view": "chart:chart_05ab664f-8307-4f5e-8945-94c99151669f",
+              "ms": 30.399999998509884,
+              "engineMs": 17.250582000007853,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
-              "ms": 70.70000000111759,
-              "engineMs": 32.06421799999953,
+              "view": "chart:chart_effbccad-5cc9-44b4-bccf-333f02e4ddb7",
+              "ms": 40.80000000074506,
+              "engineMs": 24.41885399998864,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
-              "ms": 99.10000000149012,
-              "engineMs": 67.0716689999972,
+              "view": "chart:chart_e47c3a69-d505-4612-9d08-f594bfaec9a4",
+              "ms": 63.5,
+              "engineMs": 49.5622960000037,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:rows",
-              "ms": 131.5,
-              "engineMs": 80.63532400000258,
+              "ms": 74.80000000074506,
+              "engineMs": 52.60077000000456,
               "fromCube": false,
               "cached": false
             }
@@ -895,41 +895,41 @@
           ]
         },
         {
-          "ms": 64.69999999925494,
+          "ms": 66,
           "rowCount": 1703642,
           "views": [
             {
+              "view": "chart:chart_effbccad-5cc9-44b4-bccf-333f02e4ddb7",
+              "ms": 40.399999998509884,
+              "engineMs": 18.875961999990977,
+              "fromCube": true,
+              "cached": false
+            },
+            {
               "view": "grid:count",
-              "ms": 37,
-              "engineMs": 16.844041000003926,
+              "ms": 45.599999997764826,
+              "engineMs": 27.541127999997116,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
-              "ms": 41.59999999962747,
-              "engineMs": 19.619135999993887,
-              "fromCube": true,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
-              "ms": 49.40000000037253,
-              "engineMs": 18.61375699999917,
+              "view": "chart:chart_05ab664f-8307-4f5e-8945-94c99151669f",
+              "ms": 47.099999997764826,
+              "engineMs": 31.41530700000294,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:rows",
-              "ms": 56.69999999925494,
-              "engineMs": 23.542935000004945,
+              "ms": 58.599999997764826,
+              "engineMs": 41.31868300000497,
               "fromCube": false,
               "cached": false
             },
             {
-              "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
-              "ms": 64.69999999925494,
-              "engineMs": 50.46173700000509,
+              "view": "chart:chart_e47c3a69-d505-4612-9d08-f594bfaec9a4",
+              "ms": 66,
+              "engineMs": 51.49420300000929,
               "fromCube": true,
               "cached": false
             }
@@ -946,42 +946,42 @@
           ]
         },
         {
-          "ms": 70.69999999925494,
+          "ms": 75.90000000223517,
           "rowCount": 146363,
           "views": [
             {
+              "view": "chart:chart_05ab664f-8307-4f5e-8945-94c99151669f",
+              "ms": 34.30000000074506,
+              "engineMs": 21.093678999997792,
+              "fromCube": true,
+              "cached": false
+            },
+            {
               "view": "grid:count",
-              "ms": 26,
-              "engineMs": 16.136472999991383,
+              "ms": 37.80000000074506,
+              "engineMs": 20.320366999992984,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
-              "ms": 30.5,
-              "engineMs": 20.096353000000818,
+              "view": "chart:chart_e47c3a69-d505-4612-9d08-f594bfaec9a4",
+              "ms": 50.80000000074506,
+              "engineMs": 35.61426500001107,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
-              "ms": 37.69999999925494,
-              "engineMs": 27.50050100000226,
+              "view": "chart:chart_effbccad-5cc9-44b4-bccf-333f02e4ddb7",
+              "ms": 51.20000000298023,
+              "engineMs": 32.94554600000265,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:rows",
-              "ms": 62.29999999888241,
-              "engineMs": 50.40442500000063,
+              "ms": 75.90000000223517,
+              "engineMs": 31.937710999991396,
               "fromCube": false,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
-              "ms": 70.69999999925494,
-              "engineMs": 55.76535599998897,
-              "fromCube": true,
               "cached": false
             }
           ],
@@ -997,41 +997,41 @@
           ]
         },
         {
-          "ms": 69.89999999850988,
+          "ms": 75,
           "rowCount": 3127001,
           "views": [
             {
+              "view": "chart:chart_05ab664f-8307-4f5e-8945-94c99151669f",
+              "ms": 22.199999999254942,
+              "engineMs": 14.449865999995382,
+              "fromCube": true,
+              "cached": false
+            },
+            {
               "view": "grid:count",
-              "ms": 38.899999998509884,
-              "engineMs": 15.337847000002512,
+              "ms": 33,
+              "engineMs": 14.831227999995463,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
-              "ms": 49.399999998509884,
-              "engineMs": 17.693637000003946,
+              "view": "chart:chart_effbccad-5cc9-44b4-bccf-333f02e4ddb7",
+              "ms": 48.5,
+              "engineMs": 32.969438999993145,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
-              "ms": 51.899999998509884,
-              "engineMs": 28.22393799999554,
-              "fromCube": true,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
-              "ms": 57,
-              "engineMs": 39.163109000000986,
+              "view": "chart:chart_e47c3a69-d505-4612-9d08-f594bfaec9a4",
+              "ms": 68.10000000149012,
+              "engineMs": 57.39416700000584,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:rows",
-              "ms": 69.89999999850988,
-              "engineMs": 26.39561799999501,
+              "ms": 75,
+              "engineMs": 45.98265099999844,
               "fromCube": false,
               "cached": false
             }
@@ -1048,42 +1048,42 @@
           ]
         },
         {
-          "ms": 61.79999999888241,
+          "ms": 80,
           "rowCount": 986137,
           "views": [
             {
               "view": "grid:count",
-              "ms": 28.59999999962747,
-              "engineMs": 17.702231999996002,
+              "ms": 47.099999997764826,
+              "engineMs": 17.68544099999417,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
-              "ms": 38.19999999925494,
-              "engineMs": 18.48649799999839,
+              "view": "chart:chart_05ab664f-8307-4f5e-8945-94c99151669f",
+              "ms": 56.79999999701977,
+              "engineMs": 26.298698999991757,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
-              "ms": 48.59999999962747,
-              "engineMs": 27.796200999990106,
-              "fromCube": true,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
-              "ms": 58.09999999962747,
-              "engineMs": 47.49409900000319,
+              "view": "chart:chart_effbccad-5cc9-44b4-bccf-333f02e4ddb7",
+              "ms": 58.5,
+              "engineMs": 28.99751600000309,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:rows",
-              "ms": 61.79999999888241,
-              "engineMs": 35.46923199998855,
+              "ms": 73.09999999776483,
+              "engineMs": 36.688200000004144,
               "fromCube": false,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_e47c3a69-d505-4612-9d08-f594bfaec9a4",
+              "ms": 80,
+              "engineMs": 61.052582000003895,
+              "fromCube": true,
               "cached": false
             }
           ],
@@ -1099,41 +1099,41 @@
           ]
         },
         {
-          "ms": 67.10000000149012,
+          "ms": 80.5,
           "rowCount": 4657562,
           "views": [
             {
               "view": "grid:count",
-              "ms": 34.90000000037253,
-              "engineMs": 17.272315000009257,
+              "ms": 37.5,
+              "engineMs": 23.140091999986907,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
-              "ms": 39.5,
-              "engineMs": 21.43616199999815,
+              "view": "chart:chart_05ab664f-8307-4f5e-8945-94c99151669f",
+              "ms": 46.5,
+              "engineMs": 29.74646599999687,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
-              "ms": 49.100000001490116,
-              "engineMs": 21.10786200000439,
+              "view": "chart:chart_effbccad-5cc9-44b4-bccf-333f02e4ddb7",
+              "ms": 49,
+              "engineMs": 29.00885100000596,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:rows",
-              "ms": 51.600000001490116,
-              "engineMs": 34.84326899998996,
+              "ms": 72.80000000074506,
+              "engineMs": 44.71781299999566,
               "fromCube": false,
               "cached": false
             },
             {
-              "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
-              "ms": 67.10000000149012,
-              "engineMs": 56.766208000000915,
+              "view": "chart:chart_e47c3a69-d505-4612-9d08-f594bfaec9a4",
+              "ms": 80.5,
+              "engineMs": 67.09702000000107,
               "fromCube": true,
               "cached": false
             }
@@ -1150,41 +1150,41 @@
           ]
         },
         {
-          "ms": 84.19999999925494,
+          "ms": 68.40000000223517,
           "rowCount": 1468576,
           "views": [
             {
+              "view": "chart:chart_05ab664f-8307-4f5e-8945-94c99151669f",
+              "ms": 29.200000002980232,
+              "engineMs": 16.75997900000948,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_effbccad-5cc9-44b4-bccf-333f02e4ddb7",
+              "ms": 38.5,
+              "engineMs": 20.252814999999828,
+              "fromCube": true,
+              "cached": false
+            },
+            {
               "view": "grid:count",
-              "ms": 29.90000000037253,
-              "engineMs": 17.012979999999516,
-              "fromCube": true,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
-              "ms": 37.69999999925494,
-              "engineMs": 28.460582999992766,
-              "fromCube": true,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
-              "ms": 48.79999999888241,
-              "engineMs": 27.739547000004677,
+              "ms": 48.100000001490116,
+              "engineMs": 26.226662000000942,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:rows",
-              "ms": 76.59999999962747,
-              "engineMs": 39.049910000001546,
+              "ms": 62.70000000298023,
+              "engineMs": 33.55684000000474,
               "fromCube": false,
               "cached": false
             },
             {
-              "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
-              "ms": 84.19999999925494,
-              "engineMs": 70.59760599999572,
+              "view": "chart:chart_e47c3a69-d505-4612-9d08-f594bfaec9a4",
+              "ms": 68.40000000223517,
+              "engineMs": 51.32635800000571,
               "fromCube": true,
               "cached": false
             }
@@ -1201,41 +1201,41 @@
           ]
         },
         {
-          "ms": 86.29999999888241,
+          "ms": 60,
           "rowCount": 215179,
           "views": [
             {
               "view": "grid:count",
-              "ms": 40.59999999962747,
-              "engineMs": 16.961557000002358,
+              "ms": 29.699999999254942,
+              "engineMs": 14.935089999999036,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_05ab664f-8307-4f5e-8945-94c99151669f",
+              "ms": 34.899999998509884,
+              "engineMs": 22.503289999993285,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_effbccad-5cc9-44b4-bccf-333f02e4ddb7",
+              "ms": 53.30000000074506,
+              "engineMs": 39.948080999995,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:rows",
-              "ms": 53.19999999925494,
-              "engineMs": 24.57951999999932,
+              "ms": 54.69999999925494,
+              "engineMs": 29.20940999999584,
               "fromCube": false,
               "cached": false
             },
             {
-              "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
-              "ms": 59.09999999962747,
-              "engineMs": 17.968915000004927,
-              "fromCube": true,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
-              "ms": 63.59999999962747,
-              "engineMs": 31.67263400000229,
-              "fromCube": true,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
-              "ms": 86.29999999888241,
-              "engineMs": 62.798480000012205,
+              "view": "chart:chart_e47c3a69-d505-4612-9d08-f594bfaec9a4",
+              "ms": 60,
+              "engineMs": 46.309310999989975,
               "fromCube": true,
               "cached": false
             }
@@ -1252,41 +1252,41 @@
           ]
         },
         {
-          "ms": 76.80000000074506,
+          "ms": 46.5,
           "rowCount": 2491747,
           "views": [
             {
-              "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
-              "ms": 53.40000000037253,
-              "engineMs": 15.090981000001193,
+              "view": "chart:chart_05ab664f-8307-4f5e-8945-94c99151669f",
+              "ms": 27.899999998509884,
+              "engineMs": 19.839220000008936,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
-              "ms": 60.5,
-              "engineMs": 22.511553999996977,
+              "view": "chart:chart_effbccad-5cc9-44b4-bccf-333f02e4ddb7",
+              "ms": 37.79999999701977,
+              "engineMs": 22.296077999999397,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:count",
-              "ms": 63.59999999962747,
-              "engineMs": 25.72981799999252,
+              "ms": 40.5,
+              "engineMs": 24.973807999995188,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
-              "ms": 70.40000000037253,
-              "engineMs": 43.60158099999535,
+              "view": "chart:chart_e47c3a69-d505-4612-9d08-f594bfaec9a4",
+              "ms": 45.399999998509884,
+              "engineMs": 35.22180099999241,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:rows",
-              "ms": 76.80000000074506,
-              "engineMs": 23.946369999990566,
+              "ms": 46.5,
+              "engineMs": 25.91908500000136,
               "fromCube": false,
               "cached": false
             }
@@ -1303,41 +1303,41 @@
           ]
         },
         {
-          "ms": 55.09999999962747,
+          "ms": 59.80000000074506,
           "rowCount": 432829,
           "views": [
             {
               "view": "grid:count",
-              "ms": 28.59999999962747,
-              "engineMs": 15.899169999989681,
+              "ms": 37.600000001490116,
+              "engineMs": 22.95173600000271,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_effbccad-5cc9-44b4-bccf-333f02e4ddb7",
+              "ms": 41.600000001490116,
+              "engineMs": 24.07352499999979,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_05ab664f-8307-4f5e-8945-94c99151669f",
+              "ms": 44.5,
+              "engineMs": 30.63726499999757,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:rows",
-              "ms": 44.90000000037253,
-              "engineMs": 24.468041000000085,
+              "ms": 53.69999999925494,
+              "engineMs": 19.5452110000042,
               "fromCube": false,
               "cached": false
             },
             {
-              "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
-              "ms": 50.59999999962747,
-              "engineMs": 31.10999300000549,
-              "fromCube": true,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
-              "ms": 51.30000000074506,
-              "engineMs": 30.19961300000432,
-              "fromCube": true,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
-              "ms": 55.09999999962747,
-              "engineMs": 39.03497300000163,
+              "view": "chart:chart_e47c3a69-d505-4612-9d08-f594bfaec9a4",
+              "ms": 59.80000000074506,
+              "engineMs": 46.69000299999607,
               "fromCube": true,
               "cached": false
             }
@@ -1354,41 +1354,41 @@
           ]
         },
         {
-          "ms": 93.59999999962747,
+          "ms": 61.20000000298023,
           "rowCount": 2160160,
           "views": [
             {
               "view": "grid:count",
-              "ms": 28.5,
-              "engineMs": 15.827486999987741,
+              "ms": 26.200000002980232,
+              "engineMs": 13.629489000013564,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
-              "ms": 51.40000000037253,
-              "engineMs": 25.77004799999122,
+              "view": "chart:chart_05ab664f-8307-4f5e-8945-94c99151669f",
+              "ms": 31.300000000745058,
+              "engineMs": 15.20245499999146,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
-              "ms": 69.19999999925494,
-              "engineMs": 31.43872300001385,
+              "view": "chart:chart_effbccad-5cc9-44b4-bccf-333f02e4ddb7",
+              "ms": 39.20000000298023,
+              "engineMs": 28.94817299999704,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
-              "ms": 73,
-              "engineMs": 46.26861000001372,
+              "view": "chart:chart_e47c3a69-d505-4612-9d08-f594bfaec9a4",
+              "ms": 60.20000000298023,
+              "engineMs": 40.89067999999679,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:rows",
-              "ms": 93.59999999962747,
-              "engineMs": 41.73740800000087,
+              "ms": 61.20000000298023,
+              "engineMs": 36.75482600000396,
               "fromCube": false,
               "cached": false
             }
@@ -1405,41 +1405,41 @@
           ]
         },
         {
-          "ms": 76.5,
+          "ms": 62,
           "rowCount": 1000753,
           "views": [
             {
               "view": "grid:count",
-              "ms": 30.800000000745058,
-              "engineMs": 15.839824999988195,
+              "ms": 39.099999997764826,
+              "engineMs": 23.8037089999998,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
-              "ms": 49.80000000074506,
-              "engineMs": 22.67508899999666,
+              "view": "chart:chart_05ab664f-8307-4f5e-8945-94c99151669f",
+              "ms": 53.399999998509884,
+              "engineMs": 29.27736000000732,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_effbccad-5cc9-44b4-bccf-333f02e4ddb7",
+              "ms": 55.099999997764826,
+              "engineMs": 40.19025800000236,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:rows",
-              "ms": 68.30000000074506,
-              "engineMs": 15.35787999999593,
+              "ms": 56.69999999925494,
+              "engineMs": 18.415440999990096,
               "fromCube": false,
               "cached": false
             },
             {
-              "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
-              "ms": 70.5,
-              "engineMs": 23.402384000000893,
-              "fromCube": true,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
-              "ms": 76.5,
-              "engineMs": 40.406546999991406,
+              "view": "chart:chart_e47c3a69-d505-4612-9d08-f594bfaec9a4",
+              "ms": 62,
+              "engineMs": 47.22716799999762,
               "fromCube": true,
               "cached": false
             }
@@ -1457,41 +1457,41 @@
         }
       ],
       "firstBrush": {
-        "ms": 283.5,
+        "ms": 197.90000000223517,
         "rowCount": 4344563,
         "views": [
           {
-            "view": "chart:chart_55a844e4-a817-4e46-8beb-93856bbf9172",
-            "ms": 39.5,
-            "engineMs": 17.17818800000532,
+            "view": "grid:count",
+            "ms": 50,
+            "engineMs": 10.353327000004356,
             "fromCube": true,
             "cached": false
           },
           {
-            "view": "grid:count",
-            "ms": 41.40000000037253,
-            "engineMs": 18.41136700000061,
+            "view": "chart:chart_05ab664f-8307-4f5e-8945-94c99151669f",
+            "ms": 78,
+            "engineMs": 14.988428999997268,
             "fromCube": true,
             "cached": false
           },
           {
             "view": "grid:rows",
-            "ms": 79.59999999962747,
-            "engineMs": 35.65610200000083,
+            "ms": 83.5,
+            "engineMs": 10.087786000003689,
             "fromCube": false,
             "cached": false
           },
           {
-            "view": "chart:chart_50eaa0df-6814-47e6-8859-403c674f59e8",
-            "ms": 175.5,
-            "engineMs": 154.83566599999904,
+            "view": "chart:chart_e47c3a69-d505-4612-9d08-f594bfaec9a4",
+            "ms": 154.10000000149012,
+            "engineMs": 136.26084699999774,
             "fromCube": true,
             "cached": false
           },
           {
-            "view": "chart:chart_a7040813-6311-4d9b-8e9c-5709eb3e6880",
-            "ms": 283.5,
-            "engineMs": 267.87571200000093,
+            "view": "chart:chart_effbccad-5cc9-44b4-bccf-333f02e4ddb7",
+            "ms": 197.90000000223517,
+            "engineMs": 177.24405999999726,
             "fromCube": true,
             "cached": false
           }
@@ -1507,9 +1507,9 @@
           }
         ],
         "prepare": {
-          "ms": 756.8000000007451,
+          "ms": 659.3999999985099,
           "detail": {
-            "source": "chart_7a6eede6-f00f-4562-8dc4-f234179024f8",
+            "source": "chart_114d0dd5-c027-4fb7-a73c-85edcfc0dcf3",
             "dimension": "trip_distance width 1",
             "cubes": [
               {
@@ -1529,7 +1529,7 @@
                 "rows": 31
               }
             ],
-            "engineMs": 752.359086000004
+            "engineMs": 654.617882999999
           }
         }
       }
@@ -1539,32 +1539,32 @@
       "creates": [
         {
           "mark": "line",
-          "ms": 1220.6000000014901,
-          "engineMs": 1178.6708619999995,
+          "ms": 1078.8999999985099,
+          "engineMs": 1047.9384539999996,
           "cached": false,
           "rows": 744,
           "filtered": false
         },
         {
           "mark": "bar",
-          "ms": 819.5,
-          "engineMs": 808.5279919999994,
+          "ms": 812.6999999992549,
+          "engineMs": 798.3313159999998,
           "cached": false,
           "rows": 5,
           "filtered": false
         },
         {
           "mark": "histogram",
-          "ms": 877.1999999992549,
-          "engineMs": 861.297305,
+          "ms": 932.4000000022352,
+          "engineMs": 917.4370410000001,
           "cached": false,
           "rows": 31,
           "filtered": false
         },
         {
           "mark": "heatmap",
-          "ms": 1059.2000000011176,
-          "engineMs": 1032.6262820000002,
+          "ms": 1086,
+          "engineMs": 1068.674645,
           "cached": false,
           "rows": 360,
           "filtered": false
@@ -1572,42 +1572,42 @@
       ],
       "brushes": [
         {
-          "ms": 108.29999999888241,
+          "ms": 111.5,
           "rowCount": 294743,
           "views": [
             {
+              "view": "chart:chart_046a0d08-5371-45b9-84cd-47eeb45494a7",
+              "ms": 44,
+              "engineMs": 6.23244700000032,
+              "fromCube": true,
+              "cached": false
+            },
+            {
               "view": "grid:count",
-              "ms": 52.5,
-              "engineMs": 29.66902999999911,
+              "ms": 56.19999999925494,
+              "engineMs": 15.551798000000417,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
-              "ms": 69.79999999888241,
-              "engineMs": 37.81130600000142,
+              "view": "chart:chart_9754f261-6bc3-4cc0-aa62-63db696a00f2",
+              "ms": 69.59999999776483,
+              "engineMs": 39.93644099999983,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
-              "ms": 79.40000000037253,
-              "engineMs": 41.58624299999974,
+              "view": "chart:chart_f1175b86-5f2c-4842-95b6-7e841c84f9fb",
+              "ms": 76.5,
+              "engineMs": 50.016718000000765,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:rows",
-              "ms": 89.09999999962747,
-              "engineMs": 37.418768999999884,
+              "ms": 111.39999999850988,
+              "engineMs": 63.796094999999696,
               "fromCube": false,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
-              "ms": 108.29999999888241,
-              "engineMs": 86.92599999999948,
-              "fromCube": true,
               "cached": false
             }
           ],
@@ -1623,41 +1623,41 @@
           ]
         },
         {
-          "ms": 81.80000000074506,
+          "ms": 73.19999999925494,
           "rowCount": 3659919,
           "views": [
             {
               "view": "grid:count",
-              "ms": 49.80000000074506,
-              "engineMs": 23.707198000000062,
+              "ms": 36.19999999925494,
+              "engineMs": 22.47161099999903,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_9754f261-6bc3-4cc0-aa62-63db696a00f2",
+              "ms": 46.899999998509884,
+              "engineMs": 30.136239999999816,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:rows",
-              "ms": 61.80000000074506,
-              "engineMs": 27.349072999999407,
+              "ms": 64.10000000149012,
+              "engineMs": 36.27709900000082,
               "fromCube": false,
               "cached": false
             },
             {
-              "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
-              "ms": 71.59999999962747,
-              "engineMs": 37.43140900000071,
+              "view": "chart:chart_f1175b86-5f2c-4842-95b6-7e841c84f9fb",
+              "ms": 72.69999999925494,
+              "engineMs": 54.97440800000004,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
-              "ms": 72.80000000074506,
-              "engineMs": 35.61613500000021,
-              "fromCube": true,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
-              "ms": 81.80000000074506,
-              "engineMs": 55.43179500000042,
+              "view": "chart:chart_046a0d08-5371-45b9-84cd-47eeb45494a7",
+              "ms": 73.19999999925494,
+              "engineMs": 42.963088000000425,
               "fromCube": true,
               "cached": false
             }
@@ -1674,41 +1674,41 @@
           ]
         },
         {
-          "ms": 63.399999998509884,
+          "ms": 75.39999999850988,
           "rowCount": 449618,
           "views": [
             {
+              "view": "chart:chart_046a0d08-5371-45b9-84cd-47eeb45494a7",
+              "ms": 33,
+              "engineMs": 21.847469999996974,
+              "fromCube": true,
+              "cached": false
+            },
+            {
               "view": "grid:count",
-              "ms": 32.79999999888241,
-              "engineMs": 9.747391000000789,
+              "ms": 36.399999998509884,
+              "engineMs": 19.37036799999987,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_9754f261-6bc3-4cc0-aa62-63db696a00f2",
+              "ms": 42.100000001490116,
+              "engineMs": 23.35164799999984,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:rows",
-              "ms": 48.59999999962747,
-              "engineMs": 27.3628069999977,
+              "ms": 52.100000001490116,
+              "engineMs": 26.746799999997165,
               "fromCube": false,
               "cached": false
             },
             {
-              "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
-              "ms": 51.19999999925494,
-              "engineMs": 25.502479000002495,
-              "fromCube": true,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
-              "ms": 55.19999999925494,
-              "engineMs": 36.64673599999878,
-              "fromCube": true,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
-              "ms": 63.399999998509884,
-              "engineMs": 51.68859100000191,
+              "view": "chart:chart_f1175b86-5f2c-4842-95b6-7e841c84f9fb",
+              "ms": 75.39999999850988,
+              "engineMs": 64.07829200000197,
               "fromCube": true,
               "cached": false
             }
@@ -1725,41 +1725,41 @@
           ]
         },
         {
-          "ms": 82.09999999962747,
+          "ms": 73.80000000074506,
           "rowCount": 3026505,
           "views": [
             {
-              "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
-              "ms": 35.40000000037253,
-              "engineMs": 20.755737999999837,
-              "fromCube": true,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
-              "ms": 46.59999999962747,
-              "engineMs": 22.744924000002356,
-              "fromCube": true,
-              "cached": false
-            },
-            {
               "view": "grid:count",
-              "ms": 50,
-              "engineMs": 20.34591299999738,
+              "ms": 42.400000002235174,
+              "engineMs": 25.08047699999952,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_9754f261-6bc3-4cc0-aa62-63db696a00f2",
+              "ms": 58.5,
+              "engineMs": 34.40069500000027,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:rows",
-              "ms": 70.19999999925494,
-              "engineMs": 41.613470000000234,
+              "ms": 63.30000000074506,
+              "engineMs": 43.56084399999963,
               "fromCube": false,
               "cached": false
             },
             {
-              "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
-              "ms": 82.09999999962747,
-              "engineMs": 60.04174100000091,
+              "view": "chart:chart_046a0d08-5371-45b9-84cd-47eeb45494a7",
+              "ms": 66.70000000298023,
+              "engineMs": 38.62403400000039,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_f1175b86-5f2c-4842-95b6-7e841c84f9fb",
+              "ms": 73.80000000074506,
+              "engineMs": 64.99634499999956,
               "fromCube": true,
               "cached": false
             }
@@ -1776,42 +1776,42 @@
           ]
         },
         {
-          "ms": 60.80000000074506,
+          "ms": 74.69999999925494,
           "rowCount": 954578,
           "views": [
             {
-              "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
-              "ms": 32.600000001490116,
-              "engineMs": 20.202696000000287,
-              "fromCube": true,
-              "cached": false
-            },
-            {
               "view": "grid:count",
-              "ms": 43.600000001490116,
-              "engineMs": 18.598578000000998,
+              "ms": 32.30000000074506,
+              "engineMs": 16.690448000001197,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
-              "ms": 49.5,
-              "engineMs": 23.283525999999256,
+              "view": "chart:chart_046a0d08-5371-45b9-84cd-47eeb45494a7",
+              "ms": 50.599999997764826,
+              "engineMs": 33.03687199999695,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
-              "ms": 60.100000001490116,
-              "engineMs": 51.73533700000189,
+              "view": "chart:chart_9754f261-6bc3-4cc0-aa62-63db696a00f2",
+              "ms": 52.899999998509884,
+              "engineMs": 33.51302900000155,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:rows",
-              "ms": 60.80000000074506,
-              "engineMs": 28.580430000001797,
+              "ms": 65.19999999925494,
+              "engineMs": 41.97706299999845,
               "fromCube": false,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_f1175b86-5f2c-4842-95b6-7e841c84f9fb",
+              "ms": 74.69999999925494,
+              "engineMs": 55.73597199999858,
+              "fromCube": true,
               "cached": false
             }
           ],
@@ -1827,41 +1827,41 @@
           ]
         },
         {
-          "ms": 53.09999999962747,
+          "ms": 66.80000000074506,
           "rowCount": 4639306,
           "views": [
             {
-              "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
-              "ms": 31.100000001490116,
-              "engineMs": 14.679000000000087,
-              "fromCube": true,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
-              "ms": 36.100000001490116,
-              "engineMs": 18.421243000000686,
-              "fromCube": true,
-              "cached": false
-            },
-            {
               "view": "grid:count",
-              "ms": 41,
-              "engineMs": 17.679164000001037,
+              "ms": 34.900000002235174,
+              "engineMs": 13.732610999999451,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
-              "ms": 49.5,
-              "engineMs": 34.559558000000834,
+              "view": "chart:chart_046a0d08-5371-45b9-84cd-47eeb45494a7",
+              "ms": 48.900000002235174,
+              "engineMs": 32.76063399999839,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_9754f261-6bc3-4cc0-aa62-63db696a00f2",
+              "ms": 50.600000001490116,
+              "engineMs": 33.31247699999949,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_f1175b86-5f2c-4842-95b6-7e841c84f9fb",
+              "ms": 64.5,
+              "engineMs": 52.549888999998075,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:rows",
-              "ms": 53,
-              "engineMs": 26.51050600000235,
+              "ms": 66.80000000074506,
+              "engineMs": 34.97471900000164,
               "fromCube": false,
               "cached": false
             }
@@ -1878,41 +1878,41 @@
           ]
         },
         {
-          "ms": 61.399999998509884,
+          "ms": 72.5,
           "rowCount": 45965,
           "views": [
             {
               "view": "grid:count",
-              "ms": 39.29999999888241,
-              "engineMs": 14.312470999997458,
+              "ms": 28.800000000745058,
+              "engineMs": 14.546253000000434,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
-              "ms": 46.69999999925494,
-              "engineMs": 34.46643699999913,
+              "view": "chart:chart_046a0d08-5371-45b9-84cd-47eeb45494a7",
+              "ms": 31,
+              "engineMs": 17.60726500000237,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
-              "ms": 55.29999999888241,
-              "engineMs": 42.019328999998834,
+              "view": "chart:chart_9754f261-6bc3-4cc0-aa62-63db696a00f2",
+              "ms": 56.100000001490116,
+              "engineMs": 32.40286399999968,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
-              "ms": 60.19999999925494,
-              "engineMs": 50.91418599999815,
+              "view": "chart:chart_f1175b86-5f2c-4842-95b6-7e841c84f9fb",
+              "ms": 66.20000000298023,
+              "engineMs": 53.744525000001886,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:rows",
-              "ms": 61.399999998509884,
-              "engineMs": 37.76233200000206,
+              "ms": 72.5,
+              "engineMs": 36.33369899999889,
               "fromCube": false,
               "cached": false
             }
@@ -1929,41 +1929,41 @@
           ]
         },
         {
-          "ms": 66.69999999925494,
+          "ms": 67.60000000149012,
           "rowCount": 1696070,
           "views": [
             {
+              "view": "chart:chart_046a0d08-5371-45b9-84cd-47eeb45494a7",
+              "ms": 29.800000000745058,
+              "engineMs": 19.522006999999576,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_9754f261-6bc3-4cc0-aa62-63db696a00f2",
+              "ms": 33.69999999925494,
+              "engineMs": 19.95722900000328,
+              "fromCube": true,
+              "cached": false
+            },
+            {
               "view": "grid:count",
-              "ms": 33.19999999925494,
-              "engineMs": 16.974899999997433,
+              "ms": 35.19999999925494,
+              "engineMs": 20.05762599999798,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
-              "ms": 44.09999999962747,
-              "engineMs": 17.96667299999899,
-              "fromCube": true,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
-              "ms": 51.90000000037253,
-              "engineMs": 32.52205600000161,
-              "fromCube": true,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
-              "ms": 58,
-              "engineMs": 48.68411600000036,
+              "view": "chart:chart_f1175b86-5f2c-4842-95b6-7e841c84f9fb",
+              "ms": 56.19999999925494,
+              "engineMs": 46.06600999999864,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:rows",
-              "ms": 66.69999999925494,
-              "engineMs": 21.701225999997405,
+              "ms": 67.60000000149012,
+              "engineMs": 22.624675999999454,
               "fromCube": false,
               "cached": false
             }
@@ -1980,41 +1980,41 @@
           ]
         },
         {
-          "ms": 78.90000000037253,
+          "ms": 117.09999999776483,
           "rowCount": 11506,
           "views": [
             {
+              "view": "chart:chart_046a0d08-5371-45b9-84cd-47eeb45494a7",
+              "ms": 26.199999999254942,
+              "engineMs": 16.04116100000101,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_9754f261-6bc3-4cc0-aa62-63db696a00f2",
+              "ms": 37.099999997764826,
+              "engineMs": 20.772627999998804,
+              "fromCube": true,
+              "cached": false
+            },
+            {
               "view": "grid:count",
-              "ms": 36.80000000074506,
-              "engineMs": 23.580323000001954,
+              "ms": 39.69999999925494,
+              "engineMs": 24.540718000000197,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
-              "ms": 44.20000000111759,
-              "engineMs": 26.22472900000139,
-              "fromCube": true,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
-              "ms": 58.70000000111759,
-              "engineMs": 35.23301399999764,
-              "fromCube": true,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
-              "ms": 62.70000000111759,
-              "engineMs": 38.95554800000173,
+              "view": "chart:chart_f1175b86-5f2c-4842-95b6-7e841c84f9fb",
+              "ms": 66.19999999925494,
+              "engineMs": 55.1133869999976,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:rows",
-              "ms": 78.90000000037253,
-              "engineMs": 45.856142000000546,
+              "ms": 117.09999999776483,
+              "engineMs": 93.23522800000137,
               "fromCube": false,
               "cached": false
             }
@@ -2031,41 +2031,41 @@
           ]
         },
         {
-          "ms": 48.29999999888241,
+          "ms": 50.899999998509884,
           "rowCount": 1703642,
           "views": [
             {
               "view": "grid:count",
-              "ms": 27.199999999254942,
-              "engineMs": 18.337913999999728,
-              "fromCube": true,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
-              "ms": 34.09999999962747,
-              "engineMs": 20.540016999999352,
-              "fromCube": true,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
-              "ms": 35.79999999888241,
-              "engineMs": 23.008035999999265,
+              "ms": 31.799999997019768,
+              "engineMs": 20.246649000000616,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:rows",
-              "ms": 41.899999998509884,
-              "engineMs": 27.219237000001158,
+              "ms": 43.5,
+              "engineMs": 25.66048899999805,
               "fromCube": false,
               "cached": false
             },
             {
-              "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
-              "ms": 48.29999999888241,
-              "engineMs": 36.38591699999961,
+              "view": "chart:chart_046a0d08-5371-45b9-84cd-47eeb45494a7",
+              "ms": 46.69999999925494,
+              "engineMs": 22.203428000000713,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_f1175b86-5f2c-4842-95b6-7e841c84f9fb",
+              "ms": 50.399999998509884,
+              "engineMs": 29.611919999999373,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_9754f261-6bc3-4cc0-aa62-63db696a00f2",
+              "ms": 50.899999998509884,
+              "engineMs": 23.06697400000121,
               "fromCube": true,
               "cached": false
             }
@@ -2082,42 +2082,42 @@
           ]
         },
         {
-          "ms": 77.19999999925494,
+          "ms": 57.80000000074506,
           "rowCount": 146363,
           "views": [
             {
               "view": "grid:count",
-              "ms": 39.79999999888241,
-              "engineMs": 17.622604000000138,
+              "ms": 30.5,
+              "engineMs": 15.55583900000056,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
-              "ms": 47.59999999962747,
-              "engineMs": 20.262956999999005,
-              "fromCube": true,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
-              "ms": 66.19999999925494,
-              "engineMs": 25.350625000002765,
-              "fromCube": true,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
-              "ms": 71.5,
-              "engineMs": 47.595015999999305,
+              "view": "chart:chart_9754f261-6bc3-4cc0-aa62-63db696a00f2",
+              "ms": 44.30000000074506,
+              "engineMs": 18.28461000000243,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:rows",
-              "ms": 77.09999999962747,
-              "engineMs": 27.766342999999324,
+              "ms": 48.600000001490116,
+              "engineMs": 26.396271000001434,
               "fromCube": false,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_f1175b86-5f2c-4842-95b6-7e841c84f9fb",
+              "ms": 57.20000000298023,
+              "engineMs": 37.65725400000156,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_046a0d08-5371-45b9-84cd-47eeb45494a7",
+              "ms": 57.80000000074506,
+              "engineMs": 25.029343999998673,
+              "fromCube": true,
               "cached": false
             }
           ],
@@ -2133,41 +2133,41 @@
           ]
         },
         {
-          "ms": 47.09999999962747,
+          "ms": 56.099999997764826,
           "rowCount": 3127001,
           "views": [
             {
-              "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
-              "ms": 22.399999998509884,
-              "engineMs": 14.306980999997904,
-              "fromCube": true,
-              "cached": false
-            },
-            {
               "view": "grid:count",
-              "ms": 30.299999998882413,
-              "engineMs": 15.560009999997419,
+              "ms": 34.899999998509884,
+              "engineMs": 7.564030999998067,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
-              "ms": 38,
-              "engineMs": 17.39827900000091,
+              "view": "chart:chart_046a0d08-5371-45b9-84cd-47eeb45494a7",
+              "ms": 49.5,
+              "engineMs": 15.077527000001282,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
-              "ms": 44.69999999925494,
-              "engineMs": 30.25353200000245,
+              "view": "chart:chart_f1175b86-5f2c-4842-95b6-7e841c84f9fb",
+              "ms": 54.30000000074506,
+              "engineMs": 36.95341499999995,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_9754f261-6bc3-4cc0-aa62-63db696a00f2",
+              "ms": 54.69999999925494,
+              "engineMs": 32.707784999998694,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:rows",
-              "ms": 47.09999999962747,
-              "engineMs": 23.136914999999135,
+              "ms": 56.099999997764826,
+              "engineMs": 21.913973000002443,
               "fromCube": false,
               "cached": false
             }
@@ -2184,42 +2184,42 @@
           ]
         },
         {
-          "ms": 77.29999999888241,
+          "ms": 56.899999998509884,
           "rowCount": 986137,
           "views": [
             {
+              "view": "chart:chart_046a0d08-5371-45b9-84cd-47eeb45494a7",
+              "ms": 36.599999997764826,
+              "engineMs": 26.120872999999847,
+              "fromCube": true,
+              "cached": false
+            },
+            {
               "view": "grid:count",
-              "ms": 42,
-              "engineMs": 21.15795900000012,
-              "fromCube": true,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
-              "ms": 60.09999999962747,
-              "engineMs": 23.585347000000183,
-              "fromCube": true,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
-              "ms": 69.19999999925494,
-              "engineMs": 24.75454499999978,
-              "fromCube": true,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
-              "ms": 73.5,
-              "engineMs": 47.488234000000375,
+              "ms": 40.899999998509884,
+              "engineMs": 29.09165000000212,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:rows",
-              "ms": 77.29999999888241,
-              "engineMs": 30.53982199999882,
+              "ms": 47.5,
+              "engineMs": 31.76977000000261,
               "fromCube": false,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_9754f261-6bc3-4cc0-aa62-63db696a00f2",
+              "ms": 53.80000000074506,
+              "engineMs": 37.87896600000022,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_f1175b86-5f2c-4842-95b6-7e841c84f9fb",
+              "ms": 56.899999998509884,
+              "engineMs": 44.756563999999344,
+              "fromCube": true,
               "cached": false
             }
           ],
@@ -2235,41 +2235,41 @@
           ]
         },
         {
-          "ms": 67.79999999888241,
+          "ms": 68.69999999925494,
           "rowCount": 4657562,
           "views": [
             {
-              "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
-              "ms": 22.59999999962747,
-              "engineMs": 15.690601000002061,
-              "fromCube": true,
-              "cached": false
-            },
-            {
               "view": "grid:count",
-              "ms": 33.5,
-              "engineMs": 15.557906999998522,
-              "fromCube": true,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
-              "ms": 51.5,
-              "engineMs": 20.42710200000147,
+              "ms": 32,
+              "engineMs": 11.185745999999199,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:rows",
-              "ms": 55,
-              "engineMs": 33.44045499999993,
+              "ms": 55.69999999925494,
+              "engineMs": 30.079022999998415,
               "fromCube": false,
               "cached": false
             },
             {
-              "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
-              "ms": 67.79999999888241,
-              "engineMs": 45.81275399999868,
+              "view": "chart:chart_9754f261-6bc3-4cc0-aa62-63db696a00f2",
+              "ms": 63.80000000074506,
+              "engineMs": 44.63381399999707,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_046a0d08-5371-45b9-84cd-47eeb45494a7",
+              "ms": 64.89999999850988,
+              "engineMs": 43.721026999999594,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_f1175b86-5f2c-4842-95b6-7e841c84f9fb",
+              "ms": 68.69999999925494,
+              "engineMs": 48.25371299999824,
               "fromCube": true,
               "cached": false
             }
@@ -2286,42 +2286,42 @@
           ]
         },
         {
-          "ms": 79,
+          "ms": 59.30000000074506,
           "rowCount": 1468576,
           "views": [
             {
-              "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
-              "ms": 41.90000000037253,
-              "engineMs": 24.718189999999595,
+              "view": "chart:chart_046a0d08-5371-45b9-84cd-47eeb45494a7",
+              "ms": 32.69999999925494,
+              "engineMs": 15.18009400000301,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
-              "ms": 57.09999999962747,
-              "engineMs": 30.010833000000275,
+              "view": "chart:chart_9754f261-6bc3-4cc0-aa62-63db696a00f2",
+              "ms": 41.30000000074506,
+              "engineMs": 17.676931999998487,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:count",
-              "ms": 60.59999999962747,
-              "engineMs": 25.53530099999989,
+              "ms": 42.099999997764826,
+              "engineMs": 14.637359000000288,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_f1175b86-5f2c-4842-95b6-7e841c84f9fb",
+              "ms": 58.69999999925494,
+              "engineMs": 44.06577899999684,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:rows",
-              "ms": 68.79999999888241,
-              "engineMs": 44.279356999999436,
+              "ms": 59.30000000074506,
+              "engineMs": 24.428312000000005,
               "fromCube": false,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
-              "ms": 79,
-              "engineMs": 58.19952600000033,
-              "fromCube": true,
               "cached": false
             }
           ],
@@ -2337,41 +2337,41 @@
           ]
         },
         {
-          "ms": 63.90000000037253,
+          "ms": 74.60000000149012,
           "rowCount": 215179,
           "views": [
             {
+              "view": "chart:chart_046a0d08-5371-45b9-84cd-47eeb45494a7",
+              "ms": 32.100000001490116,
+              "engineMs": 20.95813199999975,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_9754f261-6bc3-4cc0-aa62-63db696a00f2",
+              "ms": 40.600000001490116,
+              "engineMs": 26.910078999997495,
+              "fromCube": true,
+              "cached": false
+            },
+            {
               "view": "grid:count",
-              "ms": 43.30000000074506,
-              "engineMs": 26.79523699999845,
+              "ms": 50.899999998509884,
+              "engineMs": 26.464528000000428,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
-              "ms": 54.5,
-              "engineMs": 30.189722000002803,
-              "fromCube": true,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
-              "ms": 58.30000000074506,
-              "engineMs": 35.238758999999845,
-              "fromCube": true,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
-              "ms": 63.09999999962747,
-              "engineMs": 47.60506499999974,
+              "view": "chart:chart_f1175b86-5f2c-4842-95b6-7e841c84f9fb",
+              "ms": 58.19999999925494,
+              "engineMs": 42.2247180000013,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:rows",
-              "ms": 63.90000000037253,
-              "engineMs": 32.226730000002135,
+              "ms": 74.5,
+              "engineMs": 42.46013699999821,
               "fromCube": false,
               "cached": false
             }
@@ -2388,41 +2388,41 @@
           ]
         },
         {
-          "ms": 77.29999999888241,
+          "ms": 58.599999997764826,
           "rowCount": 2491747,
           "views": [
             {
               "view": "grid:count",
-              "ms": 28.299999998882413,
-              "engineMs": 17.78116500000033,
+              "ms": 29.299999997019768,
+              "engineMs": 10.906058000000485,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
-              "ms": 47.19999999925494,
-              "engineMs": 26.47289499999897,
+              "view": "chart:chart_9754f261-6bc3-4cc0-aa62-63db696a00f2",
+              "ms": 36.899999998509884,
+              "engineMs": 12.973588000000746,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
-              "ms": 53.59999999962747,
-              "engineMs": 26.733033000000432,
+              "view": "chart:chart_046a0d08-5371-45b9-84cd-47eeb45494a7",
+              "ms": 41.5,
+              "engineMs": 25.23416900000302,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
-              "ms": 71.79999999888241,
-              "engineMs": 59.62314500000139,
+              "view": "chart:chart_f1175b86-5f2c-4842-95b6-7e841c84f9fb",
+              "ms": 45.399999998509884,
+              "engineMs": 37.100100999999995,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:rows",
-              "ms": 77.29999999888241,
-              "engineMs": 50.04547199999797,
+              "ms": 58.599999997764826,
+              "engineMs": 28.87983399999939,
               "fromCube": false,
               "cached": false
             }
@@ -2439,42 +2439,42 @@
           ]
         },
         {
-          "ms": 65.39999999850988,
+          "ms": 80.09999999776483,
           "rowCount": 432829,
           "views": [
             {
-              "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
-              "ms": 39.399999998509884,
-              "engineMs": 21.63234200000079,
+              "view": "chart:chart_046a0d08-5371-45b9-84cd-47eeb45494a7",
+              "ms": 51.399999998509884,
+              "engineMs": 37.343589000000065,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:count",
-              "ms": 43.19999999925494,
-              "engineMs": 21.41010599999936,
+              "ms": 55.5,
+              "engineMs": 17.69003800000064,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
-              "ms": 47.59999999962747,
-              "engineMs": 37.13482699999804,
-              "fromCube": true,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
-              "ms": 60.79999999888241,
-              "engineMs": 47.91625800000111,
+              "view": "chart:chart_9754f261-6bc3-4cc0-aa62-63db696a00f2",
+              "ms": 58.099999997764826,
+              "engineMs": 39.39201400000093,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:rows",
-              "ms": 65.39999999850988,
-              "engineMs": 22.8845450000008,
+              "ms": 71,
+              "engineMs": 24.169889000000694,
               "fromCube": false,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_f1175b86-5f2c-4842-95b6-7e841c84f9fb",
+              "ms": 80.09999999776483,
+              "engineMs": 64.26321599999937,
+              "fromCube": true,
               "cached": false
             }
           ],
@@ -2490,42 +2490,42 @@
           ]
         },
         {
-          "ms": 83.5,
+          "ms": 63,
           "rowCount": 2160160,
           "views": [
             {
               "view": "grid:count",
-              "ms": 35.59999999962747,
-              "engineMs": 15.48747000000003,
+              "ms": 41.599999997764826,
+              "engineMs": 16.89462800000183,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
-              "ms": 46,
-              "engineMs": 17.33734800000093,
+              "view": "chart:chart_046a0d08-5371-45b9-84cd-47eeb45494a7",
+              "ms": 56.899999998509884,
+              "engineMs": 25.54020600000149,
               "fromCube": true,
               "cached": false
             },
             {
-              "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
-              "ms": 57,
-              "engineMs": 23.809848000000784,
+              "view": "chart:chart_9754f261-6bc3-4cc0-aa62-63db696a00f2",
+              "ms": 58.899999998509884,
+              "engineMs": 33.65070399999968,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_f1175b86-5f2c-4842-95b6-7e841c84f9fb",
+              "ms": 62.399999998509884,
+              "engineMs": 50.606338999998115,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:rows",
-              "ms": 58,
-              "engineMs": 24.19824300000255,
+              "ms": 63,
+              "engineMs": 27.652180000000953,
               "fromCube": false,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
-              "ms": 83.5,
-              "engineMs": 49.418625000002066,
-              "fromCube": true,
               "cached": false
             }
           ],
@@ -2541,42 +2541,42 @@
           ]
         },
         {
-          "ms": 59.90000000037253,
+          "ms": 59.80000000074506,
           "rowCount": 1000753,
           "views": [
             {
-              "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
-              "ms": 23.199999999254942,
-              "engineMs": 16.042766999999003,
-              "fromCube": true,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
-              "ms": 32.40000000037253,
-              "engineMs": 16.110925999997562,
+              "view": "chart:chart_9754f261-6bc3-4cc0-aa62-63db696a00f2",
+              "ms": 30.900000002235174,
+              "engineMs": 17.61854900000253,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:count",
-              "ms": 45,
-              "engineMs": 17.868537999998807,
-              "fromCube": true,
-              "cached": false
-            },
-            {
-              "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
-              "ms": 52.80000000074506,
-              "engineMs": 27.006569000001036,
+              "ms": 51.900000002235174,
+              "engineMs": 29.132188999999926,
               "fromCube": true,
               "cached": false
             },
             {
               "view": "grid:rows",
-              "ms": 59.90000000037253,
-              "engineMs": 27.771726000002673,
+              "ms": 54,
+              "engineMs": 24.73609100000249,
               "fromCube": false,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_046a0d08-5371-45b9-84cd-47eeb45494a7",
+              "ms": 57,
+              "engineMs": 31.240907999999763,
+              "fromCube": true,
+              "cached": false
+            },
+            {
+              "view": "chart:chart_f1175b86-5f2c-4842-95b6-7e841c84f9fb",
+              "ms": 59.80000000074506,
+              "engineMs": 41.994049999997515,
+              "fromCube": true,
               "cached": false
             }
           ],
@@ -2593,41 +2593,41 @@
         }
       ],
       "firstBrush": {
-        "ms": 5355.300000000745,
+        "ms": 5037,
         "rowCount": 4344563,
         "views": [
           {
             "view": "grid:rows",
-            "ms": 215.69999999925494,
-            "engineMs": 131.74233800000002,
+            "ms": 142.80000000074506,
+            "engineMs": 71.93047099999967,
             "fromCube": false,
             "cached": false
           },
           {
             "view": "grid:count",
-            "ms": 1387.5,
-            "engineMs": 1312.178366,
+            "ms": 1630.699999999255,
+            "engineMs": 1577.786333,
             "fromCube": true,
             "cached": false
           },
           {
-            "view": "chart:chart_00011c5f-ec95-45ec-8611-21d149afd7fb",
-            "ms": 2738.89999999851,
-            "engineMs": 2658.641667,
+            "view": "chart:chart_046a0d08-5371-45b9-84cd-47eeb45494a7",
+            "ms": 2874.199999999255,
+            "engineMs": 2818.975759000001,
             "fromCube": true,
             "cached": false
           },
           {
-            "view": "chart:chart_8d70a77a-c7cb-41dc-8b2f-4b1fc94b6377",
-            "ms": 4265.0999999996275,
-            "engineMs": 4160.072181,
+            "view": "chart:chart_9754f261-6bc3-4cc0-aa62-63db696a00f2",
+            "ms": 4260.5,
+            "engineMs": 4199.492343,
             "fromCube": true,
             "cached": false
           },
           {
-            "view": "chart:chart_84815b24-f69c-47e0-9832-f47afd726ede",
-            "ms": 5355.199999999255,
-            "engineMs": 5265.818524,
+            "view": "chart:chart_f1175b86-5f2c-4842-95b6-7e841c84f9fb",
+            "ms": 5037,
+            "engineMs": 4986.592944,
             "fromCube": true,
             "cached": false
           }
@@ -2643,9 +2643,9 @@
           }
         ],
         "prepare": {
-          "ms": 5901.699999999255,
+          "ms": 5568.39999999851,
           "detail": {
-            "source": "chart_a74b5505-35db-44a7-97b7-022758fde2a7",
+            "source": "chart_fbbb6526-c408-4bb5-87b8-51e3fbe5446f",
             "dimension": "trip_distance width 1",
             "cubes": [
               {
@@ -2665,7 +2665,7 @@
                 "rows": 31
               }
             ],
-            "engineMs": 5892.332093000001
+            "engineMs": 5555.885966
           }
         }
       }

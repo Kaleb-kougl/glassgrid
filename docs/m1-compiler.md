@@ -21,7 +21,10 @@ type CompiledQuery = { sql: string; params: unknown[] }          // $1 is params
   with `quoteIdent` (e.g. `"v_<handle>"`).
 - `columns` is the table's profile. The compiler reads `name` and `type`, plus
   `min`/`max` for automatic bins and time units. Temporal min/max are ISO
-  strings (`2024-01-31`, `2024-01-31 12:00:00`) or epoch ms.
+  strings (`2024-01-31`, `2024-01-31 12:00:00`) or epoch ms. An optional
+  `duckdbType` (DuckDB's type name, as the engine's profile carries it) lets
+  the compiler pick cheaper group keys with identical results (see
+  [Group keys](#group-keys)); without it the SQL is as before.
 - Identifiers are always double-quoted with embedded quotes doubled. Every data
   value (filter values, bin widths, limits, offsets, pixel width) is a `$n`
   parameter wrapped in an explicit `CAST`, so results do not depend on how the
@@ -65,9 +68,9 @@ names never collide with internal aliases.
 | Mark | Shape | Columns returned |
 | --- | --- | --- |
 | bar | `GROUP BY gx ORDER BY y DESC NULLS LAST, gx ASC NULLS LAST LIMIT $n` (default 20, max 1000). `x.timeUnit` allowed on temporal x | `x, y` |
-| histogram | `gx = floor(CAST(x AS DOUBLE) / $w)`, returns `gx*$w`, `(gx+1)*$w`, `ORDER BY gx`. Auto width: smallest 1/2/5×10ⁿ ≥ (max−min)/50 from the profile (≥ 1 for integers). Temporal x: `date_trunc(unit)`, auto unit closest to 50 buckets | `x, x_end, y` |
-| line / area | bucket (`date_trunc` with `timeUnit` or auto: finest of hour/day/month with ≤ 20,000 buckets; numeric x raw or binned), aggregate, then M4 (below) | `x, y` |
-| heatmap | both axes binned like histogram with target 100 per axis; cell = `count(*)` | `x, x_end, y, y_end, count` |
+| histogram | `gx = floor(CAST(x AS DOUBLE) / $w)`, returns `gx*$w`, `(gx+1)*$w`, `ORDER BY gx`. Auto width: smallest 1/2/5×10ⁿ ≥ (max−min)/50 from the profile (≥ 1 for integers). Temporal x: time buckets (`date_trunc(unit)` or an integer key, see Group keys), auto unit closest to 50 buckets | `x, x_end, y` |
+| line / area | bucket (time buckets with `timeUnit` or auto: finest of hour/day/month with ≤ 20,000 buckets; numeric x raw or binned), aggregate, then M4 (below) | `x, y` |
+| heatmap | both axes binned like histogram with target 100 per axis; cell = `count(*)`; one combined key when the profile bounds both numeric axes (Group keys) | `x, x_end, y, y_end, count` |
 | scatter | raw `x, y` with x and y not NULL, `LIMIT $n` (default and max 50,000) | `x, y` |
 
 Measures: no `y` means `count(*)`; `count(col)` counts non-NULL; `sum`/`avg`
@@ -85,6 +88,40 @@ last, ties by series value ascending, NULLs last. It keeps the top 8.
 measure is recomputed from its raw rows. The result holds at most 9 series. A
 bar chart with colour picks the top N x values by total measure, then splits
 each bar by folded series.
+
+## Group keys
+
+Bucket starts and bin edges are always computed after the GROUP BY, on the
+aggregated rows. What the rows are grouped on can be cheaper than the bucket
+itself, with the same partition and therefore the same result (same values,
+types, NULL handling and order):
+
+- **Time buckets** are `date_trunc(unit, x)`, except on a column whose
+  `duckdbType` is `TIMESTAMP` (zone-less, microseconds) for line/area,
+  histogram and heatmap axes:
+  - hour: `CASE WHEN epoch_us(x) >= 0 THEN epoch_us(x) // 3600000000 ELSE
+    coalesce((epoch_us(x) + 1) // 3600000000 - 1, <±infinity sentinel>) END`
+    (BIGINT `//` truncates, so times before 1970 take the floor branch;
+    `epoch_us(±infinity)` is NULL, so ±infinity get the keys ±(2⁶³ − 1) and a
+    NULL timestamp stays NULL), turned back with
+    `make_timestamp(gx * 3600000000)` (or `±infinity`);
+  - day: `CAST(x AS DATE)`, turned back with `CAST(gx AS TIMESTAMP)`.
+
+  `x_end` is the start plus `INTERVAL 1 HOUR/DAY`, and M4's `xn` is
+  `epoch_us` of the start, as before. Months, `TIMESTAMP WITH TIME ZONE`
+  (its `date_trunc` follows the session time zone), DATE (`date_trunc` on
+  DATE fails for ±infinity, which the DATE key would not), other or missing
+  types, bar charts (whose `x` is the key itself) and cube `gb` columns keep
+  `date_trunc`. On 10M rows the hourly key groups in 118 ms where
+  `date_trunc('hour')` takes 175–190 ms.
+- **Heatmap cells** of two numeric axes whose profiled min and max fall in
+  bins within ±2²⁴ are grouped on one DOUBLE key,
+  `floor(x / $wx) * 2²⁶ + floor(y / $wy)`, in `__gg_cells`:
+  `gx = round(gxy / 2²⁶)`, `gy = gxy − gx * 2²⁶`. Bins below 2²⁶ (x) and 2²⁵
+  (y) keep the key an exact integer under 2⁵³ with `|gy / 2²⁶| < ½`, so the
+  decode is exact even if the data exceeded the profile's range twofold.
+  Time axes, missing or non-finite profile extremes (NaN, ±infinity) and
+  far-from-zero ranges keep `GROUP BY gx, gy`.
 
 ## NULL semantics
 
@@ -149,6 +186,12 @@ The engine decides the fallback, because only it can count:
 - `test/compiler.property.test.ts`: fast-check, seed 20261017, 200 runs per
   property. Seven properties: filters (`compileWhere` and count), rows,
   bar, histogram, heatmap, line/area with M4, and scatter with its count.
+- `test/fast-keys.property.test.ts` (seed 20261018): the line/area,
+  histogram and heatmap properties again with DuckDB types in the profile,
+  plus their cube answers; and the old vs the new group keys compared
+  exactly (names, DuckDB types, values, order) on edge data: microseconds
+  around bucket edges and the epoch, years 1–9999, DuckDB's extreme
+  timestamps, ±infinity, NULLs, empty and single-row tables.
   - **Data:** each run builds a random table with every type present, 0 to 60
     rows, NULLs, duplicates and hostile column names, loads it into in-memory
     DuckDB, runs the compiled SQL and compares the rows with a plain JS
