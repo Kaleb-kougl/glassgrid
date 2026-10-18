@@ -606,10 +606,11 @@ export class QueryService extends EventEmitter<QueryServiceEvents> {
     const key = this.key(state, ['count', fragmentKey(where)]);
     const hit = this.results.get(key);
     if (hit?.kind === 'count') return { value: hit.rowCount, cached: true };
-    if (!where && state.rowCount !== undefined) return { value: state.rowCount, cached: true };
 
     const value = await this.inflight.run(key, ctx.signal, async (signal): Promise<CachedValue> => {
-      await this.awaitConversion(state, signal);
+      // An unfiltered count parses little of each line, so it is cheaper than waiting for the
+      // conversion; it is the row count the grid shows right after open.
+      if (where) await this.awaitConversion(state, signal);
       const rowCount = await this.withConnection(state, signal, async (connection) => {
         const reader = await connection.runAndReadAll(sql, bind(where?.params));
         return toCount(reader.getRows()[0]?.[0] ?? null);
