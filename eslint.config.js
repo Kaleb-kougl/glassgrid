@@ -92,6 +92,8 @@ export default defineConfig(
       'apps/desktop/src/engine/**',
       '**/*.config.ts',
       'apps/desktop/e2e/**',
+      'apps/web/e2e/**',
+      'apps/web/scripts/**',
       'tools/**',
       'packages/ui/bench/*.ts',
       ...ENGINE_NODE_FILES,
@@ -107,7 +109,7 @@ export default defineConfig(
     languageOptions: { globals: { ...globals.browser, process: 'readonly' } },
   },
   {
-    files: ['apps/desktop/src/renderer/**', 'apps/web/src/**', 'packages/ui/src/**', 'packages/ui/bench/grid/**', 'packages/ui/bench/charts/**'],
+    files: ['apps/desktop/src/renderer/**', 'apps/web/src/**', 'packages/app/src/**', 'packages/ui/src/**', 'packages/ui/bench/grid/**', 'packages/ui/bench/charts/**'],
     languageOptions: { globals: globals.browser },
   },
   {
@@ -184,5 +186,23 @@ export default defineConfig(
     // Renderer code (desktop and web) runs in a sandboxed browser context.
     files: ['apps/desktop/src/renderer/**', 'apps/web/src/**', 'packages/ui/src/**'],
     rules: { 'no-restricted-imports': ['error', nodeOnlyImports] },
+  },
+  {
+    // The app is shared by both shells: no Electron, no Node, and nothing
+    // from a shell. Platform specifics arrive through its Platform interface.
+    files: ['packages/app/src/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: nodeOnlyImports.paths,
+          patterns: [
+            ...nodeOnlyImports.patterns,
+            { group: ['@glassgrid/desktop', '@glassgrid/desktop/*', '@glassgrid/web', '@glassgrid/web/*'], message: 'The app must not depend on a shell; add what it needs to Platform.' },
+            { group: ['**/apps/**'], message: 'The app must not depend on a shell; add what it needs to Platform.' },
+          ],
+        },
+      ],
+    },
   },
 );

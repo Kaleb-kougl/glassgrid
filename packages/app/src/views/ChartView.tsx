@@ -36,13 +36,13 @@ import {
   type ResolvedTokens,
 } from '@glassgrid/ui';
 import { axisExpression, chartTitle, yExpression } from '../describe';
-import type { EngineClient } from '../engine-client';
+import type { EngineClientLike } from '../engine';
 import { renderPerf } from '../render-perf-core';
 import { useChartQuery, type ChartResult } from './chart-data';
 import { brushInputOf, intervalOf, intervalSummary, selectedBarKeys, toggleBar } from './selection';
 
 export interface ChartViewProps {
-  engine: Pick<EngineClient, 'aggregate'>;
+  engine: Pick<EngineClientLike, 'aggregate'>;
   tableId: TableId | null;
   /** Bumped when the engine's data changed under the same spec (type overrides, engine restart). */
   dataVersion: number;

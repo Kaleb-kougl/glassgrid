@@ -1,0 +1,44 @@
+{
+  "name": "@glassgrid/app",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The Glassgrid React app (workspace, grid, charts, cross-filtering), shared by the desktop and web shells through a Platform interface.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": [
+    "*.css",
+    "./src/render-perf-core.ts"
+  ],
+  "exports": {
+    ".": "./src/index.ts",
+    "./perf": "./src/perf.ts",
+    "./render-perf-core": "./src/render-perf-core.ts",
+    "./app.css": "./src/app.css"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.lib.json && tsc --noEmit -p tsconfig.node.json",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "dependencies": {
+    "@glassgrid/core": "workspace:*",
+    "@glassgrid/ui": "workspace:*",
+    "apache-arrow": "21.2.0"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "10.4.2",
+    "@testing-library/react": "16.3.3",
+    "@types/node": "24.19.2",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "jsdom": "30.1.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "typescript": "6.0.3",
+    "vite": "8.3.4",
+    "vitest": "5.0.5"
+  }
+}

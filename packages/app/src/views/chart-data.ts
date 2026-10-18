@@ -1,7 +1,7 @@
 import type { Table } from 'apache-arrow';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ChartViewQuery, Mark, TableId } from '@glassgrid/core';
-import { isAbandoned, type EngineClient } from '../engine-client';
+import { isAbandoned, type EngineClientLike } from '../engine';
 import { AGGREGATE_MEASURE, type AggregateMeasureDetail } from '../perf';
 import { renderPerf } from '../render-perf-core';
 
@@ -52,7 +52,7 @@ function measure(start: string, detail: AggregateMeasureDetail): void {
  * but is not part of the key (it never changes the answer).
  */
 export function useChartQuery(
-  engine: Pick<EngineClient, 'aggregate'>,
+  engine: Pick<EngineClientLike, 'aggregate'>,
   tableId: TableId | null,
   query: ChartViewQuery,
   pixelWidth: number,

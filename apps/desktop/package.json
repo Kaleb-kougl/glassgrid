@@ -25,6 +25,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
+    "@glassgrid/app": "workspace:*",
     "@glassgrid/core": "workspace:*",
     "@glassgrid/engine": "workspace:*",
     "@glassgrid/ui": "workspace:*",

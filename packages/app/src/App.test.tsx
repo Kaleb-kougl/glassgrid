@@ -2,127 +2,29 @@
  * @vitest-environment jsdom
  */
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { tableFromArrays } from 'apache-arrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { tableIdForFile, toFileHandle, type FilterInput, type MenuCommand, type SortKey, type TableHandle } from '@glassgrid/core';
-import { App, formatNulls, type AppProps } from './App';
-import { EngineRequestError } from './engine-client';
+import { tableIdForFile, toFileHandle, type MenuCommand } from '@glassgrid/core';
+import { App, formatNulls } from './App';
+import { EngineError } from './engine';
+import { fakeEngine, handle, table, tableId } from './test-support/fake-engine';
+import { fakePlatform } from './test-support/fake-platform';
+import { stubLayout } from './test-support/jsdom';
 import { THEME_STORAGE_KEY } from './theme';
 import { createAppWorkspace } from './workspace';
-
-const handle = toFileHandle('0b6c8f0e-6d0a-4f43-9d3e-2f1f1a0d9c11');
-const tableId = tableIdForFile(handle);
-const table: TableHandle = {
-  id: tableId,
-  file: handle,
-  fileName: 'trips.csv',
-  fingerprint: { sizeBytes: 2048, mtimeMs: 1, headTailSha256: 'a'.repeat(64), key: 'b'.repeat(32) },
-  usingParquetCache: false,
-  columns: [
-    { name: 'id', type: 'integer', duckdbType: 'BIGINT' },
-    { name: 'category', type: 'text', duckdbType: 'VARCHAR' },
-    { name: 'amount', type: 'float', duckdbType: 'DOUBLE' },
-  ],
-};
-
-interface PageView {
-  viewId?: string;
-  sort?: SortKey[];
-  filters?: readonly FilterInput[];
-}
-
-/** Result rows shaped like the compiler's for each mark. */
-function aggregateTable(mark: string) {
-  const f64 = (values: number[]) => Float64Array.from(values);
-  switch (mark) {
-    case 'histogram':
-      return tableFromArrays({ x: f64([0, 1, 2]), x_end: f64([1, 2, 3]), y: f64([5, 3, 1]) });
-    case 'line':
-    case 'area':
-    case 'scatter':
-      return tableFromArrays({ x: f64([0, 1, 2, 3]), y: f64([4, 6, 5, 7]) });
-    case 'heatmap':
-      return tableFromArrays({ x: f64([0, 1]), x_end: f64([1, 2]), y: f64([0, 0]), y_end: f64([1, 1]), count: f64([3, 4]) });
-    default:
-      return tableFromArrays({ x: ['alpha', 'bravo'], y: Float64Array.from([7, 5]) });
-  }
-}
-
-function fakeEngine() {
-  const timing = { engineMs: 1, cached: false };
-  const restartListeners = new Set<() => void>();
-  /** Every page the grid fetched: view, offset and limit. */
-  const pages: { table: string; view: PageView; offset: number; limit: number }[] = [];
-  return {
-    pages,
-    restart: () => restartListeners.forEach((listener) => listener()),
-    open: vi.fn(() => Promise.resolve({ table, engineMs: 3 })),
-    pageFetcher: vi.fn((tableId: string, view: PageView = {}) => (offset: number, limit: number) => {
-      pages.push({ table: tableId, view, offset, limit });
-      return Promise.resolve({
-        table: tableFromArrays({ id: Int32Array.from([1, 2]), category: ['alpha', null], amount: Float64Array.from([1.5, 2]) }),
-        ...timing,
-      });
-    }),
-    setColumnTypes: vi.fn((tableId: string, overrides: readonly { column: string; type: string }[]) =>
-      Promise.resolve({
-        table: { ...table, id: tableId as TableHandle['id'], typeOverrides: overrides.map((o) => ({ ...o })) } as TableHandle,
-        columns: overrides.map((o) => ({ column: o.column, type: o.type as 'text', duckdbType: 'VARCHAR', failedCasts: o.type === 'integer' ? 1_234 : 0 })),
-        engineMs: 2,
-      }),
-    ),
-    closeTable: vi.fn(() => Promise.resolve()),
-    onRestarted: vi.fn((listener: () => void) => {
-      restartListeners.add(listener);
-      return () => restartListeners.delete(listener);
-    }),
-    profile: vi.fn(() =>
-      Promise.resolve({
-        rowCount: 2,
-        columns: table.columns.map((c, i) => ({ ...c, nullFraction: 0, distinctCount: [2, 12_345, 8_410_000][i] ?? 0, min: null, max: null })),
-        ...timing,
-      }),
-    ),
-    count: vi.fn((_table: string, options: { filters?: readonly unknown[] } = {}) =>
-      Promise.resolve({ rowCount: options.filters?.length ? 1 : 2, ...timing }),
-    ),
-    aggregate: vi.fn((_table: string, spec: { mark: string }, _options?: unknown) =>
-      Promise.resolve({
-        table: aggregateTable(spec.mark),
-        mark: spec.mark as 'bar',
-        fellBackToHeatmap: false,
-        fromCube: false,
-        ...timing,
-      }),
-    ),
-    prepareCrossfilter: vi.fn(() => Promise.resolve({ cubes: [], engineMs: 1 })),
-    onEvent: vi.fn(() => () => undefined),
-  } satisfies AppProps['engine'] & Record<string, unknown>;
-}
 
 function renderApp() {
   let id = 0;
   const workspace = createAppWorkspace({ clock: () => 1_000, newId: (prefix) => `${prefix}_${++id}` });
   const engine = fakeEngine();
-  const menuListeners = new Set<(command: MenuCommand) => void>();
-  const bridge = {
-    platform: 'linux',
-    openCsv: vi.fn(() => Promise.resolve({ status: 'opened' as const, file: { handle, displayName: 'trips.csv', sizeBytes: 2048 } })),
-    openDroppedFile: vi.fn(() => Promise.resolve({ status: 'failed' as const, message: 'notes.txt is not a file on this computer' })),
-    setTheme: vi.fn(),
-    onMenuCommand: (listener: (command: MenuCommand) => void) => {
-      menuListeners.add(listener);
-      return () => menuListeners.delete(listener);
-    },
-    clipboard: { writeText: vi.fn((_text: string) => Promise.resolve()) },
-  } satisfies AppProps['bridge'];
-  render(<App engine={engine} bridge={bridge} workspace={workspace} />);
+  const fake = fakePlatform(engine, {
+    picked: { status: 'opened', file: { handle, displayName: 'trips.csv', sizeBytes: 2048 } },
+    dropped: { status: 'failed', message: 'notes.txt is not a file on this computer' },
+  });
+  render(<App platform={fake.platform} workspace={workspace} />);
   const menu = (command: MenuCommand) => {
-    act(() => {
-      menuListeners.forEach((listener) => listener(command));
-    });
+    act(() => fake.menu(command));
   };
-  return { engine, workspace, bridge, menu };
+  return { engine, workspace, files: fake.files, clipboard: fake.clipboard, shell: fake.shell, menu, close: fake.close };
 }
 
 async function openFile() {
@@ -180,38 +82,8 @@ function historyEntries() {
   return entries;
 }
 
-/** A 2D context that draws nothing: jsdom has no canvas backend. */
-function nullContext(): CanvasRenderingContext2D {
-  const target: Record<string | symbol, unknown> = {};
-  return new Proxy(target, {
-    get: (target, key) => {
-      if (key in target) return target[key];
-      if (key === 'measureText') return (text: string) => ({ width: text.length * 7 });
-      return () => undefined;
-    },
-    set: (target, key, value) => {
-      target[key] = value;
-      return true;
-    },
-  }) as unknown as CanvasRenderingContext2D;
-}
-
 beforeEach(() => {
-  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(() => nullContext());
-  // jsdom does no layout: give the grid's scroller a viewport.
-  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(function (this: HTMLElement) {
-    // ...and the chart plots a width, so brushable charts build their models.
-    return this.classList.contains('gg-cgrid__scroller') ? 800 : this.classList.contains('gg-chart__plot') ? 300 : 0;
-  });
-  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(function (this: HTMLElement) {
-    return this.classList.contains('gg-cgrid__scroller') ? 400 : 0;
-  });
-  window.matchMedia = vi.fn((query: string) => ({
-    matches: false,
-    media: query,
-    addEventListener: () => undefined,
-    removeEventListener: () => undefined,
-  })) as unknown as typeof window.matchMedia;
+  stubLayout();
   window.localStorage.clear();
 });
 
@@ -369,22 +241,22 @@ describe('App', () => {
   });
 
   it('copies the selection as TSV through copySelection and the preload clipboard', async () => {
-    const { workspace, bridge } = await openFile();
+    const { workspace, clipboard } = await openFile();
     press(cell(0, 0), { key: 'ArrowDown', shiftKey: true });
     press(cell(1, 0), { key: 'ArrowRight', shiftKey: true });
     press(cell(1, 1), { key: 'c', ctrlKey: true });
-    await waitFor(() => expect(bridge.clipboard.writeText).toHaveBeenCalledWith('1\talpha\n2\t'));
+    await waitFor(() => expect(clipboard.writeText).toHaveBeenCalledWith('1\talpha\n2\t'));
     await waitFor(() => expect(toastWith('Copied 2 rows × 2 columns.')).toBeDefined());
     // Write tier: an AI caller is refused (no confirmation UI yet), and nothing is recorded.
     await expect(workspace.registry.dispatch('copySelection', {}, { caller: 'ai' })).rejects.toMatchObject({ code: 'forbidden' });
-    expect(bridge.clipboard.writeText).toHaveBeenCalledTimes(1);
+    expect(clipboard.writeText).toHaveBeenCalledTimes(1);
     expect(workspace.store.getHistory().past.map((entry) => entry.name)).toEqual(['openFile']);
   });
 
   it('closes the previous table when another file replaces it', async () => {
-    const { engine, bridge } = await openFile();
+    const { engine, files } = await openFile();
     const second = toFileHandle('1b6c8f0e-6d0a-4f43-9d3e-2f1f1a0d9c22');
-    bridge.openCsv.mockResolvedValueOnce({ status: 'opened', file: { handle: second, displayName: 'b.csv', sizeBytes: 10 } });
+    files.pickCsv.mockResolvedValueOnce({ status: 'opened', file: { handle: second, displayName: 'b.csv', sizeBytes: 10 } });
     engine.open.mockResolvedValueOnce({ table: { ...table, id: tableIdForFile(second), file: second, fileName: 'b.csv' }, engineMs: 1 });
     fireEvent.click(screen.getByTestId('open-csv'));
     await waitFor(() => expect(screen.getByTestId('file-name').textContent).toBe('b.csv'));
@@ -438,7 +310,7 @@ describe('App', () => {
   it('shows the engine message on a chart that cannot be computed', async () => {
     const { engine, workspace } = await openFile();
     engine.aggregate.mockImplementationOnce(() =>
-      Promise.reject(new EngineRequestError('bad_request', 'y.aggregate "sum" needs a numeric column, but "category" is text. Use "count" instead.', 'y.aggregate')),
+      Promise.reject(new EngineError('bad_request', 'y.aggregate "sum" needs a numeric column, but "category" is text. Use "count" instead.', 'y.aggregate')),
     );
     await act(() => workspace.registry.dispatch('addChart', { spec: { mark: 'bar', x: { column: 'id' }, y: { column: 'category', aggregate: 'sum' } } }, { caller: 'ai' }));
     const alert = await screen.findByRole('alert');
@@ -447,35 +319,35 @@ describe('App', () => {
     expect(screen.getByText('by AI')).toBeDefined();
   });
 
-  it('opens a dropped file through the bridge and reports a refused drop', async () => {
-    const { bridge } = renderApp();
+  it('opens a dropped file through the platform and reports a refused drop', async () => {
+    const { files } = renderApp();
     const file = new File(['a,b\n'], 'notes.txt');
     const zone = screen.getByTestId('app');
     fireEvent.dragOver(zone, { dataTransfer: { types: ['Files'], files: [file], dropEffect: 'none' } });
     expect(screen.getByTestId('empty-state').getAttribute('data-over')).toBe('true');
     fireEvent.drop(zone, { dataTransfer: { types: ['Files'], files: [file] } });
-    expect(bridge.openDroppedFile).toHaveBeenCalledWith(file);
+    expect(files.openDropped).toHaveBeenCalledWith(file);
     expect((await screen.findByRole('alert')).textContent).toContain('notes.txt is not a file on this computer');
-    expect(bridge.openCsv).not.toHaveBeenCalled();
+    expect(files.pickCsv).not.toHaveBeenCalled();
   });
 
   it('follows View → Theme and remembers the choice', () => {
-    const { bridge, menu } = renderApp();
+    const { shell, menu } = renderApp();
     expect(document.documentElement.dataset['ggTheme']).toBe('light');
-    expect(bridge.setTheme).toHaveBeenLastCalledWith('system');
+    expect(shell.syncTheme).toHaveBeenLastCalledWith('system');
     menu({ kind: 'theme', theme: 'dark' });
     expect(document.documentElement.dataset['ggTheme']).toBe('dark');
     expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark');
-    expect(bridge.setTheme).toHaveBeenLastCalledWith('dark');
+    expect(shell.syncTheme).toHaveBeenLastCalledWith('dark');
     menu({ kind: 'theme', theme: 'system' });
     expect(document.documentElement.dataset['ggTheme']).toBe('light');
     expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBeNull();
   });
 
   it('opens from File → Open', async () => {
-    const { bridge, menu } = renderApp();
+    const { files, menu } = renderApp();
     menu({ kind: 'open' });
-    expect(bridge.openCsv).toHaveBeenCalledOnce();
+    expect(files.pickCsv).toHaveBeenCalledOnce();
     expect(await screen.findByTestId('file-name')).toBeDefined();
   });
 

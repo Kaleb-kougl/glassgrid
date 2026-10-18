@@ -1,0 +1,11 @@
+{
+  // Build and test tooling in Node: Vite/Vitest/Playwright configs, the
+  // bundle-size check and the Playwright smoke tests (with DOM types for
+  // callbacks evaluated in the page).
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM"],
+    "types": ["node"]
+  },
+  "include": ["vite.config.ts", "vitest.config.ts", "playwright.config.ts", "scripts", "e2e"]
+}

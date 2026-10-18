@@ -422,6 +422,13 @@ export interface RenderPerfApi {
 }
 
 declare global {
+  /**
+   * Build-time flag (each shell's Vite `define`): true only in
+   * `GLASSGRID_RENDER_PERF=1` builds, which compile in this module and
+   * render-perf.ts. Declared here, the module every user of the flag imports.
+   */
+  const __GG_RENDER_PERF__: boolean;
+
   interface Window {
     __ggRenderPerf?: RenderPerfApi;
   }

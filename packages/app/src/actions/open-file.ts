@@ -1,23 +1,21 @@
-import {
-  OpenCsvResultSchema,
-  type CommandRegistry,
-  type GlassgridBridge,
-  type OpenedFile,
-  type TableHandle,
-} from '@glassgrid/core';
-import type { EngineClient } from '../engine-client';
+import { formatBytes, OpenCsvResultSchema, type CommandRegistry, type OpenedFile, type TableHandle } from '@glassgrid/core';
+import type { EngineClientLike } from '../engine';
+import type { PlatformFiles } from '../platform';
 
 /** What the open action needs; narrow so tests can pass fakes. */
 export interface OpenFileDeps {
-  readonly bridge: Pick<GlassgridBridge, 'openCsv'>;
-  readonly engine: Pick<EngineClient, 'open'>;
+  readonly files: Pick<PlatformFiles, 'pickCsv'>;
+  readonly engine: Pick<EngineClientLike, 'open'>;
   readonly registry: Pick<CommandRegistry, 'dispatch'>;
   /**
-   * Where the file comes from; defaults to main's open dialog. Drag and drop
-   * passes `() => bridge.openDroppedFile(file)`: the preload resolves the path
-   * and main registers it, so either way the page only sees a handle.
+   * Where the file comes from; defaults to the platform's picker (desktop:
+   * main's open dialog). Drag and drop passes `() => files.openDropped(file)`,
+   * a sample `() => files.openSample(id)`: either way the shell registers the
+   * file and the page only sees a handle.
    */
   readonly pick?: () => Promise<unknown>;
+  /** The platform's file size limit (`capabilities.maxFileBytes`); null or absent for none. */
+  readonly maxFileBytes?: number | null;
   /** Called after the engine opened the table, just before `openFile` changes the state. */
   readonly onEngineOpened?: (table: TableHandle, engineMs: number) => void;
 }
@@ -36,7 +34,8 @@ export type OpenFileOutcome =
 
 /**
  * The async half of "open a file" (see docs/m1-commands.md, "The async action
- * pattern"): main's native dialog registers the file and returns a handle,
+ * pattern"): the platform's picker (main's native dialog on desktop)
+ * registers the file and returns a handle,
  * the engine opens it (fingerprint and inferred column types), and only then
  * the synchronous `openFile` command records the result. Undo therefore never
  * re-runs engine work.
@@ -46,9 +45,15 @@ export type OpenFileOutcome =
  * appears without waiting for a full-table profile scan.
  */
 export async function openFileAction(deps: OpenFileDeps): Promise<OpenFileOutcome> {
-  const picked = OpenCsvResultSchema.parse(await (deps.pick ?? (() => deps.bridge.openCsv()))());
+  const picked = OpenCsvResultSchema.parse(await (deps.pick ?? (() => deps.files.pickCsv()))());
   if (picked.status === 'cancelled') return { status: 'cancelled' };
   if (picked.status === 'failed') throw new Error(`Could not open file: ${picked.message}`);
+  const limit = deps.maxFileBytes ?? null;
+  if (limit !== null && picked.file.sizeBytes > limit) {
+    throw new Error(
+      `Could not open file: ${picked.file.displayName} is ${formatBytes(picked.file.sizeBytes)}; files up to ${formatBytes(limit)} open here. The desktop app opens larger files.`,
+    );
+  }
 
   const { table, engineMs } = await deps.engine.open(picked.file.handle);
   deps.onEngineOpened?.(table, engineMs);

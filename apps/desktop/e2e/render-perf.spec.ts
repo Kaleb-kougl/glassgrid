@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type CDPSession, type ElectronApplication, type Page } from '@playwright/test';
-import type { RenderPerfRecording } from '../src/renderer/src/perf';
+import type { RenderPerfRecording } from '@glassgrid/app/perf';
 import { BRUSH_PATH, brush, DROPS, dropColumns, openTrips, type Mark } from './charts';
 import { writeTripsCsv } from './csv-fixture';
 import {

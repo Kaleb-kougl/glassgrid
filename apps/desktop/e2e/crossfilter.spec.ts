@@ -6,7 +6,7 @@ import {
   CROSSFILTER_PREPARE_MEASURE,
   type CrossfilterMeasureDetail,
   type CrossfilterPrepareMeasureDetail,
-} from '../src/renderer/src/perf';
+} from '@glassgrid/app/perf';
 import { BRUSH_PATH, brush, card, cardMenu, clickBar, DROPS, dropColumns, openTrips, plotBox, removeAllChips, removeChart, type Mark } from './charts';
 import { PAYMENT_TYPES, writeTripsCsv } from './csv-fixture';
 import { SqlReference, type ReferenceFilter } from './sql-reference';

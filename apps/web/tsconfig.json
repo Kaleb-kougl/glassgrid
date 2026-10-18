@@ -1,9 +1,6 @@
 {
-  "extends": "../../tsconfig.base.json",
-  "compilerOptions": {
-    "lib": ["ES2023", "DOM", "DOM.Iterable"],
-    "jsx": "react-jsx",
-    "types": ["vite/client"]
-  },
-  "include": ["src", "vite.config.ts"]
+  // Solution file for editors and typescript-eslint's project service.
+  // `pnpm typecheck` checks each referenced project separately.
+  "files": [],
+  "references": [{ "path": "./tsconfig.app.json" }, { "path": "./tsconfig.node.json" }]
 }

@@ -1,8 +1,8 @@
-import type { RenderCause, RenderPerfCommit, RenderPerfEvent, RenderPerfRecording } from '../src/renderer/src/perf';
+import type { RenderCause, RenderPerfCommit, RenderPerfEvent, RenderPerfRecording } from '@glassgrid/app/perf';
 import { stats } from './support';
 
 /*
- * Turns render-perf recordings (src/renderer/src/render-perf-core.ts) into
+ * Turns render-perf recordings (packages/app/src/render-perf-core.ts) into
  * the benchmark's numbers: per-interaction milestones (ms after the input
  * event), the segments between them, the work measured inside them, and the
  * React commits with the components that rendered (needed or wasted).
@@ -523,7 +523,7 @@ function categoryOf(module: string, functionName: string): string {
   if (module.includes('packages/ui')) return 'ui components';
   if (module.includes('packages/core')) return 'core (state, commands, queries)';
   if (module.includes('render-perf')) return 'instrumentation';
-  if (module.includes('src/renderer')) return 'app (renderer)';
+  if (module.includes('packages/app/src') || module.includes('src/renderer')) return 'app (renderer)';
   if (module === '(native)' || module === '') return 'native/builtins';
   return 'other';
 }
