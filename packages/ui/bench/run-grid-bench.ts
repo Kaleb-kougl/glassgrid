@@ -15,6 +15,7 @@
  *
  * Chromium: GLASSGRID_CHROMIUM, else Playwright's own build, else the
  * newest chromium-* under PLAYWRIGHT_BROWSERS_PATH. Never downloads one.
+ * Extra flags (e.g. --disable-gpu) go in GLASSGRID_CHROMIUM_ARGS.
  */
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { cpus, totalmem } from 'node:os';
@@ -256,6 +257,7 @@ async function runOnce(url: string, executablePath: string, run: number) {
       '--disable-sync',
       '--disable-renderer-backgrounding',
       '--disable-background-timer-throttling',
+      ...(process.env['GLASSGRID_CHROMIUM_ARGS'] ?? '').split(' ').filter(Boolean),
     ],
   });
   try {
