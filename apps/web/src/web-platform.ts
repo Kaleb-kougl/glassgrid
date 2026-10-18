@@ -3,14 +3,16 @@ import type { EngineClientLike, Platform, SampleDataset } from '@glassgrid/app';
 
 /*
  * The web Platform: browser APIs for files, clipboard and theme, and an
- * engine client that can read browser `File`s. Today the engine is the
- * temporary stub (stub-engine/); M4 integration swaps in the DuckDB-WASM
- * worker client, whose `registerFile` (File System Access / drag-drop
- * `File` → `db.registerFileHandle`) takes the stub's place here.
+ * engine client that can read browser `File`s: the DuckDB-WASM worker
+ * client (web-engine.ts), whose `registerFile` hands a picked or dropped
+ * `File` to the worker, which reads it in place.
  */
 
-/** Practical ceiling for the WASM engine (4 GB address space; see docs/technical-design.md, "Web demo target"). */
-export const WEB_MAX_FILE_BYTES = 2 * 1024 ** 3;
+/**
+ * Largest file the web demo opens: the engine worker's own cap (`maxSourceBytes`, 1 GiB by
+ * default, from the design doc's risk table; DuckDB-WASM has a 4 GB address space and no spilling).
+ */
+export const WEB_MAX_FILE_BYTES = 1024 ** 3;
 
 /** What the web platform needs from its engine besides the client itself. */
 export interface WebEngine {
@@ -21,8 +23,8 @@ export interface WebEngine {
   openSample?(id: string): Promise<OpenCsvResult>;
 }
 
-/** Files the picker offers (CSV and its usual MIME types; Parquet once the WASM engine lands). */
-const ACCEPT = '.csv,.tsv,.txt,text/csv,text/tab-separated-values,text/plain';
+/** Files the picker offers: CSV and its usual MIME types, and Parquet (the engine opens it in place). */
+const ACCEPT = '.csv,.tsv,.txt,.parquet,text/csv,text/tab-separated-values,text/plain';
 
 /** How long after the page regains focus a picker without `change` counts as cancelled (browsers without `cancel`). */
 const FOCUS_CANCEL_MS = 1_000;

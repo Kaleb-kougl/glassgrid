@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { gzipSync } from 'node:zlib';
 
@@ -14,6 +14,10 @@ import { gzipSync } from 'node:zlib';
  * mentions duckdb: the .wasm binaries and their workers). Sizes are gzip
  * level 9 of the emitted files; kB = 1,000 bytes, as Vite prints them.
  * Exits 1 when `/` is over budget.
+ *
+ * The engine worker (DuckDB-WASM's JS glue, the engine core) and the .wasm
+ * builds are not in the page's import graph at all: the worker fetches them
+ * after the page has loaded. They are listed for information, not counted.
  */
 
 const BUDGET_BYTES = 400_000;
@@ -85,6 +89,18 @@ for (const [route, roots] of Object.entries(ROUTES)) {
 for (const [route, { js, jsGzip, cssGzip }] of Object.entries(report)) {
   console.info(`\n${route}: first-load JS ${kB(jsGzip)} gzip (${kB(js.reduce((sum, chunk) => sum + chunk.raw, 0))} raw), CSS ${kB(cssGzip)} gzip`);
   for (const chunk of js) console.info(`  ${chunk.file.padEnd(40)} ${kB(chunk.raw).padStart(10)}  ${kB(chunk.gzip).padStart(9)} gzip`);
+}
+
+// Loaded by the engine worker, not by the page (`new Worker(...)` and the worker's own imports).
+const counted = new Set(Object.values(report).flatMap(({ js }) => js.map((chunk) => chunk.file)));
+const workerSide = readdirSync(join(dist, 'assets'))
+  .map((name) => `assets/${name}`)
+  .filter((file) => file.endsWith('.wasm') || (file.endsWith('.js') && !counted.has(file) && !Object.values(manifest).some((chunk) => chunk.file === file)))
+  .map((file) => ({ file, ...sizeOf(file) }))
+  .sort((a, b) => b.raw - a.raw);
+if (workerSide.length > 0) {
+  console.info('\nEngine worker side (fetched by the worker after the page loads; not first-load):');
+  for (const asset of workerSide) console.info(`  ${asset.file.padEnd(40)} ${kB(asset.raw).padStart(10)}  ${kB(asset.gzip).padStart(9)} gzip`);
 }
 
 const budgeted = report[BUDGETED_ROUTE]?.jsGzip ?? 0;
