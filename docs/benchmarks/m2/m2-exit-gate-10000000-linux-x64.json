@@ -1,0 +1,469 @@
+{
+  "benchmark": "m2-exit-gate",
+  "milestone": "M2",
+  "exitGate": {
+    "name": "first rows < 2 s, scroll p95 < 16.7 ms, flat memory, sorted first rows < 1 s",
+    "firstRows": {
+      "ms": 333.7000000011176,
+      "budgetMs": 2000,
+      "met": true
+    },
+    "scroll": {
+      "rafIntervalP95Ms": 16.700000000000728,
+      "mainThreadPerFrameP95Ms": 8.819,
+      "rafWorkP95Ms": 0.693,
+      "presentedIntervalP95Ms": 19.611,
+      "budget": "p95 rAF interval <= 17.7 ms and p95 main-thread work per frame < 16.7 ms",
+      "met": true
+    },
+    "memory": {
+      "beforeBytes": 185647104,
+      "bottomBytes": 189337600,
+      "afterBytes": 190005248,
+      "peakBytes": 276652032,
+      "jsHeapBeforeBytes": 16462276,
+      "jsHeapAfterBytes": 20698248,
+      "budget": "flat (after - before < 50 MB) and peak < 300 MB",
+      "met": true
+    },
+    "sortFirstRows": {
+      "ms": 249,
+      "sort": "amount asc",
+      "firstPageEngineMs": 238.63518599999952,
+      "budgetMs": 1000,
+      "met": true
+    },
+    "met": true
+  },
+  "recordedAt": "2026-10-18T07:49:04.439Z",
+  "rows": 10000000,
+  "fileBytes": 328578927,
+  "machine": {
+    "platform": "linux",
+    "arch": "x64",
+    "cpuModel": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "cpuCount": 2,
+    "totalMemBytes": 8419655680,
+    "ci": false
+  },
+  "versions": {
+    "electron": "44.9.0",
+    "chrome": "152.0.7977.167",
+    "node": "24.22.0",
+    "duckdbNodeApi": "1.5.6-r.1"
+  },
+  "packaged": false,
+  "openToFirstRows": {
+    "ms": 333.7000000011176,
+    "firstPageEngineMs": 101.25805799999989,
+    "openEngineMs": 113.13830800000005
+  },
+  "scroll": {
+    "wheel": {
+      "rafIntervals": {
+        "count": 206,
+        "p50": 16.69999999999709,
+        "p95": 16.700000000000728,
+        "p99": 16.799999999999272,
+        "max": 16.799999999999272,
+        "over": 0.49029126213592233
+      },
+      "mainThreadPerFrame": {
+        "count": 206,
+        "p50": 3.606,
+        "p95": 8.503,
+        "p99": 9.938,
+        "max": 11.342,
+        "over": 0
+      },
+      "rafWork": {
+        "count": 409,
+        "p50": 0.123,
+        "p95": 0.693,
+        "p99": 0.93,
+        "max": 1.788,
+        "over": 0
+      },
+      "presentedIntervals": {
+        "count": 203,
+        "p50": 16.598,
+        "p95": 19.19,
+        "p99": 20.515,
+        "max": 37.88,
+        "over": 0.46798029556650245
+      },
+      "longestTaskMs": 7.15,
+      "landedRow": 1236,
+      "landingLoadMs": 150.69999999925494
+    },
+    "thumb": {
+      "rafIntervals": {
+        "count": 91,
+        "p50": 16.700000000000728,
+        "p95": 16.700000000000728,
+        "p99": 16.799999999999272,
+        "max": 16.799999999999272,
+        "over": 0.5054945054945055
+      },
+      "mainThreadPerFrame": {
+        "count": 91,
+        "p50": 2.871,
+        "p95": 8.819,
+        "p99": 17.936,
+        "max": 17.936,
+        "over": 0.02197802197802198
+      },
+      "rafWork": {
+        "count": 273,
+        "p50": 0.119,
+        "p95": 0.415,
+        "p99": 0.898,
+        "max": 1.107,
+        "over": 0
+      },
+      "presentedIntervals": {
+        "count": 90,
+        "p50": 16.59,
+        "p95": 19.611,
+        "p99": 21.707,
+        "max": 21.707,
+        "over": 0.4666666666666667
+      },
+      "longestTaskMs": 11.031,
+      "landedRow": 5998447,
+      "landingLoadMs": 150.5
+    }
+  },
+  "memory": {
+    "samples": [
+      {
+        "atMs": 0,
+        "workingSetBytes": 185647104,
+        "jsHeapBytes": 16462276
+      },
+      {
+        "atMs": 500,
+        "workingSetBytes": 191987712,
+        "jsHeapBytes": 17741392
+      },
+      {
+        "atMs": 1007,
+        "workingSetBytes": 197054464,
+        "jsHeapBytes": 17723896
+      },
+      {
+        "atMs": 1513,
+        "workingSetBytes": 197832704,
+        "jsHeapBytes": 18696640
+      },
+      {
+        "atMs": 2019,
+        "workingSetBytes": 204886016,
+        "jsHeapBytes": 19836708
+      },
+      {
+        "atMs": 2528,
+        "workingSetBytes": 203153408,
+        "jsHeapBytes": 22169636
+      },
+      {
+        "atMs": 3032,
+        "workingSetBytes": 206774272,
+        "jsHeapBytes": 21974576
+      },
+      {
+        "atMs": 3539,
+        "workingSetBytes": 208064512,
+        "jsHeapBytes": 24682752
+      },
+      {
+        "atMs": 4052,
+        "workingSetBytes": 210493440,
+        "jsHeapBytes": 23001892
+      },
+      {
+        "atMs": 4559,
+        "workingSetBytes": 216240128,
+        "jsHeapBytes": 23860476
+      },
+      {
+        "atMs": 5066,
+        "workingSetBytes": 215126016,
+        "jsHeapBytes": 26084328
+      },
+      {
+        "atMs": 5573,
+        "workingSetBytes": 215748608,
+        "jsHeapBytes": 22775104
+      },
+      {
+        "atMs": 6078,
+        "workingSetBytes": 217407488,
+        "jsHeapBytes": 27534524
+      },
+      {
+        "atMs": 6582,
+        "workingSetBytes": 217792512,
+        "jsHeapBytes": 24502956
+      },
+      {
+        "atMs": 7091,
+        "workingSetBytes": 219250688,
+        "jsHeapBytes": 30396232
+      },
+      {
+        "atMs": 7603,
+        "workingSetBytes": 225570816,
+        "jsHeapBytes": 24891960
+      },
+      {
+        "atMs": 8111,
+        "workingSetBytes": 231661568,
+        "jsHeapBytes": 30309260
+      },
+      {
+        "atMs": 8616,
+        "workingSetBytes": 241537024,
+        "jsHeapBytes": 35468072
+      },
+      {
+        "atMs": 9123,
+        "workingSetBytes": 246693888,
+        "jsHeapBytes": 29031248
+      },
+      {
+        "atMs": 9628,
+        "workingSetBytes": 251817984,
+        "jsHeapBytes": 32671716
+      },
+      {
+        "atMs": 10133,
+        "workingSetBytes": 256630784,
+        "jsHeapBytes": 37067900
+      },
+      {
+        "atMs": 10638,
+        "workingSetBytes": 263766016,
+        "jsHeapBytes": 32849588
+      },
+      {
+        "atMs": 11144,
+        "workingSetBytes": 267567104,
+        "jsHeapBytes": 35088988
+      },
+      {
+        "atMs": 11654,
+        "workingSetBytes": 272097280,
+        "jsHeapBytes": 37018444
+      },
+      {
+        "atMs": 12165,
+        "workingSetBytes": 276652032,
+        "jsHeapBytes": 40349440
+      },
+      {
+        "atMs": 12674,
+        "workingSetBytes": 272412672,
+        "jsHeapBytes": 22119280
+      },
+      {
+        "atMs": 13182,
+        "workingSetBytes": 273760256,
+        "jsHeapBytes": 30383700
+      },
+      {
+        "atMs": 13688,
+        "workingSetBytes": 274239488,
+        "jsHeapBytes": 33012076
+      },
+      {
+        "atMs": 14194,
+        "workingSetBytes": 274923520,
+        "jsHeapBytes": 35278108
+      },
+      {
+        "atMs": 14701,
+        "workingSetBytes": 275550208,
+        "jsHeapBytes": 37569308
+      },
+      {
+        "atMs": 15216,
+        "workingSetBytes": 189329408,
+        "jsHeapBytes": 20480764
+      },
+      {
+        "atMs": 15755,
+        "workingSetBytes": 195440640,
+        "jsHeapBytes": 21047740
+      },
+      {
+        "atMs": 16262,
+        "workingSetBytes": 201297920,
+        "jsHeapBytes": 21911568
+      },
+      {
+        "atMs": 16769,
+        "workingSetBytes": 201502720,
+        "jsHeapBytes": 22113572
+      },
+      {
+        "atMs": 17275,
+        "workingSetBytes": 203952128,
+        "jsHeapBytes": 22331296
+      },
+      {
+        "atMs": 17782,
+        "workingSetBytes": 209338368,
+        "jsHeapBytes": 24074880
+      },
+      {
+        "atMs": 18307,
+        "workingSetBytes": 215150592,
+        "jsHeapBytes": 26006524
+      },
+      {
+        "atMs": 18814,
+        "workingSetBytes": 224088064,
+        "jsHeapBytes": 29185092
+      },
+      {
+        "atMs": 19319,
+        "workingSetBytes": 230903808,
+        "jsHeapBytes": 28403976
+      },
+      {
+        "atMs": 19829,
+        "workingSetBytes": 240558080,
+        "jsHeapBytes": 28931920
+      },
+      {
+        "atMs": 20334,
+        "workingSetBytes": 248135680,
+        "jsHeapBytes": 32761636
+      },
+      {
+        "atMs": 20841,
+        "workingSetBytes": 254709760,
+        "jsHeapBytes": 32004368
+      },
+      {
+        "atMs": 21348,
+        "workingSetBytes": 258670592,
+        "jsHeapBytes": 34357020
+      },
+      {
+        "atMs": 21929,
+        "workingSetBytes": 253239296,
+        "jsHeapBytes": 23031444
+      },
+      {
+        "atMs": 22436,
+        "workingSetBytes": 254836736,
+        "jsHeapBytes": 29337148
+      },
+      {
+        "atMs": 22942,
+        "workingSetBytes": 256634880,
+        "jsHeapBytes": 31475588
+      },
+      {
+        "atMs": 23447,
+        "workingSetBytes": 259026944,
+        "jsHeapBytes": 33738740
+      },
+      {
+        "atMs": 23953,
+        "workingSetBytes": 258908160,
+        "jsHeapBytes": 23361396
+      },
+      {
+        "atMs": 24461,
+        "workingSetBytes": 259239936,
+        "jsHeapBytes": 26356800
+      },
+      {
+        "atMs": 24967,
+        "workingSetBytes": 258785280,
+        "jsHeapBytes": 20796928
+      },
+      {
+        "atMs": 25475,
+        "workingSetBytes": 260231168,
+        "jsHeapBytes": 29084820
+      },
+      {
+        "atMs": 25980,
+        "workingSetBytes": 260579328,
+        "jsHeapBytes": 32061576
+      },
+      {
+        "atMs": 26489,
+        "workingSetBytes": 259108864,
+        "jsHeapBytes": 21660132
+      },
+      {
+        "atMs": 27001,
+        "workingSetBytes": 260005888,
+        "jsHeapBytes": 28120960
+      },
+      {
+        "atMs": 27506,
+        "workingSetBytes": 260476928,
+        "jsHeapBytes": 30809392
+      },
+      {
+        "atMs": 28014,
+        "workingSetBytes": 258441216,
+        "jsHeapBytes": 21769964
+      },
+      {
+        "atMs": 28524,
+        "workingSetBytes": 259604480,
+        "jsHeapBytes": 28591792
+      },
+      {
+        "atMs": 29030,
+        "workingSetBytes": 260009984,
+        "jsHeapBytes": 32273456
+      },
+      {
+        "atMs": 29536,
+        "workingSetBytes": 261455872,
+        "jsHeapBytes": 25652992
+      },
+      {
+        "atMs": 30060,
+        "workingSetBytes": 262217728,
+        "jsHeapBytes": 30329684
+      },
+      {
+        "atMs": 30707,
+        "workingSetBytes": 190005248,
+        "jsHeapBytes": 20698248
+      }
+    ],
+    "before": {
+      "atMs": 0,
+      "workingSetBytes": 185647104,
+      "jsHeapBytes": 16462276
+    },
+    "afterDown": {
+      "atMs": 15254,
+      "workingSetBytes": 189337600,
+      "jsHeapBytes": 20480764
+    },
+    "afterUp": {
+      "atMs": 30707,
+      "workingSetBytes": 190005248,
+      "jsHeapBytes": 20698248
+    },
+    "sweepMs": 30718,
+    "pagesLanded": 100
+  },
+  "sort": {
+    "ms": 249,
+    "sort": "amount asc",
+    "firstPageEngineMs": 238.63518599999952,
+    "cached": false
+  }
+}

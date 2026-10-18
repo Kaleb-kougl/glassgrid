@@ -1,0 +1,40 @@
+{
+  "benchmark": "open-to-first-rows",
+  "milestone": "M2",
+  "exitGate": {
+    "name": "open-to-first-rows-painted",
+    "firstRows": "first 1000-row page painted on the canvas grid",
+    "roundTripMs": 333.7000000011176,
+    "budgetMs": 2000,
+    "met": true
+  },
+  "recordedAt": "2026-10-18T07:48:13.029Z",
+  "rows": 10000000,
+  "fileBytes": 328578927,
+  "csvGenerationMs": 11518.165924,
+  "machine": {
+    "platform": "linux",
+    "arch": "x64",
+    "cpuModel": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "cpuCount": 2,
+    "totalMemBytes": 8419655680,
+    "ci": false
+  },
+  "versions": {
+    "electron": "44.9.0",
+    "chrome": "152.0.7977.167",
+    "node": "24.22.0",
+    "duckdbNodeApi": "1.5.6-r.1"
+  },
+  "packaged": false,
+  "openToFirstRows": {
+    "roundTripMs": 333.7000000011176,
+    "openEngineMs": 113.13830800000005,
+    "firstPageEngineMs": 101.25805799999989,
+    "wallMs": 377.95625800000016
+  },
+  "profile": {
+    "roundTripMs": 3859.89999999851,
+    "engineMs": 3843.824823
+  }
+}

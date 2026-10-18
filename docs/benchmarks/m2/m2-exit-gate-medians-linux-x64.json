@@ -1,0 +1,198 @@
+{
+  "benchmark": "m2-exit-gate-medians",
+  "milestone": "M2",
+  "rows": 10000000,
+  "runs": 3,
+  "recordedAt": [
+    "2026-10-18T07:46:37.014Z",
+    "2026-10-18T07:47:50.692Z",
+    "2026-10-18T07:49:04.439Z"
+  ],
+  "machine": {
+    "platform": "linux",
+    "arch": "x64",
+    "cpuModel": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "cpuCount": 2,
+    "totalMemBytes": 8419655680,
+    "ci": false
+  },
+  "versions": {
+    "electron": "44.9.0",
+    "chrome": "152.0.7977.167",
+    "node": "24.22.0",
+    "duckdbNodeApi": "1.5.6-r.1"
+  },
+  "exitGate": {
+    "firstRowsMs": {
+      "values": [
+        315.1,
+        293,
+        333.7
+      ],
+      "median": 315.1,
+      "budgetMs": 2000
+    },
+    "scroll": {
+      "wheel": {
+        "rafIntervalP95Ms": {
+          "values": [
+            16.7,
+            16.8,
+            16.7
+          ],
+          "median": 16.7
+        },
+        "mainThreadPerFrameP95Ms": {
+          "values": [
+            8.47,
+            7.67,
+            8.5
+          ],
+          "median": 8.47
+        },
+        "rafWorkP95Ms": {
+          "values": [
+            0.71,
+            0.61,
+            0.69
+          ],
+          "median": 0.69
+        },
+        "presentedIntervalP95Ms": {
+          "values": [
+            20.3,
+            19.99,
+            19.19
+          ],
+          "median": 19.99
+        },
+        "longestTaskMs": {
+          "values": [
+            9.2,
+            10.7,
+            7.2
+          ],
+          "median": 9.2
+        },
+        "landingLoadMs": {
+          "values": [
+            151,
+            151.0,
+            151.0
+          ],
+          "median": 151.0
+        }
+      },
+      "thumb": {
+        "rafIntervalP95Ms": {
+          "values": [
+            16.7,
+            16.8,
+            16.7
+          ],
+          "median": 16.7
+        },
+        "mainThreadPerFrameP95Ms": {
+          "values": [
+            10.44,
+            12.43,
+            8.82
+          ],
+          "median": 10.44
+        },
+        "rafWorkP95Ms": {
+          "values": [
+            0.42,
+            0.42,
+            0.41
+          ],
+          "median": 0.42
+        },
+        "presentedIntervalP95Ms": {
+          "values": [
+            19.32,
+            20.84,
+            19.61
+          ],
+          "median": 19.61
+        },
+        "longestTaskMs": {
+          "values": [
+            10.9,
+            8.5,
+            11.0
+          ],
+          "median": 10.9
+        },
+        "landingLoadMs": {
+          "values": [
+            150.0,
+            150.0,
+            150.0
+          ],
+          "median": 150.0
+        }
+      }
+    },
+    "memoryMB": {
+      "workingSetBefore": {
+        "values": [
+          181.2,
+          183.5,
+          177.0
+        ],
+        "median": 181.2
+      },
+      "workingSetBottom": {
+        "values": [
+          183.8,
+          184.3,
+          180.6
+        ],
+        "median": 183.8
+      },
+      "workingSetAfter": {
+        "values": [
+          184.6,
+          183.2,
+          181.2
+        ],
+        "median": 183.2
+      },
+      "workingSetPeak": {
+        "values": [
+          273.4,
+          271.8,
+          263.8
+        ],
+        "median": 271.8
+      },
+      "jsHeapBefore": {
+        "values": [
+          15.7,
+          18.9,
+          15.7
+        ],
+        "median": 15.7
+      },
+      "jsHeapAfter": {
+        "values": [
+          19.8,
+          19.7,
+          19.7
+        ],
+        "median": 19.7
+      }
+    },
+    "sortFirstRowsMs": {
+      "values": [
+        233.5,
+        315.5,
+        249
+      ],
+      "median": 249,
+      "budgetMs": 1000
+    },
+    "met": true
+  }
+}

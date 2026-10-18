@@ -1,0 +1,38 @@
+{
+  "benchmark": "count-rows",
+  "recordedAt": "2026-10-18T07:48:26.023Z",
+  "rows": 10000000,
+  "fileBytes": 328578927,
+  "csvGenerationMs": 11518.165924,
+  "machine": {
+    "platform": "linux",
+    "arch": "x64",
+    "cpuModel": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "cpuCount": 2,
+    "totalMemBytes": 8419655680,
+    "ci": false
+  },
+  "versions": {
+    "electron": "44.9.0",
+    "chrome": "152.0.7977.167",
+    "node": "24.22.0",
+    "duckdbNodeApi": "1.5.6-r.1"
+  },
+  "packaged": false,
+  "runs": [
+    {
+      "label": "cold",
+      "roundTripMs": 2394.699999999255,
+      "engineMs": 2377.2304890000005,
+      "cached": false,
+      "wallMs": 2394.699999999255
+    },
+    {
+      "label": "warm",
+      "roundTripMs": 12.399999998509884,
+      "engineMs": 0.04475399999864749,
+      "cached": true,
+      "wallMs": 96.4709870000006
+    }
+  ]
+}

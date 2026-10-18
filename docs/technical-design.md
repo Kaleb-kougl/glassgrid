@@ -479,15 +479,17 @@ Result: both met; see [M1 notes](m1-notes.md).
 
 ### M2 · Virtualized grid (week 2)
 
-- [ ] Canvas renderer with 1,000-row paging and overscan
-- [ ] Row-number materialization for sorted views; scaled scroll mapping past \~1M rows
-- [ ] Sort, resize, reorder, keyboard navigation and range copy, all as commands
-- [ ] ARIA grid mirror; axe checks in E2E
-- [ ] Column list with types, null % and distinct counts
+- [x] Canvas renderer with 1,000-row paging and overscan
+- [x] Row-number materialization for sorted views; scaled scroll mapping past \~1M rows
+- [x] Sort, resize, reorder, keyboard navigation and range copy, all as commands
+- [x] ARIA grid mirror; axe checks in E2E
+- [x] Column list with types, null % and distinct counts
 
 **Exit gate:** first rows in < 2 s and scroll p95 < 16.7 ms on 10M rows, with flat memory. If this is not met by the end of week 2, switch to a TanStack Virtual DOM grid to protect the week 5 release.
 
 **Demo:** smooth scroll through a 10M-row file.
+
+Result: met on the Linux dev VM (medians of three 10M-row E2E runs): first rows painted 315 ms, scroll p95 frame interval 16.7 ms with p95 main-thread work 8 to 10 ms per frame, renderer memory 181 MB before and 183 MB after a full scroll down and back, first sorted rows 249 ms; see [M2 notes](m2-notes.md).
 
 ### M3 · Charts and cross-filtering (week 3)
 

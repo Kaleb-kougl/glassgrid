@@ -12,8 +12,10 @@ for drift with `--check` or `pnpm test`). Nothing in the app imports from
 Each image puts the design frame (left) next to the app (right), both
 1440×900. The app side comes from the E2E suite (`xvfb-run -a pnpm e2e`):
 the real Electron app on Linux with the generated 1,000,000-row fixture, a
-bar chart dragged from the column list, one bar selected, the grid sorted by
-`id` and a cell range selected.
+bar chart dragged from the column list, one bar selected, the canvas grid
+sorted by `id` (a click on its header) and a cell range dragged on the
+canvas, then copied with Ctrl+C. Since M2 the grid is the canvas grid
+(`CanvasGrid` in `@glassgrid/ui`); the images were refreshed then.
 
 | State | Dark | Light |
 | --- | --- | --- |
@@ -40,11 +42,15 @@ spacing, type and colour are meant to match.
   (and brushing) arrive with the M3 chart layer. "+ New chart", Enter on a
   column and dragging a column onto the Charts panel all add bar charts.
   The Color shelf is shown but inert (tooltip says so).
-- **The grid is a windowed DOM table until M2.** It follows the design
-  (32px rows, Plex Mono tabular numbers right-aligned, muted italic `null`,
-  sticky header with the sort arrow, focused cell and range selection) and
-  pages through `rows()`; the canvas grid replaces it in M2. Column resize
-  and reorder are not there yet.
+- **Null share is not drawn in the column list.** The design's rows show
+  the distinct count only; the profile's null fraction is the row's tooltip
+  and part of its accessible name ("12.5% null").
+- **"Agent · not connected" uses the secondary text colour**, not the
+  disabled one: it is status text, and the disabled colour measured 4.37:1
+  on the light title bar (axe colour-contrast, WCAG 1.4.3 needs 4.5:1).
+- **The file name is the page heading.** It is an `h1` styled like the
+  design's title text, so the populated screen has a level-one heading
+  (axe page-has-heading-one); nothing changes visually.
 - **"+ Filter" is disabled.** The filter editor is not designed yet; bars
   are the way to filter for now.
 - **Title bar on Linux and Windows.** The 80px traffic-light inset is macOS

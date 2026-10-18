@@ -1,0 +1,27 @@
+{
+  "benchmark": "aggregate-bar",
+  "recordedAt": "2026-10-18T07:48:25.868Z",
+  "rows": 10000000,
+  "fileBytes": 328578927,
+  "machine": {
+    "platform": "linux",
+    "arch": "x64",
+    "cpuModel": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "cpuCount": 2,
+    "totalMemBytes": 8419655680,
+    "ci": false
+  },
+  "versions": {
+    "electron": "44.9.0",
+    "chrome": "152.0.7977.167",
+    "node": "24.22.0",
+    "duckdbNodeApi": "1.5.6-r.1"
+  },
+  "packaged": false,
+  "aggregate": {
+    "roundTripMs": 55.5,
+    "engineMs": 39.39610200000061,
+    "cached": false,
+    "rows": 5
+  }
+}
