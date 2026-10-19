@@ -1,10 +1,10 @@
-import { appendFile, mkdir, mkdtemp, readdir, readFile, rename, rm } from 'node:fs/promises';
+import { appendFile, mkdir, mkdtemp, readdir, readFile, rename } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import { parseWorkspace } from '@glassgrid/core';
 import { writeFixtureCsv } from './csv-fixture';
-import { answerClosePrompt, axe, clickMenuItem, closePrompts, digits, launchApp, mirrorRow, recentMenuLabels, rowsLoaded, screenshot, setTheme, stubDialogs } from './support';
+import { answerClosePrompt, axe, clickMenuItem, closePrompts, digits, launchApp, mirrorRow, recentMenuLabels, removeWorkDir, rowsLoaded, screenshot, setTheme, stubDialogs } from './support';
 
 /*
  * Workspace files through the UI of the real app: Save (File → Save
@@ -75,7 +75,7 @@ test.describe('workspace files in the UI', () => {
   test.afterEach(async () => {
     await app?.close().catch(() => undefined);
     app = undefined;
-    await rm(work, { recursive: true, force: true });
+    await removeWorkDir(work);
   });
 
   async function launch(): Promise<{ app: ElectronApplication; page: Page; rendererErrors: string[] }> {

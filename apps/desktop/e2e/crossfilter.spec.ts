@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
@@ -17,6 +17,7 @@ import {
   machineInfo,
   measureCount,
   measures,
+  removeWorkDir,
   RESULTS_DIR,
   ROWS,
   screenshot,
@@ -106,7 +107,7 @@ test.describe('linked charts', () => {
   test.afterAll(async () => {
     await session?.app.close();
     reference.close();
-    if (workDir) await rm(workDir, { recursive: true, force: true });
+    if (workDir) await removeWorkDir(workDir);
   });
 
   test('four linked charts and the grid: a bar click and a histogram brush cross-filter each other, undo restores', async () => {
@@ -322,7 +323,7 @@ test.describe('raw CSV (no Parquet copy)', () => {
 
   test.afterAll(async () => {
     await session?.app.close();
-    if (workDir) await rm(workDir, { recursive: true, force: true });
+    if (workDir) await removeWorkDir(workDir);
   });
 
   test('chart create and cross-filter on the raw CSV', async () => {

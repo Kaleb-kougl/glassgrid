@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
@@ -30,6 +30,7 @@ import {
   mirrorRow,
   nextMeasure,
   PACKAGED_EXECUTABLE,
+  removeWorkDir,
   RESULTS_DIR,
   ROWS,
   rowsLoaded,
@@ -114,7 +115,7 @@ test.describe('data path', () => {
 
   test.afterAll(async () => {
     await app?.close();
-    if (workDir) await rm(workDir, { recursive: true, force: true });
+    if (workDir) await removeWorkDir(workDir);
   });
 
   test(`opens ${ROWS.toLocaleString('en-US')} rows, fetches the first page and profiles`, async () => {

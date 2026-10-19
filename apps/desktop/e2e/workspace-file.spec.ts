@@ -1,4 +1,4 @@
-import { cp, mkdir, mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readdir, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
@@ -6,7 +6,7 @@ import { parseWorkspace, type GlassgridBridge, type WorkspaceSnapshot } from '@g
 import { fingerprintFile } from '@glassgrid/engine';
 import { nodeFiles } from '@glassgrid/engine/native';
 import { writeFixtureCsv } from './csv-fixture';
-import { launchApp, stubDialogs } from './support';
+import { launchApp, removeWorkDir, stubDialogs } from './support';
 
 /*
  * Workspace files through the real main process and preload: Save As, the
@@ -27,7 +27,7 @@ test.describe('workspace files', () => {
   test.afterEach(async () => {
     await app?.close().catch(() => undefined);
     app = undefined;
-    await rm(work, { recursive: true, force: true });
+    await removeWorkDir(work);
   });
 
   test('save, reopen a moved project, autosave and recover through main', async () => {
