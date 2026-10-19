@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { readFile, mkdir, rm, writeFile } from 'node:fs/promises';
 import { arch, cpus, platform, totalmem } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -326,8 +327,25 @@ export async function recentMenuLabels(app: ElectronApplication): Promise<string
 
 /**
  * Remove a test's temp folder. On Windows, Electron's helper processes can hold files in userData for a moment
- * after the app closes (EBUSY); `rm` retries those errors with a back-off instead of failing the test.
+ * after the app closes (EBUSY); `rm` retries those errors briefly instead of failing the test. A file that stays
+ * locked means a process outlived its app (see `crashApp`), and that should fail, not hang.
  */
 export async function removeWorkDir(dir: string): Promise<void> {
-  await rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+  await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+}
+
+/**
+ * Kill the app as a crash would: no close events, no prompts. On Windows, killing the main process leaves its
+ * GPU, renderer and utility (engine) processes running, and they keep files in userData open, so the whole
+ * process tree is killed there; on macOS and Linux the children exit with their parent.
+ */
+export async function crashApp(app: ElectronApplication): Promise<void> {
+  const child = app.process();
+  const exited = new Promise((resolve) => child.once('exit', resolve));
+  if (platform() === 'win32' && child.pid !== undefined) {
+    execFileSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+  } else {
+    child.kill('SIGKILL');
+  }
+  await exited;
 }

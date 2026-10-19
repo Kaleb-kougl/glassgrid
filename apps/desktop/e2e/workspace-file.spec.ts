@@ -6,7 +6,7 @@ import { parseWorkspace, type GlassgridBridge, type WorkspaceSnapshot } from '@g
 import { fingerprintFile } from '@glassgrid/engine';
 import { nodeFiles } from '@glassgrid/engine/native';
 import { writeFixtureCsv } from './csv-fixture';
-import { launchApp, removeWorkDir, stubDialogs } from './support';
+import { crashApp, launchApp, removeWorkDir, stubDialogs } from './support';
 
 /*
  * Workspace files through the real main process and preload: Save As, the
@@ -97,9 +97,7 @@ test.describe('workspace files', () => {
     // The app dies without closing its window (a crash): the snapshot stays.
     const killed = app;
     app = undefined;
-    const exited = new Promise((resolve) => killed.process().once('exit', resolve));
-    killed.process().kill('SIGKILL');
-    await exited;
+    await crashApp(killed);
     expect((await readdir(recoveryDir)).filter((name) => name.endsWith('.glassgrid'))).toHaveLength(1);
 
     const relaunched = await launchApp(csvPath, userData);
