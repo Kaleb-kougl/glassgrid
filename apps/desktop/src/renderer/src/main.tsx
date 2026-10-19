@@ -1,4 +1,6 @@
-// First: in render-perf builds this installs the commit inspector before react-dom loads (empty otherwise).
+// First: no Zod code generation under the CSP (see zod-jitless.ts).
+import './zod-jitless';
+// Then, in render-perf builds this installs the commit inspector before react-dom loads (empty otherwise).
 import '@glassgrid/app/render-perf-core';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
