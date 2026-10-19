@@ -11,7 +11,8 @@ import { answerClosePrompt, axe, clickMenuItem, closePrompts, digits, launchApp,
  * Workspace, Ctrl/Cmd+S) and reopening from the start screen's recent list
  * and File → Open Recent, the
  * edited dot (undo back to the saved state clears it), the "Save changes?"
- * veto on close, the locate prompt for a moved data file with the
+ * veto on close, the app's own "Save this workspace?" before an open
+ * replaces unsaved work, the locate prompt for a moved data file with the
  * changed-data banner, and restoring unsaved work after a crash. Native
  * dialogs are stubbed in main (support.ts).
  */
@@ -104,7 +105,7 @@ test.describe('workspace files in the UI', () => {
     // Read category as integer: the engine casts every value to null.
     await page.getByTestId('column-category-type').click();
     await page.getByRole('menuitemradio', { name: /Integer/ }).click();
-    await expect(mirrorRow(page, 0)).toHaveText(['1', 'null (empty value)', '0', '2026-01-01'], { timeout: 60_000 });
+    await expect(mirrorRow(page, 0)).toHaveText(['1', 'null (empty value)', '0.00', '2026-01-01'], { timeout: 60_000 });
 
     // File → Save Workspace (its accelerator is Ctrl/Cmd+S; the page leaves that key to the menu): Save As the first time.
     await stubDialogs(firstApp, { save: join(project, 'analysis') });
@@ -143,7 +144,7 @@ test.describe('workspace files in the UI', () => {
     await expect(second.page.getByRole('listbox', { name: /Rows by category/ })).toBeVisible();
     await expect(second.page.getByTestId('column-category-type')).toHaveAttribute('data-type', 'integer');
     await rowsLoaded(second.page);
-    await expect(mirrorRow(second.page, 0)).toHaveText(['1', 'null (empty value)', '0', '2026-01-01'], { timeout: 60_000 });
+    await expect(mirrorRow(second.page, 0)).toHaveText(['1', 'null (empty value)', '0.00', '2026-01-01'], { timeout: 60_000 });
     await expect(dot(second.page)).toHaveCount(0);
     expect(second.rendererErrors).toEqual([]);
   });
@@ -170,6 +171,36 @@ test.describe('workspace files in the UI', () => {
     await closed;
     expect(parseWorkspace(await readFile(join(project, 'closing.glassgrid'), 'utf8')).workspace.charts).toHaveLength(1);
     expect(await recoverySnapshots(userData)).toEqual([]);
+  });
+
+  test('asks before opening over unsaved work: Cancel keeps it, Save writes it first and then opens', async () => {
+    const { app: electronApp, page, rendererErrors } = await launch();
+    await openCsv(page);
+    await chartCategory(page);
+    await expect(dot(page)).toBeVisible();
+
+    // Open workspace… over unsaved work: the app asks before the native dialog.
+    await page.getByTestId('open-workspace').click();
+    const prompt = page.getByRole('alertdialog', { name: 'Save this workspace?' });
+    await expect(prompt).toBeVisible();
+    await expect(prompt.getByRole('button', { name: 'Save as…' })).toBeFocused();
+    await shot(page, 'save-before-replace');
+    expect(await axe(page, 'save-before-replace')).toEqual([]);
+    await prompt.getByRole('button', { name: 'Cancel' }).click();
+    await expect(prompt).toHaveCount(0);
+    await expect(page.getByRole('listbox', { name: /Rows by category/ })).toBeVisible();
+    await expect(dot(page)).toBeVisible();
+
+    // Open CSV… (the File menu's command): Save as… writes the workspace, then the CSV opens as a new, clean workspace.
+    await stubDialogs(electronApp, { save: join(project, 'before-open.glassgrid') });
+    await clickMenuItem(electronApp, 'open');
+    await prompt.getByRole('button', { name: 'Save as…' }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'Saved before-open.glassgrid' })).toBeVisible();
+    await expect(page.getByRole('listbox', { name: /Rows by category/ })).toHaveCount(0);
+    await expect(dot(page)).toHaveCount(0);
+    await rowsLoaded(page);
+    expect(parseWorkspace(await readFile(join(project, 'before-open.glassgrid'), 'utf8')).workspace.charts).toHaveLength(1);
+    expect(rendererErrors).toEqual([]);
   });
 
   test('asks for a moved data file and warns that it changed', async () => {
@@ -208,6 +239,10 @@ test.describe('workspace files in the UI', () => {
     const banner = second.page.getByRole('alert').filter({ hasText: 'has changed since this workspace was saved' });
     await expect(banner).toContainText('data.csv has changed since this workspace was saved');
     await expect(banner).toContainText('contents differ');
+    // The banner takes its own row: it covers neither the grid nor the charts.
+    const bannerBox = await banner.boundingBox();
+    const panelsBox = await second.page.locator('main.workspace').boundingBox();
+    expect(bannerBox && panelsBox && bannerBox.y + bannerBox.height <= panelsBox.y).toBe(true);
     await shot(second.page, 'data-mismatch');
     await banner.getByRole('button', { name: 'Continue' }).click();
     await expect(banner).toHaveCount(0);

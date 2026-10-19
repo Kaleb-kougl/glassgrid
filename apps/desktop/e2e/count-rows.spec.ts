@@ -155,7 +155,7 @@ test.describe('data path', () => {
     expect(firstPage.duration).toBeLessThan(2_000);
     exitGate.firstRows = { ms: firstPage.duration, firstPageEngineMs: firstPage.detail.firstPageEngineMs, openEngineMs: firstPage.detail.openEngineMs };
     await expect(mirror(page).getByRole('columnheader')).toHaveText(['Row', 'id', 'category', 'amount', 'created_on']);
-    await expect(mirrorRow(page, 0)).toHaveText(['1', 'alpha', '0', '2026-01-01']);
+    await expect(mirrorRow(page, 0)).toHaveText(['1', 'alpha', '0.00', '2026-01-01']);
     await expect(mirror(page)).toHaveAttribute('aria-rowcount', String(ROWS + 1));
 
     const profiled = await nextMeasure(page, PROFILE_MEASURE, previousProfile);
@@ -240,7 +240,7 @@ test.describe('data path', () => {
     await expect(page.getByTestId('redo')).toBeEnabled();
 
     await expect(page.getByTestId('retyping')).toHaveCount(0);
-    await expect(mirrorRow(page, 0)).toHaveText(['1', 'alpha', '0', '2026-01-01']);
+    await expect(mirrorRow(page, 0)).toHaveText(['1', 'alpha', '0.00', '2026-01-01']);
 
     // The engine reads overrides with TRY_CAST: text that is not a number reads as null, and the app says so.
     const category = page.getByTestId('column-category-type');
@@ -250,10 +250,10 @@ test.describe('data path', () => {
     await expect(toast).toContainText(`${ROWS.toLocaleString('en-US')} values in category couldn’t be read as integer and show as null`, {
       timeout: 120_000,
     });
-    await expect(mirrorRow(page, 0)).toHaveText(['1', 'null (empty value)', '0', '2026-01-01']);
+    await expect(mirrorRow(page, 0)).toHaveText(['1', 'null (empty value)', '0.00', '2026-01-01']);
     await toast.getByRole('button', { name: /Undo/ }).click();
     await expect(category).toHaveAttribute('data-type', 'text');
-    await expect(mirrorRow(page, 0)).toHaveText(['1', 'alpha', '0', '2026-01-01'], { timeout: 120_000 });
+    await expect(mirrorRow(page, 0)).toHaveText(['1', 'alpha', '0.00', '2026-01-01'], { timeout: 120_000 });
     expect(rendererErrors, 'renderer console errors (CSP violations, exceptions)').toEqual([]);
   });
 
@@ -398,7 +398,7 @@ test.describe('data path', () => {
       await expect(mirrorHeader(page, 'id')).not.toHaveAttribute('aria-sort', before ?? '');
     }
     await expect(mirrorHeader(page, 'id')).not.toHaveAttribute('aria-sort', /.+/);
-    await expect(mirrorRow(page, 0)).toHaveText(['1', 'alpha', '0', '2026-01-01']);
+    await expect(mirrorRow(page, 0)).toHaveText(['1', 'alpha', '0.00', '2026-01-01']);
     await page.mouse.move(grid.cell(5, 1).x, grid.cell(5, 1).y);
 
     exitGate.scroll = await fling(app, page);
@@ -434,7 +434,7 @@ test.describe('data path', () => {
     console.log(`sort ${detail.sort}: first rows painted in ${measured.duration.toFixed(1)} ms (engine ${detail.firstPageEngineMs.toFixed(1)} ms)`);
     expect(detail).toMatchObject({ sort: 'amount asc', cached: false });
     await expect(mirrorHeader(page, 'amount')).toHaveAttribute('aria-sort', 'ascending');
-    await expect(mirrorRow(page, 0)).toHaveText(['1', 'alpha', '0', '2026-01-01']);
+    await expect(mirrorRow(page, 0)).toHaveText(['1', 'alpha', '0.00', '2026-01-01']);
     // The first sorted rows come from the engine's top-K path in well under a second.
     expect(measured.duration).toBeLessThan(1_000);
   });

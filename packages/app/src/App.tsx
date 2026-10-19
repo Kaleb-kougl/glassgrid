@@ -68,7 +68,7 @@ import {
   toIndexSelection,
 } from './views/grid-source';
 import { TopBar } from './views/TopBar';
-import { LocateDataDialog, MismatchBanner, RecentWorkspaces, RecoveryOffers } from './views/WorkspaceFileViews';
+import { LocateDataDialog, MismatchBanner, RecentWorkspaces, RecoveryOffers, SaveBeforeReplaceDialog } from './views/WorkspaceFileViews';
 import { workspaceFilesOf, type Platform } from './platform';
 import { createAppWorkspace, type AppWorkspace } from './workspace';
 import { isWorkspaceFileName, useWorkspaceFiles } from './workspace-files';
@@ -575,8 +575,12 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
 
   // The Retry action of an open error re-runs the latest `open` (called from an event handler).
   const retryOpen = useRef<(pick?: () => Promise<unknown>) => Promise<void>>(() => Promise.resolve());
+  // Asks before an open replaces unsaved work (set once the workspace-file hook below exists).
+  const confirmReplace = useRef<() => boolean | Promise<boolean>>(() => true);
   const open = useCallback(
     async (pick?: () => Promise<unknown>) => {
+      const go = confirmReplace.current();
+      if (go !== true && !(await go)) return;
       setOpening(true);
       const start = `${OPEN_TO_FIRST_ROWS_MEASURE}:start:${performance.now()}`;
       performance.mark(start);
@@ -759,7 +763,10 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
   // Workspace files (.glassgrid): only when the platform provides them
 
   const workspaceFiles = useWorkspaceFiles({ api: workspaceFilesOf(platform), workspace, engine, shell, state, toast: showToast });
-  const modal = workspaceFiles.locate !== null;
+  const modal = workspaceFiles.locate !== null || workspaceFiles.replacePrompt !== null;
+  useLayoutEffect(() => {
+    confirmReplace.current = workspaceFiles.confirmReplace;
+  }, [workspaceFiles.confirmReplace]);
   /** The latest of both, for the key and menu handlers (subscribed once, not on every render). */
   const latestFiles = useRef({ workspaceFiles, modal });
   useLayoutEffect(() => {
@@ -910,6 +917,16 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
         }
       />)}
 
+      {/* In the layout (not over it): the panels below move down while the notice is up. */}
+      {workspaceFiles.mismatch && (
+        <MismatchBanner
+          notice={workspaceFiles.mismatch}
+          busy={workspaceFiles.busy}
+          onLocate={workspaceFiles.relinkData}
+          onDismiss={workspaceFiles.dismissMismatch}
+          inert={modal}
+        />
+      )}
       <main className="workspace" inert={modal}>
         {state.dataSource === null ? (
           <section className="panel empty" aria-label="Open a file" data-testid="empty-state" data-over={fileOver}>
@@ -1194,14 +1211,7 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
           Drop to open
         </div>
       )}
-      {workspaceFiles.mismatch && (
-        <MismatchBanner
-          notice={workspaceFiles.mismatch}
-          busy={workspaceFiles.busy}
-          onLocate={workspaceFiles.relinkData}
-          onDismiss={workspaceFiles.dismissMismatch}
-        />
-      )}
+      {workspaceFiles.replacePrompt && <SaveBeforeReplaceDialog prompt={workspaceFiles.replacePrompt} busy={workspaceFiles.busy} />}
       {workspaceFiles.locate && (
         <LocateDataDialog
           prompt={workspaceFiles.locate}

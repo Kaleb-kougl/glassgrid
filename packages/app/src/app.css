@@ -584,14 +584,10 @@ body {
   min-width: 0;
 }
 
+/* A row of its own between the title bar and the panels, so it never covers the grid or the charts. */
 .banner-slot {
-  position: absolute;
-  top: calc(var(--gg-titlebar-h) + 8px);
-  left: 50%;
-  z-index: 30;
-  width: max-content;
-  max-width: min(760px, calc(100% - 32px));
-  transform: translateX(-50%);
+  flex: none;
+  padding: 0 var(--gg-panel-gap) var(--gg-panel-gap);
 }
 
 .recovery {
@@ -672,4 +668,9 @@ body {
   justify-content: flex-end;
   gap: 8px;
   margin-top: 4px;
+}
+
+/* Pushes what follows to the right ("Don't save" on the left, Cancel and Save on the right). */
+.dialog__actions-spacer {
+  flex: 1;
 }
