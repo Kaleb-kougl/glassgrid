@@ -60,7 +60,7 @@ describe('web platform', () => {
     expect(prepare).toHaveBeenCalledTimes(1);
     await platform.files.pickCsv();
     expect(order).toEqual(['prepare', 'prepare', 'pick']);
-    expect(setup().platform.files.prepare).toBeUndefined();
+    expect('prepare' in setup().platform.files).toBe(false);
   });
 
   it('offers the engine’s samples when it has them', async () => {
