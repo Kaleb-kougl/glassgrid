@@ -101,6 +101,8 @@ export interface QueryServiceOptions {
   exactDistinctMaxRows?: number;
   /** Text and boolean columns are counted exactly up to this many rows (default EXACT_CATEGORY_DISTINCT_MAX_ROWS). */
   exactCategoryDistinctMaxRows?: number;
+  /** How often a Parquet conversion reports progress (default PROGRESS_INTERVAL_MS; tests lower it). */
+  progressIntervalMs?: number;
 }
 
 /** Per-request context: cancellation and the view the request belongs to. */
@@ -273,6 +275,7 @@ export class QueryService extends Emitter<QueryServiceEvents> {
   private readonly sortIndexes: SortIndexes;
   readonly parquetCache: ParquetCache;
   private readonly autoConvertMinBytes: number;
+  private readonly progressIntervalMs: number;
   private readonly tempRoot: string;
   private readonly memoryLimitBytes: number;
   private readonly pagingStrategy: PagingStrategy;
@@ -303,6 +306,7 @@ export class QueryService extends Emitter<QueryServiceEvents> {
     this.filteredIndexDelayMs = options.filteredIndexDelayMs ?? FILTERED_INDEX_DELAY_MS;
     this.exactDistinctMaxRows = options.exactDistinctMaxRows ?? EXACT_DISTINCT_MAX_ROWS;
     this.exactCategoryDistinctMaxRows = options.exactCategoryDistinctMaxRows ?? EXACT_CATEGORY_DISTINCT_MAX_ROWS;
+    this.progressIntervalMs = options.progressIntervalMs ?? PROGRESS_INTERVAL_MS;
   }
 
   static async create(driver: DuckDriver, options: QueryServiceOptions): Promise<QueryService> {
@@ -1193,7 +1197,7 @@ export class QueryService extends Emitter<QueryServiceEvents> {
         for (const table of this.tablesWithKey(key)) {
           this.emit('event', { type: 'parquetProgress', table: table.id, fraction });
         }
-      }, PROGRESS_INTERVAL_MS);
+      }, this.progressIntervalMs);
       try {
         // PRAGMAs, unlike SET, still work after lock_configuration; they only touch this connection.
         await connection.enableProgress();

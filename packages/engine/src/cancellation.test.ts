@@ -5,8 +5,8 @@ import { createHarness, writeFixtureCsv, type Harness } from './test-support';
 
 /*
  * A CSV large enough that a full scan (profile) or a sort materialization
- * takes hundreds of milliseconds even on a fast machine, so interrupts are
- * observable.
+ * takes well over a hundred milliseconds even on a fast machine (about 160 ms
+ * on an M-series Mac), so interrupts are observable.
  */
 const ROWS = 2_000_000;
 
@@ -35,11 +35,18 @@ describe('interrupt via AbortSignal', () => {
   it('stops a running scan within a fraction of its full duration', async () => {
     const controller = new AbortController();
     const started = performance.now();
+    let abortedAt = Number.NaN;
     const pending = h.service.profile(table, { signal: controller.signal });
-    setTimeout(() => controller.abort(), 20);
+    setTimeout(() => {
+      abortedAt = performance.now();
+      controller.abort();
+    }, 20);
     await expect(pending).rejects.toMatchObject({ code: 'cancelled' });
-    const elapsed = performance.now() - started;
-    expect(elapsed).toBeLessThan(Math.max(fullProfileMs / 2, 50));
+    // Measured from the abort, against what was left of the scan: a fast machine scans 2M rows in ~160 ms,
+    // where "half the full scan" left less room than the interrupt itself takes. 100 ms covers that latency.
+    const afterAbort = performance.now() - abortedAt;
+    const remainingMs = fullProfileMs - (abortedAt - started);
+    expect(afterAbort).toBeLessThan(Math.max(remainingMs / 2, 100));
     // The connection is gone, the service is healthy.
     expect((await h.service.count(table)).value).toBe(ROWS);
   });

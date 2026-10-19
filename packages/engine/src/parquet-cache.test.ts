@@ -172,6 +172,9 @@ describe.skipIf(!hasParquet)('QueryService Parquet cache', () => {
   });
 
   it('converts in the background on open when asked, with progress events', async () => {
+    // Progress is sampled every 250 ms by default, and a fast machine converts 1.5M rows in less; sample
+    // often enough that any real conversion reports at least once.
+    await h.restart({ progressIntervalMs: 5 });
     const path = join(h.dir, 'auto.csv');
     await writeFixtureCsv(path, 1_500_000);
     const { file } = h.register(path);
