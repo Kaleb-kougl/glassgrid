@@ -116,6 +116,10 @@ function createMainWindow(): BrowserWindow {
     backgroundColor: nativeTheme.shouldUseDarkColors ? GROUND.dark : GROUND.light,
     // macOS: the traffic lights sit inset in the app's own 44px title bar.
     ...(isMac ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 16, y: 16 } } : { autoHideMenuBar: true }),
+    // Under test only: macOS clamps a window to the screen, and CI's macOS displays are smaller than the
+    // 1440x900 design frame. The grid mirrors only the columns on screen, so a clamped window hides columns
+    // the E2E expects. Other platforms already allow larger-than-screen windows.
+    ...(isE2E && isMac ? { enableLargerThanScreen: true } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,

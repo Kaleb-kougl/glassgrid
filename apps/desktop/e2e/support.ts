@@ -1,4 +1,4 @@
-import { readFile, mkdir, writeFile } from 'node:fs/promises';
+import { readFile, mkdir, rm, writeFile } from 'node:fs/promises';
 import { arch, cpus, platform, totalmem } from 'node:os';
 import { join, resolve } from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
@@ -227,6 +227,16 @@ export async function launchApp(csvPath: string, userData: string, env: Record<s
   app.process().stdout?.on('data', (chunk: Buffer) => logs.push(`[stdout] ${chunk.toString()}`));
   app.process().stderr?.on('data', (chunk: Buffer) => logs.push(`[stderr] ${chunk.toString()}`));
   const page = await app.firstWindow();
+  // The window's size decides how many grid columns are on screen, and so in the accessibility mirror the tests
+  // read. Windows and macOS shrink a new window to a small CI display (1440x900 is the design frame), so every
+  // test starts at that content size; macOS also needs `enableLargerThanScreen`, set under GLASSGRID_E2E in main.
+  // The sizes go into the logs, so a failure on a small display explains itself.
+  const sizes = await app.evaluate(({ BrowserWindow, screen }) => {
+    const win = BrowserWindow.getAllWindows()[0];
+    win?.setContentSize(1440, 900);
+    return { workArea: screen.getPrimaryDisplay().workAreaSize, content: win?.getContentSize() ?? [] };
+  });
+  logs.push(`[e2e] display work area ${sizes.workArea.width}x${sizes.workArea.height}, window content ${sizes.content.join('x')}\n`);
   // "Save changes?" on close: Don't Save unless a test says otherwise (a native box would block the run).
   await answerClosePrompt(app, 'dontSave');
   page.on('console', (message) => {
@@ -312,4 +322,12 @@ export async function clickMenuItem(app: ElectronApplication, id: string): Promi
 /** Labels of the File → Open Recent submenu. */
 export async function recentMenuLabels(app: ElectronApplication): Promise<string[]> {
   return app.evaluate(({ Menu }) => Menu.getApplicationMenu()?.getMenuItemById('open-recent')?.submenu?.items.map((item) => item.label) ?? []);
+}
+
+/**
+ * Remove a test's temp folder. On Windows, Electron's helper processes can hold files in userData for a moment
+ * after the app closes (EBUSY); `rm` retries those errors with a back-off instead of failing the test.
+ */
+export async function removeWorkDir(dir: string): Promise<void> {
+  await rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
 }

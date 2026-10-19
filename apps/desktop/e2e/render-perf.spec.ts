@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -25,7 +25,7 @@ import {
   type TraceEvent,
   type TraceSummary,
 } from './render-analysis';
-import { gridGeometry, launchApp, machineInfo, RESULTS_DIR, ROWS, stats, writeBaseline, type LaunchedApp } from './support';
+import { gridGeometry, launchApp, machineInfo, RESULTS_DIR, ROWS, stats, removeWorkDir, writeBaseline, type LaunchedApp } from './support';
 
 /*
  * Render-path benchmark: where the non-engine time of a chart create goes,
@@ -349,7 +349,7 @@ test.describe('render path', () => {
 
   test.afterAll(async () => {
     await session?.app.close();
-    if (workDir) await rm(workDir, { recursive: true, force: true });
+    if (workDir) await removeWorkDir(workDir);
   });
 
   test('chart create: cached replays and fresh filters, heatmap and bars', async () => {
