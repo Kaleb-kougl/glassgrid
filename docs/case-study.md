@@ -47,7 +47,9 @@ written against a `Platform` interface that each shell implements.
 On the desktop, main wires a `MessagePort` between the renderer and the
 engine's `utilityProcess`, so queries never pass through main. On the web, the
 same engine runs in a Web Worker, reached by `postMessage` with transferred
-Arrow buffers. Both clients implement one `EngineClientApi` with per-view
+Arrow buffers; it starts on first intent (a sample link, or pointing at Open
+or a sample), so the start screen downloads none of its 7.7 MB (gzip) of
+WebAssembly. Both clients implement one `EngineClientApi` with per-view
 sequence numbers: a newer request supersedes a stale one.
 
 ## Hard problems
@@ -169,8 +171,9 @@ navigation, cold, on localhost.
 - **Workspace files.** A `.glassgrid` file is versioned JSON that references
   the data by relative path, absolute path and a fingerprint (size, mtime,
   SHA-256 of the first and last 1 MB). Opening tries both paths, then asks the
-  user to locate the file, and warns when the fingerprint differs. Writes are
-  atomic; unsaved work autosaves ([persistence notes](m4-persistence.md)).
+  user to locate the file, and shows a docked banner when the fingerprint
+  differs. An open that would replace unsaved work asks to save first. Writes
+  are atomic; unsaved work autosaves ([persistence notes](m4-persistence.md)).
 
 ## Results
 
@@ -182,8 +185,8 @@ navigation, cold, on localhost.
 | Chart create, p95: bar / line / histogram | < 250 ms | 88.8 / 196.5 / 206.1 ms | [M3 exit gate](benchmarks/m3/m3-exit-gate-medians-linux-x64.json) |
 | Chart create, p95: heatmap | < 250 ms | **257.1 ms (missed)** | same |
 | Cross-filter, 4 charts + grid, p95 | < 100 ms | 80.5 ms | same |
-| Web first-load JS (gzip) | < 400 kB | 251 kB | [M4 result](technical-design.md#m4--persistence-and-web-demo-week-4) |
-| Web demo, sample link → all charts (1.4M–2M rows) | | 3.0–3.2 s | [web demo samples](benchmarks/m4/web-demo-samples-chromium-linux-x64.json) |
+| Web first-load JS (gzip) | < 400 kB | 253.5 kB (251 kB at M4) | `pnpm --filter @glassgrid/web size`, [M4 result](technical-design.md#m4--persistence-and-web-demo-week-4) |
+| Web demo, sample link → all charts (1.4M–2M rows) | | 3.0–3.2 s (3.7–4.4 s to first chart on a busier VM) | [web demo samples](benchmarks/m4/web-demo-samples-chromium-linux-x64.json), [notes](m4-web-demo.md#architecture) |
 
 All on a Linux VM with 2 vCPUs (Xeon @ 2.1 GHz) and 8 GB, medians of three
 runs: the desktop in Electron under Xvfb with software rendering, on the
@@ -199,12 +202,16 @@ background Parquet copy; the web demo in headless Chromium from localhost.
   cubes, and a selective brush can take 1.6 to 1.9 s to find a page of matches.
 - **The web demo** is not deployed yet, is untested in Firefox and Safari, has
   no workspace save, and is single-threaded (no cross-origin isolation). A
-  second tab cannot read the same OPFS cached copy.
+  second tab cannot read the same OPFS cached copy. Below 760 px the panels
+  stack for phones, but touch brushing is untested.
 - **Rendering.** The app re-renders the whole tree around each interaction;
   65 to 90% of those component renders are wasted. It costs milliseconds, not
   the budget, but it is the next cleanup.
-- **Data.** Distinct counts are approximate, and the sample datasets and the
-  exit-gate benchmark files are synthetic, not real taxi records.
+- **Data.** Distinct counts are exact where cheap but estimated (shown as ≈)
+  for numbers and timestamps past 250,000 rows and for every column past 5M
+  rows. The
+  sample datasets and the exit-gate benchmark files are synthetic, not real
+  taxi records.
 
 ## What's next
 

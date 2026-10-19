@@ -26,13 +26,14 @@ builds an unsigned installer for your OS (see [Develop](#develop)).
 | Scroll 10M rows: p95 frame interval; renderer memory before → after a full scroll | **16.7 ms**; 181 → 183 MB | 60 fps; flat, < 300 MB | [m2 exit gate](docs/benchmarks/m2/m2-exit-gate-medians-linux-x64.json) |
 | Chart create on 10M rows (drop → drawn), p95: bar / line / histogram / **heatmap** | 88.8 / 196.5 / 206.1 / **257.1 ms** (heatmap misses) | < 250 ms | [m3 exit gate](docs/benchmarks/m3/m3-exit-gate-medians-linux-x64.json) |
 | Web demo, cold: sample link → all four charts drawn; brush → every view painted | 3.0–3.2 s; 115–265 ms | | [web demo samples](docs/benchmarks/m4/web-demo-samples-chromium-linux-x64.json) |
-| Web demo first-load JS, gzip (DuckDB-WASM loads in a worker, excluded) | **251 kB** | < 400 kB | [M4 result](docs/technical-design.md#m4--persistence-and-web-demo-week-4), `pnpm --filter @glassgrid/web size` |
+| Web demo first-load JS, gzip (DuckDB-WASM loads later, in a worker, on first intent) | **253.5 kB** | < 400 kB | `pnpm --filter @glassgrid/web size` at this commit ([M4 recorded 251 kB](docs/technical-design.md#m4--persistence-and-web-demo-week-4)) |
 
 Conditions: a Linux VM with 2 vCPUs (Xeon @ 2.1 GHz) and 8 GB, medians of three
 runs. Desktop: Electron 44 under Xvfb with software rendering; chart and
 cross-filter numbers use the background Parquet copy of the CSV. Web: headless
 Chromium against the production build on localhost, so downloads are nearly
-free. The budgets were set for the macOS arm64 CI
+free; later runs on a busier VM put the first chart at 3.7–4.4 s
+([web demo notes](docs/m4-web-demo.md#architecture)). The budgets were set for the macOS arm64 CI
 runners, where they have not been measured yet. The heatmap miss is query time:
 a compute-bound aggregate of about 175 ms on two cores
 ([M3 notes](docs/m3-notes.md#exit-gate)).
@@ -56,7 +57,9 @@ More screenshots: [start screen](docs/images/showcase/web-start.png),
   the view: a 1,000-row grid page, or a chart's aggregated (or M4-downsampled) rows.
 - **One app, two runtimes.** `packages/app` renders the same React app on a
   desktop or web `Platform`; `packages/engine` runs the same query service on
-  native DuckDB in an Electron `utilityProcess` or on DuckDB-WASM in a Web Worker.
+  native DuckDB in an Electron `utilityProcess` or on DuckDB-WASM in a Web Worker,
+  which the web demo starts only on first intent (a sample link, or pointing at
+  Open or a sample).
 - **Every action is a command.** Clicks, menus and keys dispatch typed, validated
   commands with undo, so an MCP agent (M6) can drive the same registry.
 
@@ -123,7 +126,7 @@ pnpm e2e          # build, then Playwright E2E on a generated 1M-row CSV, then t
 pnpm e2e:10m      # the same with 10M rows (the exit-gate benchmarks)
 pnpm e2e:web      # web demo E2E on the production build with production headers
 pnpm package      # electron-builder installer for the current OS (unsigned)
-pnpm showcase     # rebuild, then regenerate docs/images/showcase (about 5 min; 2 more on first run)
+pnpm showcase     # rebuild, then regenerate docs/images/showcase (2–5 min; about 2 more on first run)
 ```
 
 E2E writes benchmark JSON to `apps/desktop/e2e-results/`. On Linux without a
