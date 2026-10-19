@@ -344,7 +344,9 @@ browser test.
 
 ## Deploying (Vercel)
 
-Nothing is deployed from this branch. To connect it:
+The step-by-step for the first publish (GitHub repository, Vercel import,
+previews, `scripts/check-deploy.sh`) is [deploy.md](deploy.md). Nothing is
+deployed from this branch. To connect it:
 
 1. **Create the project.** In Vercel, **Add New → Project**, then import
    the GitHub repository.
