@@ -301,7 +301,9 @@ body {
 
 .empty__zone {
   width: 560px;
-  height: 300px;
+  max-width: 100%;
+  /* Grows with the sample list (web) instead of squeezing the icon. */
+  min-height: 300px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -320,6 +322,7 @@ body {
 }
 
 .empty__icon {
+  flex: none;
   width: 40px;
   height: 48px;
   display: flex;
@@ -673,4 +676,9 @@ body {
 /* Pushes what follows to the right ("Don't save" on the left, Cancel and Save on the right). */
 .dialog__actions-spacer {
   flex: 1;
+}
+
+/* A chart's first result has not arrived: keep the plot's room, so the cards below do not jump when it does. */
+.chart-view__plot--pending {
+  min-height: 174px; /* a line, area or histogram plot: 160px plus the x axis */
 }

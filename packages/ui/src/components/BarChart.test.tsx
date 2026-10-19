@@ -11,11 +11,13 @@ const data: BarDatum[] = [
 ];
 
 describe('barLabelFormatter', () => {
-  it('keeps full values under a million and goes compact for every bar from there', () => {
-    expect(barLabelFormatter(data.slice(1), formatAggregate)(631_488)).toBe('631,488');
-    const compact = barLabelFormatter(data, formatAggregate);
-    expect(compact(2_688_301)).toBe('2.69M');
-    expect(compact(152_906)).toBe('153K');
+  it('keeps counts exact, and goes compact for every bar once other values reach a million', () => {
+    expect(barLabelFormatter(data, formatAggregate)(2_688_301)).toBe('2,688,301');
+    const sums = data.map((d) => ({ ...d, value: (d.value ?? 0) + 0.25 }));
+    expect(barLabelFormatter(sums.slice(1), formatAggregate)(631_488.25)).toBe('631,488.25');
+    const compact = barLabelFormatter(sums, formatAggregate);
+    expect(compact(2_688_301.25)).toBe('2.69M');
+    expect(compact(152_906.25)).toBe('153K');
     expect(barLabelFormatter([{ key: 'x', label: 'x', value: null }], formatAggregate)).toBe(formatAggregate);
   });
 });

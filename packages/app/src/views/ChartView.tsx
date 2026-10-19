@@ -407,7 +407,7 @@ export function ChartView({
     >
       {/* A press on the plot may start a brush or click: build the cross-filter cubes while the pointer moves. */}
       <div
-        className="chart-view__plot"
+        className={result || data.status === 'error' ? 'chart-view__plot' : 'chart-view__plot chart-view__plot--pending'}
         data-mark={mark}
         onPointerDownCapture={(event) => {
           if (event.button === 0) onBrushStart(chart.id);

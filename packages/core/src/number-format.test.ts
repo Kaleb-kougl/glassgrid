@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   COMPACT_LABEL_MIN,
+  compactLabels,
   decimalsNeeded,
   formatCompact,
   formatFilterNumber,
@@ -172,8 +173,12 @@ describe('formatCompact and labelFormatter', () => {
     expect(labelFormatter({ aggregate: 'sum', type: 'float' }, sums)(sums[0] ?? 0)).toBe('39.0M');
     const counts = [85_076, 1_209];
     expect(labelFormatter({ aggregate: 'count' }, counts)(85_076)).toBe('85,076');
-    expect(labelFormatter({}, [COMPACT_LABEL_MIN - 1])(COMPACT_LABEL_MIN - 1)).toBe('999,999');
-    expect(labelFormatter({}, [-COMPACT_LABEL_MIN])(-COMPACT_LABEL_MIN)).toBe('-1.00M');
+    // Whole numbers stay exact up to a billion; other values go compact from a million.
+    expect(labelFormatter({ aggregate: 'count' }, [1_375_980, 4_092])(1_375_980)).toBe('1,375,980');
+    expect(labelFormatter({ aggregate: 'count' }, [2e9])(2e9)).toBe('2.00B');
+    expect(labelFormatter({}, [COMPACT_LABEL_MIN - 0.5])(COMPACT_LABEL_MIN - 0.5)).toBe('999,999.50');
+    expect(labelFormatter({}, [-COMPACT_LABEL_MIN - 0.5])(-COMPACT_LABEL_MIN)).toBe('-1.00M');
+    expect(compactLabels([Number.NaN])).toBe(false);
   });
 });
 

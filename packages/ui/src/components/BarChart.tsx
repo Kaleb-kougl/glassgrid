@@ -1,7 +1,7 @@
 import type { Table } from 'apache-arrow';
 import { scaleBand, scaleLinear } from 'd3-scale';
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { COMPACT_LABEL_MIN, formatCompact, type FilterValue } from '@glassgrid/core';
+import { compactLabels, formatCompact, type FilterValue } from '@glassgrid/core';
 import { chartColumnsFromArrow, OTHER_SERIES_KEY } from '../charts/arrow.js';
 import { barPath, chartFonts, ellipsize, measuringContext, sizeCanvas, type ChartFonts } from '../charts/canvas.js';
 import { seriesColors } from '../charts/colors.js';
@@ -278,12 +278,11 @@ export function barDataFromArrow(table: Table, data: ChartColumns = chartColumns
 /**
  * The default bar label: `formatValue`, or compact text for every bar once
  * the largest value reaches a million (`39.0M` instead of `39,015,093.43`;
- * the tooltip keeps the full value).
+ * counts stay exact up to a billion; the tooltip keeps the full value). See
+ * core's `compactLabels`.
  */
 export function barLabelFormatter(data: readonly BarDatum[], formatValue: (value: number) => string): (value: number) => string {
-  let max = 0;
-  for (const d of data) if (d.value !== null && Number.isFinite(d.value)) max = Math.max(max, Math.abs(d.value));
-  return max >= COMPACT_LABEL_MIN ? formatCompact : formatValue;
+  return compactLabels(data.map((d) => d.value ?? Number.NaN)) ? formatCompact : formatValue;
 }
 
 /**

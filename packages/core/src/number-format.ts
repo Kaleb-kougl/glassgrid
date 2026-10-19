@@ -22,8 +22,9 @@ import type { Aggregate } from './spec/field.js';
  *   column's own precision (up to 6 decimals); a `sum` of floats has two
  *   fixed decimals (`9,399,854.36`), unless every value of the result is a
  *   whole number. Below 1 a measure shows 3 significant digits (`0.0123`).
- * - Compact (bar labels when space is tight): 3 significant digits and a
- *   suffix, `39.0M`, `812K`, `1.50B`.
+ * - Compact (bar labels once a chart's largest value reaches a million, a
+ *   billion for whole numbers): 3 significant digits and a suffix, `39.0M`,
+ *   `812K`, `1.50B`. Tooltips keep the full value.
  * - Magnitudes Intl cannot group sensibly (≥ 1e21, or non-zero values that
  *   round to 0) use a short exponent: `1.23e-7`, `4.00e21`.
  *
@@ -225,22 +226,31 @@ export function measureFormatter(format: MeasureFormat = {}, values?: ArrayLike<
   };
 }
 
-/** Bar labels switch to compact text when the largest value reaches this. */
+/** Bar labels switch to compact text when the largest value reaches this (counts and other whole numbers: COMPACT_INTEGER_LABEL_MIN). */
 export const COMPACT_LABEL_MIN = 1_000_000;
+/** Whole numbers (counts) stay exact up to here: `1,375,980` reads better than `1.38M` and fits a label. */
+export const COMPACT_INTEGER_LABEL_MIN = 1_000_000_000;
+
+/** Whether labels for `values` should be compact (see COMPACT_LABEL_MIN). */
+export function compactLabels(values: ArrayLike<number>): boolean {
+  let max = 0;
+  let integral = true;
+  for (let i = 0; i < values.length; i += 1) {
+    const v = values[i] ?? Number.NaN;
+    if (!Number.isFinite(v)) continue;
+    if (Math.abs(v) > max) max = Math.abs(v);
+    if (integral && !Number.isInteger(trimFloat(v))) integral = false;
+  }
+  return max >= (integral ? COMPACT_INTEGER_LABEL_MIN : COMPACT_LABEL_MIN);
+}
 
 /**
  * A formatter for labels drawn next to marks, where space is tight: the full
- * measure while the largest value is under a million, compact (`39.0M`)
- * for every label once it is not.
+ * measure while the largest value is under a million (a billion for whole
+ * numbers), compact (`39.0M`) for every label once it is not.
  */
 export function labelFormatter(format: MeasureFormat = {}, values: ArrayLike<number> = []): (value: number) => string {
-  let max = 0;
-  for (let i = 0; i < values.length; i += 1) {
-    const v = Math.abs(values[i] ?? 0);
-    if (Number.isFinite(v) && v > max) max = v;
-  }
-  if (max >= COMPACT_LABEL_MIN) return formatCompact;
-  return measureFormatter(format, values);
+  return compactLabels(values) ? formatCompact : measureFormatter(format, values);
 }
 
 const MAX_RANGE_DECIMALS = 6;

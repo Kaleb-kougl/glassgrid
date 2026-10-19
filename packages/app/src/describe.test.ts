@@ -22,8 +22,12 @@ describe('words for state', () => {
     expect(axisExpression({ mark: 'line', x: { column: 'pickup_at' }, filters: [] }, 'x', columns)).toBe('hour(pickup_at)');
     expect(axisExpression({ mark: 'histogram', x: { column: 'trip_distance', bin: 'auto' }, filters: [] }, 'x', columns)).toBe('bin(trip_distance, 0.5)');
     expect(axisExpression({ mark: 'histogram', x: { column: 'trip_distance', bin: 2 }, filters: [] }, 'x', columns)).toBe('bin(trip_distance, 2)');
-    // Without a profile the field reads as it is in the spec.
+    // Without a profile the field reads as it is in the spec (not the compiler's width-1 fallback, which would flash before the real width).
     expect(axisExpression({ mark: 'histogram', x: { column: 'trip_distance', bin: 'auto' }, filters: [] }, 'x', [{ name: 'trip_distance', type: 'float' }])).toBe(
+      'bin(trip_distance, auto)',
+    );
+    // A profiled column without values (min and max null) draws with the fallback width.
+    expect(axisExpression({ mark: 'histogram', x: { column: 'trip_distance', bin: 'auto' }, filters: [] }, 'x', [{ name: 'trip_distance', type: 'float', min: null, max: null }])).toBe(
       'bin(trip_distance, 1)',
     );
   });
