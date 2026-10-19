@@ -60,7 +60,8 @@ for (const sample of manifest.samples) {
   test(`/?sample=${sample.id} opens the ${sample.id} workspace: charts with data, a brush cross-filters, the grid scrolls`, async ({ page }) => {
     const problems = await watchProblems(page);
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto(`/?sample=${sample.id}`);
+    // Relative to the base: /?sample=… at the root, /glassgrid/?sample=… (redirected to /glassgrid?sample=…) under it.
+    await page.goto(`./?sample=${sample.id}`);
     // The production CSP header (the engine worker's policy) and the <meta> copy are both in force.
     expect(await page.locator('meta[http-equiv="Content-Security-Policy"]').getAttribute('content')).toContain("script-src 'self' 'wasm-unsafe-eval'");
 

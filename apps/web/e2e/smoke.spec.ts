@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
-import { expectEngineWithParquet, expectNoProblems, shownRows, watchProblems } from './support';
+import { BASE, expectEngineWithParquet, expectNoProblems, shownRows, watchProblems } from './support';
 
 /*
  * The web demo in Chromium, on the production build served with the
@@ -16,7 +16,7 @@ const FIXTURES = resolve(import.meta.dirname, 'fixtures');
 
 async function openStart(page: Page) {
   const problems = await watchProblems(page);
-  const response = await page.goto('/');
+  const response = await page.goto('./');
   return { problems, headers: response?.headers() ?? {} };
 }
 
@@ -27,6 +27,8 @@ test('/ shows the start screen with the production headers and the three samples
     if (/engine-worker|duckdb-|\.wasm$|duckdb-extensions/.test(request.url())) engineRequests.push(request.url());
   });
   const { problems, headers } = await openStart(page);
+  // At the root: /. Under a base: /glassgrid/ answers with a 308 to /glassgrid (Next.js's default), which serves the app.
+  expect(new URL(page.url()).pathname).toBe(BASE === '/' ? '/' : BASE.slice(0, -1));
 
   // The header policy (what the engine worker runs under) and the <meta> copy.
   expect(headers['content-security-policy']).toContain("script-src 'self' 'wasm-unsafe-eval'");
@@ -120,10 +122,12 @@ test('/ opens a picked Parquet file with list, struct and blob columns (rendered
 test('/gallery (and ?gallery) renders the component gallery', async ({ page }) => {
   // The gallery shows error toasts on purpose (component states); console, CSP and HTTP problems still count.
   const problems = await watchProblems(page, { alerts: false });
-  await page.goto('/gallery');
+  await page.goto('gallery');
   await expect(page.getByRole('heading', { level: 1, name: 'Glassgrid component gallery' })).toBeVisible();
   await expect(page.getByTestId('app')).toHaveCount(0);
-  await page.goto('/?gallery');
+  await page.goto('gallery/');
+  await expect(page.getByRole('heading', { level: 1, name: 'Glassgrid component gallery' })).toBeVisible();
+  await page.goto('./?gallery');
   await expect(page.getByRole('heading', { level: 1, name: 'Glassgrid component gallery' })).toBeVisible();
   await expectNoProblems(page, problems);
 });

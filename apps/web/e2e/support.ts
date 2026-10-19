@@ -1,4 +1,5 @@
 import { expect, type Page } from '@playwright/test';
+import { parseBase } from '../hosting.ts';
 
 /*
  * Shared by the web E2E specs: everything that would mean the demo is
@@ -13,8 +14,12 @@ import { expect, type Page } from '@playwright/test';
  * - failed requests, except aborted ones (a HEAD whose body is never read,
  *   a superseded fetch);
  * - `[glassgrid]` warnings (extensions that failed to load, a sample whose
- *   workspace no longer fits its data).
+ *   workspace no longer fits its data);
+ * - under a base (GLASSGRID_BASE), any same-origin request outside it.
  */
+
+/** The base the build under test is served at (playwright.config.ts). */
+export const BASE = parseBase(process.env['GLASSGRID_BASE']);
 
 export interface Problems {
   readonly list: string[];
@@ -39,6 +44,11 @@ export async function watchProblems(page: Page, options: { alerts?: boolean } = 
   page.on('pageerror', (error) => problems.list.push(`pageerror: ${error.message}`));
   page.on('response', (response) => {
     if (response.status() >= 400) problems.list.push(`HTTP ${response.status()} ${response.request().method()} ${response.url()}`);
+  });
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if (BASE === '/' || !/^https?:$/.test(url.protocol)) return;
+    if (url.pathname !== BASE.slice(0, -1) && !url.pathname.startsWith(BASE)) problems.list.push(`outside ${BASE}: ${request.method()} ${request.url()}`);
   });
   page.on('requestfailed', (request) => {
     const failure = request.failure()?.errorText ?? '';
