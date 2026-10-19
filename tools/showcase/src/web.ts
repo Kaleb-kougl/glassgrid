@@ -91,12 +91,11 @@ export async function captureStills(baseUrl: string): Promise<void> {
   await ensureDir(MEDIA_DIR);
   const browser = await chromium.launch({ executablePath: await findChromium(), args: sandboxFlags() });
   try {
-    // Start screen: the engine is ready (its start-up line) and the three samples are offered.
+    // Start screen: the three samples are offered. DuckDB-WASM starts lazily (on a
+    // sample link, or when a person points at Open or a sample), so nothing here waits for it.
     {
       const { context, page } = await newPage(browser, SHOT, 'light');
-      const ready = page.waitForEvent('console', { predicate: (message) => message.text().includes('DuckDB-WASM') && message.text().includes('ready'), timeout: 120_000 });
       await page.goto(`${baseUrl}/`);
-      await ready;
       await page.getByText('Or try a sample').waitFor();
       await parkPointer(page);
       await settle(page);

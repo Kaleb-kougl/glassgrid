@@ -12,9 +12,9 @@
  * synthetic CSV with tools/datasets on its first run and keeps it in
  * tools/showcase/out/.
  *
- * Duration on a 2-vCPU Linux VM: about 5 minutes (build 20 s, web stills
- * 45 s, demo video 1.5 to 2.5 min, desktop 1 min), plus about 2 minutes on
- * the first run to generate the CSV.
+ * Duration on a 2-vCPU Linux VM: 2 to 5 minutes depending on load (build
+ * 10-20 s, web stills 30-45 s, demo video 1-2.5 min, desktop 30-60 s), plus
+ * about 2 minutes on the first run to generate the CSV.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, readdirSync, statSync } from 'node:fs';
