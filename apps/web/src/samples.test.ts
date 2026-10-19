@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ChartSpecSchema, parseWorkspace, toFileHandle, type Fingerprint } from '@glassgrid/core';
 import { createAppWorkspace } from '@glassgrid/app';
 import manifest from '../public/samples/samples.manifest.json';
-import { openSampleWorkspace, sampleFromSearch, SAMPLES, type SampleOpenDeps } from './samples';
+import { openSampleWorkspace, sampleFromSearch, SAMPLES, SAMPLES_PATH, type SampleOpenDeps } from './samples';
 
 /*
  * The committed sample workspaces (public/samples/*.glassgrid, written by
@@ -90,6 +90,16 @@ describe('openSampleWorkspace', () => {
     expect(state.charts.map((chart) => chart.title)).toEqual(['Trips per day', 'Trips by pickup zone', 'Trip distance (km)', 'Pickup locations']);
     expect(state.document).toMatchObject({ id: null, fileName: 'taxi.glassgrid' });
     expect(workspace.store.getHistory().past).toHaveLength(1);
+  });
+
+  it('reads everything from the samples base, never from the workspace\'s absolutePath (a subfolder build: /glassgrid/samples/)', async () => {
+    const { all, fetch, registerUrl } = deps({ base: '/glassgrid/samples/' });
+    // The committed workspaces record "/samples/<file>" as absolutePath (metadata from the generator); the web loader ignores it.
+    expect(parseWorkspace(byName.get('taxi.glassgrid')).data.absolutePath).toBe('/samples/taxi-trips-2025h1.parquet');
+    expect(await openSampleWorkspace(taxi, all)).toEqual({ status: 'cancelled' });
+    expect(fetch).toHaveBeenCalledWith('/glassgrid/samples/taxi.glassgrid');
+    expect(registerUrl).toHaveBeenCalledWith('/glassgrid/samples/taxi-trips-2025h1.parquet', { name: 'taxi-trips-2025h1.parquet' });
+    expect(SAMPLES_PATH).toBe('/samples/'); // the default build's base is /
   });
 
   it('reports restore warnings when the data no longer matches the workspace', async () => {

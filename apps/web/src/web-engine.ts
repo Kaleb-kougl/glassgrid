@@ -1,5 +1,6 @@
 import type { CommandRegistry, OpenCsvResult } from '@glassgrid/core';
 import { createWorkerEngine, type WorkerEngine } from '@glassgrid/engine/web';
+import { absoluteUrl } from './base';
 import { openSampleWorkspace, SAMPLES, type SampleInfo } from './samples';
 import type { WebEngine } from './web-platform';
 
@@ -24,7 +25,7 @@ export const SAMPLE_LOADED_MARK = 'glassgrid:sample-loaded';
 
 export interface WebEngineOptions {
   readonly registry: Pick<CommandRegistry, 'dispatch'>;
-  /** Defaults to this origin's /duckdb-extensions. */
+  /** Defaults to this origin's <base>duckdb-extensions (extensionRepository()). */
   readonly extensionRepository?: string;
   readonly samples?: readonly SampleInfo[];
   /** An engine to use (tests); default: a new worker engine that starts lazily. */
@@ -37,8 +38,13 @@ export interface DuckdbWebEngine extends WebEngine {
   readonly worker: WorkerEngine;
 }
 
+/** The signed Parquet extension's repository on this origin: `https://host/duckdb-extensions`, or under the base. */
+export function extensionRepository(origin: string, base?: string): string {
+  return absoluteUrl('duckdb-extensions', origin, base);
+}
+
 export function createDuckdbWebEngine(options: WebEngineOptions): DuckdbWebEngine {
-  const worker = options.engine ?? createWorkerEngine({ start: 'lazy', extensionRepository: options.extensionRepository ?? `${location.origin}/duckdb-extensions` });
+  const worker = options.engine ?? createWorkerEngine({ start: 'lazy', extensionRepository: options.extensionRepository ?? extensionRepository(location.origin) });
   const samples = options.samples ?? SAMPLES;
   // Visible in the console (and to the E2E tests): what DuckDB-WASM runs as, and whether Parquet loaded.
   worker.ready.then(

@@ -7,11 +7,12 @@ import {
   type OpenedData,
 } from '@glassgrid/core';
 import type { EngineClientLike, SampleDataset } from '@glassgrid/app';
+import { withBase } from './base';
 
 /*
  * The web demo's sample workspaces. Each sample is a `.glassgrid` (format v1)
  * workspace with a few cross-filtered charts, over a synthetic Parquet file
- * served from this origin under /samples/ (generated and committed by
+ * served from this origin under <base>samples/ (generated and committed by
  * `pnpm --filter @glassgrid/datasets samples`; see tools/datasets/src/samples.ts).
  *
  * Opening one is a workspace open with the data relinked by URL: fetch the
@@ -35,7 +36,8 @@ export const SAMPLES: readonly SampleInfo[] = [
   { id: 'sensors', label: 'Sensor readings', detail: '1.4M rows · 8 MB Parquet', workspace: 'sensors.glassgrid', data: 'sensor-readings-2025-09.parquet' },
 ];
 
-export const SAMPLES_PATH = '/samples/';
+/** Where the samples are served: `/samples/`, or `/glassgrid/samples/` in a subfolder build. */
+export const SAMPLES_PATH = withBase('samples/');
 
 /** The sample a link asks for (`/?sample=taxi`), or null. */
 export function sampleFromSearch(search: string, samples: readonly SampleInfo[] = SAMPLES): SampleInfo | null {
@@ -49,7 +51,7 @@ export interface SampleOpenDeps {
   readonly registerUrl: (url: string, options?: { name?: string }) => Promise<{ handle: FileHandle; fileName: string }>;
   readonly registry: Pick<CommandRegistry, 'dispatch'>;
   readonly fetch?: (url: string) => Promise<Pick<Response, 'ok' | 'status' | 'text'>>;
-  /** Where the samples are served (default `/samples/`). */
+  /** Where the samples are served (default SAMPLES_PATH, under the base). */
   readonly base?: string;
   /** Restore warnings (a column the data no longer has, a changed type): none are expected for a sample. */
   readonly onWarnings?: (sample: SampleInfo, warnings: readonly { code: string; message: string }[]) => void;

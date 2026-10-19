@@ -12,8 +12,9 @@ import { isGalleryRoute } from './routes';
  * and the gallery only the gallery:
  * - `/`: the shared app (app-route.tsx);
  * - `/gallery` or `?gallery`: the component gallery.
- * Hosting must serve index.html for /gallery (vite dev and preview do; the
- * Vercel rewrite is in docs/m4-app-package.md).
+ * Both are relative to the base (`/glassgrid/gallery` in a subfolder build,
+ * see base.ts). Hosting must serve index.html for the gallery route (vite
+ * dev and preview do; the rewrites for Vercel and Next.js are in hosting.ts).
  */
 
 const root = document.getElementById('root');
