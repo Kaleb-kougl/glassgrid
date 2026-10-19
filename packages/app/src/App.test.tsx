@@ -112,10 +112,13 @@ describe('App', () => {
     expect(engine.pageFetcher).toHaveBeenCalledWith(tableId, { viewId: 'grid', sort: [], filters: [] });
     expect(engine.pages[0]).toMatchObject({ table: tableId, offset: 0, limit: 1000 });
     expect(gridHeaders()).toEqual(['Row', 'id', 'category', 'amount']);
-    expect(gridCells()).toEqual(['1', 'alpha', '1.5', '2', 'null (empty value)', '2']);
+    // Floats on one page share their decimals (2 → 2.0 next to 1.5).
+    expect(gridCells()).toEqual(['1', 'alpha', '1.5', '2', 'null (empty value)', '2.0']);
     expect(mirror().getAttribute('aria-rowcount')).toBe('3');
     await waitFor(() => expect(within(screen.getByTestId('column-category')).getByText('12,345')).toBeDefined());
-    expect(within(screen.getByTestId('column-amount')).getByText('8.41M')).toBeDefined();
+    // An estimated count (numbers of a large table) says so; exact ones do not.
+    expect(within(screen.getByTestId('column-amount')).getByText('≈8.41M').getAttribute('title')).toMatch(/^Estimated/);
+    expect(within(screen.getByTestId('column-category')).queryByText(/≈/)).toBeNull();
     expect(screen.getByTestId('column-amount').getAttribute('title')).toBe('no nulls');
     // The profile is recorded in the workspace (for default charts and brush snapping), without an undo entry.
     expect(workspace.store.getState().columns.find((column) => column.name === 'category')?.profile).toEqual({

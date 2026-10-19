@@ -5,6 +5,7 @@ import {
   crossfilterPlan,
   effectiveColumnType,
   filterChips,
+  formatInteger,
   isNumericType,
   stateColumns,
   tableIdForFile,
@@ -123,7 +124,6 @@ interface ToastState {
   action?: ToastAction;
 }
 
-const numberFormat = new Intl.NumberFormat('en-US');
 const compact = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 2 });
 const percent = new Intl.NumberFormat('en-US', { style: 'percent', maximumFractionDigits: 1 });
 
@@ -145,9 +145,14 @@ function isEditableTarget(target: EventTarget | null): boolean {
   return target.isContentEditable || target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement;
 }
 
-/** Distinct counts as the column list shows them: exact below a million, then compact (8.41M). */
-export function formatDistinct(count: number): string {
-  return count < 1_000_000 ? numberFormat.format(count) : compact.format(count);
+/**
+ * Distinct counts as the column list shows them: grouped below a million,
+ * then compact (8.41M), with `≈` when the engine estimated it (numbers and
+ * timestamps of large tables, see the engine's EXACT_DISTINCT_MAX_ROWS).
+ */
+export function formatDistinct(count: number, approximate = false): string {
+  const text = count < 1_000_000 ? formatInteger(count) : compact.format(count);
+  return approximate ? `≈${text}` : text;
 }
 
 /** The share of NULLs in a column, as the column list reads it out: `no nulls`, `<0.1% null`, `12.5% null`. */
@@ -428,7 +433,7 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
           const more = failed.length > 1 ? ` (and in ${failed.length - 1} more ${failed.length === 2 ? 'column' : 'columns'})` : '';
           showToast({
             tone: 'info',
-            message: `${numberFormat.format(first.failedCasts)} ${first.failedCasts === 1 ? 'value' : 'values'} in ${first.column} couldn’t be read as ${first.type} and show as null${more}`,
+            message: `${formatInteger(first.failedCasts)} ${first.failedCasts === 1 ? 'value' : 'values'} in ${first.column} couldn’t be read as ${first.type} and show as null${more}`,
             ...(initial ? {} : { action: { label: 'Undo', shortcut: mod('Z'), onClick: () => dispatch('undo') } }),
           });
         }
@@ -824,7 +829,7 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
   const profiled = profile?.table === tableId ? profile : null;
   const profiling = tableId !== null && profiled === null;
   const distinctByColumn = useMemo(
-    () => new Map((profiled?.columns ?? []).map((column) => [column.name, column.distinctCount])),
+    () => new Map((profiled?.columns ?? []).map((column) => [column.name, { count: column.distinctCount, approximate: column.distinctApproximate === true }])),
     [profiled],
   );
   const nullsByColumn = useMemo(() => new Map((profiled?.columns ?? []).map((column) => [column.name, formatNulls(column.nullFraction)])), [profiled]);
@@ -982,7 +987,15 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
                       name={column.name}
                       type={effectiveColumnType(column)}
                       inferredType={column.inferredType}
-                      distinct={distinct === undefined ? '–' : formatDistinct(distinct)}
+                      distinct={
+                        distinct === undefined ? (
+                          '–'
+                        ) : distinct.approximate ? (
+                          <span title="Estimated distinct count (HyperLogLog). Text columns and small tables are counted exactly.">{formatDistinct(distinct.count, true)}</span>
+                        ) : (
+                          formatDistinct(distinct.count)
+                        )
+                      }
                       nulls={nullsByColumn.get(column.name)}
                       profiling={profiling}
                       selected={selectedColumns.includes(column.name)}
@@ -1029,11 +1042,11 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
                     profiling ? 'Reading…' : ''
                   ) : filters.length > 0 && totalRows !== null ? (
                     <>
-                      <strong>{numberFormat.format(rowCount)}</strong> of {numberFormat.format(totalRows)} rows
+                      <strong>{formatInteger(rowCount)}</strong> of {formatInteger(totalRows)} rows
                     </>
                   ) : (
                     <>
-                      <strong>{numberFormat.format(rowCount)}</strong> rows
+                      <strong>{formatInteger(rowCount)}</strong> rows
                     </>
                   )}
                 </div>

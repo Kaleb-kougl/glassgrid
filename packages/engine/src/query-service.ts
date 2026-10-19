@@ -97,6 +97,10 @@ export interface QueryServiceOptions {
    * with the next brush's queries for the same cores.
    */
   filteredIndexDelayMs?: number;
+  /** Profiles count every column's distinct values exactly up to this many rows (default EXACT_DISTINCT_MAX_ROWS; tests lower it). */
+  exactDistinctMaxRows?: number;
+  /** Text and boolean columns are counted exactly up to this many rows (default EXACT_CATEGORY_DISTINCT_MAX_ROWS). */
+  exactCategoryDistinctMaxRows?: number;
 }
 
 /** Per-request context: cancellation and the view the request belongs to. */
@@ -136,7 +140,31 @@ type Source = { kind: 'csv' } | { kind: 'parquet'; path: string; key: string };
 /** What the user opened: a CSV (read in place, optionally copied to Parquet) or a Parquet file (read in place). */
 export type InputFormat = 'csv' | 'parquet';
 
-type ColumnStats = Pick<TableColumnProfile, 'nullFraction' | 'distinctCount' | 'min' | 'max'>;
+type ColumnStats = Pick<TableColumnProfile, 'nullFraction' | 'distinctCount' | 'min' | 'max'> & { distinctApproximate: boolean };
+
+/*
+ * Distinct counts. DuckDB's `approx_count_distinct` (HyperLogLog) was off
+ * by up to 25% on the web demo's samples where it shows most: 3 sites for 4,
+ * 11 categories for 10, 66 sensors for 64. An exact `count(DISTINCT …)` in
+ * the same scan costs about nothing on low-cardinality columns (it was even
+ * faster than the estimate), but a hash table per value on high-cardinality
+ * ones: on DuckDB-WASM, counting every column of the samples exactly made
+ * the profile 0.9 to 1.3 s slower, and every chart waits for the profile.
+ * So the profile is exact:
+ *
+ * - for every column up to EXACT_DISTINCT_MAX_ROWS rows;
+ * - for text and boolean columns (the categories people count bars of) up
+ *   to EXACT_CATEGORY_DISTINCT_MAX_ROWS rows, within noise on the samples;
+ *
+ * and an estimate otherwise (numbers and timestamps of large tables), with
+ * `distinctApproximate: true` so the UI can say so (`≈1.7M`). Estimates are
+ * clamped to what is possible: at most the non-null count, and for integers
+ * at most max − min + 1.
+ */
+export const EXACT_DISTINCT_MAX_ROWS = 250_000;
+export const EXACT_CATEGORY_DISTINCT_MAX_ROWS = 5_000_000;
+/** Rows per byte of CSV assumed while the row count is not known yet (a CSV profiled before its first count). */
+const CSV_BYTES_PER_ROW_GUESS = 32;
 
 /**
  * '' before any type change, else a digest of the overrides and the type-change count, so a version
@@ -250,6 +278,8 @@ export class QueryService extends Emitter<QueryServiceEvents> {
   private readonly pagingStrategy: PagingStrategy;
   private readonly topKRows: number;
   private readonly filteredIndexDelayMs: number;
+  private readonly exactDistinctMaxRows: number;
+  private readonly exactCategoryDistinctMaxRows: number;
   /** Pending delays of filtered index builds, by index name; calling one starts the build now. */
   private readonly indexDelays = new Map<string, () => void>();
   private closed = false;
@@ -271,6 +301,8 @@ export class QueryService extends Emitter<QueryServiceEvents> {
     this.pagingStrategy = options.pagingStrategy ?? 'auto';
     this.topKRows = options.topKRows ?? TOP_K_MAX_ROWS;
     this.filteredIndexDelayMs = options.filteredIndexDelayMs ?? FILTERED_INDEX_DELAY_MS;
+    this.exactDistinctMaxRows = options.exactDistinctMaxRows ?? EXACT_DISTINCT_MAX_ROWS;
+    this.exactCategoryDistinctMaxRows = options.exactCategoryDistinctMaxRows ?? EXACT_CATEGORY_DISTINCT_MAX_ROWS;
   }
 
   static async create(driver: DuckDriver, options: QueryServiceOptions): Promise<QueryService> {
@@ -585,7 +617,8 @@ export class QueryService extends Emitter<QueryServiceEvents> {
       for (const entry of failedNeeded) {
         selects.push(`count(*) FILTER (WHERE ${quoteIdent(entry.inferred.name)} IS NOT NULL AND ${cast(entry)} IS NULL)`);
       }
-      for (const entry of statsNeeded) selects.push(...statSelects(cast(entry), entry.duckdbType));
+      const exact = this.exactDistinct(state);
+      for (const entry of statsNeeded) selects.push(...statSelects(cast(entry), entry.duckdbType, exact(entry.duckdbType)));
       const row = await this.withConnection(state, ctx.signal, async (connection) => {
         const result = await connection.query(`SELECT ${selects.join(', ')} FROM ${state.rawView}`);
         return result.rows[0] ?? [];
@@ -597,7 +630,7 @@ export class QueryService extends Emitter<QueryServiceEvents> {
       });
       const base = 1 + failedNeeded.length;
       statsNeeded.forEach((entry, index) => {
-        state.stats.set(statKey(entry.inferred.name, entry.duckdbType), readStats(row, base + index * 4, rowCount));
+        state.stats.set(statKey(entry.inferred.name, entry.duckdbType), readStats(row, base + index * 4, rowCount, entry.duckdbType, exact(entry.duckdbType)));
       });
     }
     throwIfAborted(ctx.signal);
@@ -639,9 +672,9 @@ export class QueryService extends Emitter<QueryServiceEvents> {
   // Queries
 
   /**
-   * Per-column profile: non-null count, approximate distinct count
-   * (HyperLogLog), min and max, in one aggregate scan. Cheaper than
-   * SUMMARIZE (see docs/m1-engine-notes.md). Statistics are kept per column
+   * Per-column profile: non-null count, distinct count (exact or estimated,
+   * see EXACT_DISTINCT_MAX_ROWS), min and max, in one aggregate scan.
+   * Cheaper than SUMMARIZE (see docs/m1-engine-notes.md). Statistics are kept per column
    * and type, so after a type override only the affected columns are
    * scanned again.
    */
@@ -659,13 +692,26 @@ export class QueryService extends Emitter<QueryServiceEvents> {
     throw new EngineFailure('query_failed', 'The profile changed while it was computed; please retry');
   }
 
+  /** Whether the profile of `state` counts a column of DuckDB type `duckdbType` exactly (see EXACT_DISTINCT_MAX_ROWS). */
+  private exactDistinct(state: TableState): (duckdbType: string) => boolean {
+    const rows = state.rowCount ?? state.fingerprint.sizeBytes / CSV_BYTES_PER_ROW_GUESS;
+    const all = rows <= this.exactDistinctMaxRows;
+    const categories = rows <= this.exactCategoryDistinctMaxRows;
+    return (duckdbType) => {
+      if (all) return true;
+      const type = simpleColumnType(duckdbType);
+      return categories && (type === 'text' || type === 'boolean');
+    };
+  }
+
   private async scanProfile(state: TableState, ctx: RequestContext): Promise<void> {
     const key = this.key(state, ['profile']);
     await this.inflight.run(key, ctx.signal, async (signal) => {
       await this.awaitConversion(state, signal);
       const missing = state.columns.filter((column) => !state.stats.has(statKey(column.name, column.duckdbType)));
+      const exact = this.exactDistinct(state);
       const selects = ['count(*)'];
-      for (const column of missing) selects.push(...statSelects(quoteIdent(column.name), column.duckdbType));
+      for (const column of missing) selects.push(...statSelects(quoteIdent(column.name), column.duckdbType, exact(column.duckdbType)));
       const row = await this.withConnection(state, signal, async (connection) => {
         const result = await connection.query(`SELECT ${selects.join(', ')} FROM ${state.view}`);
         return result.rows[0] ?? [];
@@ -673,7 +719,7 @@ export class QueryService extends Emitter<QueryServiceEvents> {
       const rowCount = toCount(row[0] ?? null);
       state.rowCount = rowCount;
       missing.forEach((column, index) => {
-        state.stats.set(statKey(column.name, column.duckdbType), readStats(row, 1 + index * 4, rowCount));
+        state.stats.set(statKey(column.name, column.duckdbType), readStats(row, 1 + index * 4, rowCount, column.duckdbType, exact(column.duckdbType)));
       });
       return { kind: 'count', rowCount };
     });
@@ -1387,7 +1433,7 @@ function statKey(column: string, duckdbType: string): string {
  * text for everything else, cast in SQL so every driver reports the same
  * text (see driver.ts on value mapping).
  */
-function statSelects(expression: string, duckdbType: string): string[] {
+function statSelects(expression: string, duckdbType: string, exactDistinctCount: boolean): string[] {
   const type = simpleColumnType(duckdbType);
   const bound = (fn: 'min' | 'max') =>
     type === 'integer' || type === 'float' || type === 'boolean'
@@ -1395,16 +1441,28 @@ function statSelects(expression: string, duckdbType: string): string[] {
       : type === 'decimal'
         ? `CAST(${fn}(${expression}) AS DOUBLE)`
         : `CAST(${fn}(${expression}) AS VARCHAR)`;
-  return [`count(${expression})`, `approx_count_distinct(${expression})`, bound('min'), bound('max')];
+  const distinct = exactDistinctCount ? `count(DISTINCT ${expression})` : `approx_count_distinct(${expression})`;
+  return [`count(${expression})`, distinct, bound('min'), bound('max')];
 }
 
-function readStats(row: readonly DriverValue[], base: number, rowCount: number): ColumnStats {
+function readStats(row: readonly DriverValue[], base: number, rowCount: number, duckdbType: string, exactDistinctCount: boolean): ColumnStats {
   const nonNull = toCount(row[base] ?? null);
+  const min = toScalar(row[base + 2] ?? null);
+  const max = toScalar(row[base + 3] ?? null);
+  let distinctCount = toCount(row[base + 1] ?? null);
+  if (!exactDistinctCount) {
+    // An estimate can exceed what is possible; clamp it (an integer column has at most max - min + 1 values).
+    distinctCount = Math.min(distinctCount, nonNull);
+    if (simpleColumnType(duckdbType) === 'integer' && typeof min === 'number' && typeof max === 'number') {
+      distinctCount = Math.min(distinctCount, max - min + 1);
+    }
+  }
   return {
     nullFraction: rowCount === 0 ? 0 : (rowCount - nonNull) / rowCount,
-    distinctCount: toCount(row[base + 1] ?? null),
-    min: toScalar(row[base + 2] ?? null),
-    max: toScalar(row[base + 3] ?? null),
+    distinctCount,
+    distinctApproximate: !exactDistinctCount,
+    min,
+    max,
   };
 }
 

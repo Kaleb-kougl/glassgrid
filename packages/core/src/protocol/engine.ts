@@ -112,11 +112,15 @@ export type TableHandle = z.infer<typeof TableHandleSchema>;
 /**
  * A column's profile as the engine reports it: the compiler's
  * `ColumnProfile` (name, logical type, null fraction, distinct count, min,
- * max) plus DuckDB's own type name. `distinctCount` is a HyperLogLog
- * estimate (`approx_count_distinct`), NULLs excluded.
+ * max) plus DuckDB's own type name. `distinctCount` excludes NULLs. It is
+ * exact (`count(DISTINCT …)`) on small tables and for text and boolean
+ * columns, else a HyperLogLog estimate (`approx_count_distinct`, which can
+ * be off by 10% or more); `distinctApproximate` is true for an estimate
+ * (see the engine's EXACT_DISTINCT_MAX_ROWS).
  */
 export const TableColumnProfileSchema = ColumnProfileSchema.extend({
   duckdbType: z.string(),
+  distinctApproximate: z.boolean().optional(),
 });
 export type TableColumnProfile = z.infer<typeof TableColumnProfileSchema>;
 
