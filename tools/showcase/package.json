@@ -1,0 +1,21 @@
+{
+  "name": "@glassgrid/showcase",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Reproducible README and case-study media: screenshots of the web demo and the desktop app, and the cross-filter demo as GIF, MP4 and WebM, written to docs/images/showcase/.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "scripts": {
+    "capture": "node src/run.ts",
+    "links": "node src/check-links.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "@types/node": "24.19.2",
+    "typescript": "6.0.3"
+  }
+}

@@ -28,7 +28,8 @@
     "e2e": "pnpm --filter @glassgrid/desktop build && pnpm --filter @glassgrid/desktop e2e && pnpm --filter @glassgrid/engine e2e",
     "e2e:10m": "pnpm --filter @glassgrid/desktop build && pnpm --filter @glassgrid/desktop e2e:10m",
     "e2e:web": "pnpm --filter @glassgrid/web e2e",
-    "package": "pnpm --filter @glassgrid/desktop package"
+    "package": "pnpm --filter @glassgrid/desktop package",
+    "showcase": "pnpm --filter @glassgrid/showcase capture"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

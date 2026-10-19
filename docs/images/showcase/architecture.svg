@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="910" viewBox="0 0 1200 910" role="img" aria-label="Glassgrid architecture after M4: the shared app and engine packages on Electron and in the browser">
+<rect width="1200" height="910" fill="#ffffff"/>
+<text x="40" y="44" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="20" font-weight="600" fill="#1f2328">One app, one query engine, two runtimes</text>
+<text x="40" y="68" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13.5" fill="#59636e">As built after M4. Every grid page and chart is a query; only screen-sized Arrow results cross into the UI.</text>
+<rect x="40" y="92" width="545" height="448" rx="12" fill="#f3f4f6" stroke="#d0d7de"/>
+<text x="58" y="120" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#1f2328">Desktop app · Electron (apps/desktop)</text>
+<rect x="60" y="134" width="505" height="74" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+<text x="74" y="158" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#1f2328">Main process</text>
+<text x="74" y="176" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">Windows, menus and native dialogs; .glassgrid save, open and relink;</text>
+<text x="74" y="194" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">autosave and crash recovery.</text>
+<rect x="60" y="252" width="505" height="104" rx="8" fill="#e8f1fb" stroke="#0b5cad" stroke-width="1.5"/>
+<text x="74" y="276" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#1f2328">Renderer · sandboxed, CSP</text>
+<text x="74" y="296" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#0b5cad">&lt;App platform={desktop} /&gt;</text>
+<text x="74" y="314" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">The shared app on the desktop Platform. EngineClient: per-view</text>
+<text x="74" y="332" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">sequencing, superseding, page coalescing.</text>
+<rect x="60" y="404" width="505" height="116" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+<text x="74" y="428" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#1f2328">Engine · utilityProcess</text>
+<text x="74" y="448" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#0b5cad">QueryService + native driver</text>
+<text x="74" y="466" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">@duckdb/node-api 1.5.6: one locked-down DuckDB per table (allowlisted</text>
+<text x="74" y="484" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">paths, no external access), spills to disk; Parquet cache in the app</text>
+<text x="74" y="502" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">cache folder.</text>
+<line x1="150" y1="208" x2="150" y2="252" stroke="#8c959f" stroke-width="1.5"/>
+<path d="M145 244 L150 252 L155 244" fill="none" stroke="#8c959f" stroke-width="1.5"/>
+<path d="M145 216 L150 208 L155 216" fill="none" stroke="#8c959f" stroke-width="1.5"/>
+<text x="160" y="234" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">preload API, Zod-validated IPC; file handles, never paths</text>
+<line x1="150" y1="356" x2="150" y2="404" stroke="#8c959f" stroke-width="1.5"/>
+<path d="M145 396 L150 404 L155 396" fill="none" stroke="#8c959f" stroke-width="1.5"/>
+<path d="M145 364 L150 356 L155 364" fill="none" stroke="#8c959f" stroke-width="1.5"/>
+<text x="160" y="384" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">MessagePort (wired by main) · specs in, Arrow IPC out</text>
+<rect x="615" y="92" width="545" height="448" rx="12" fill="#f3f4f6" stroke="#d0d7de"/>
+<text x="633" y="120" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#1f2328">Web demo · static build (apps/web)</text>
+<rect x="635" y="134" width="505" height="74" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+<text x="649" y="158" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#1f2328">Static host</text>
+<text x="649" y="176" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">App JS, DuckDB-WASM, the signed Parquet extension, three sample Parquet</text>
+<text x="649" y="194" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">files with .glassgrid workspaces; production headers.</text>
+<rect x="635" y="252" width="505" height="104" rx="8" fill="#e8f1fb" stroke="#0b5cad" stroke-width="1.5"/>
+<text x="649" y="276" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#1f2328">Page · main thread, header CSP</text>
+<text x="649" y="296" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#0b5cad">&lt;App platform={web} /&gt;</text>
+<text x="649" y="314" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">The same app on the web Platform. createWorkerEngine() implements the</text>
+<text x="649" y="332" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">same EngineClientApi.</text>
+<rect x="635" y="404" width="505" height="116" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+<text x="649" y="428" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#1f2328">Engine · Web Worker</text>
+<text x="649" y="448" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#0b5cad">QueryService + DuckDB-WASM driver</text>
+<text x="649" y="466" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">duckdb-wasm 1.32.0 (DuckDB 1.4.3), single-threaded; locked-down sandbox;</text>
+<text x="649" y="484" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">Parquet cache in OPFS; 1 GiB memory limit.</text>
+<line x1="725" y1="208" x2="725" y2="252" stroke="#8c959f" stroke-width="1.5"/>
+<path d="M720 244 L725 252 L730 244" fill="none" stroke="#8c959f" stroke-width="1.5"/>
+<text x="735" y="234" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">HTTP</text>
+<line x1="725" y1="356" x2="725" y2="404" stroke="#8c959f" stroke-width="1.5"/>
+<path d="M720 396 L725 404 L730 396" fill="none" stroke="#8c959f" stroke-width="1.5"/>
+<path d="M720 364 L725 356 L730 364" fill="none" stroke="#8c959f" stroke-width="1.5"/>
+<text x="735" y="384" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">postMessage · transferred Arrow buffers</text>
+<path d="M1120 404 L1120 208" fill="none" stroke="#8c959f" stroke-width="1.5" stroke-dasharray="4 4"/>
+<path d="M1115 216 L1120 208 L1125 216" fill="none" stroke="#8c959f" stroke-width="1.5"/>
+<text x="1110" y="234" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e" text-anchor="end">worker: Range reads of samples</text>
+<rect x="40" y="568" width="1120" height="232" rx="12" fill="#eef6ee" stroke="#9cc59c"/>
+<text x="58" y="596" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#1f2328">Shared TypeScript packages: one contract for both runtimes</text>
+<rect x="60" y="610" width="256" height="172" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+<text x="74" y="634" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#1f2328">packages/core</text>
+<text x="74" y="652" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">No DOM, Node or React.</text>
+<text x="74" y="670" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">ChartSpec and Zod schemas, SQL</text>
+<text x="74" y="688" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">compiler (bound parameters),</text>
+<text x="74" y="706" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">cross-filter model, command</text>
+<text x="74" y="724" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">registry and undo, .glassgrid</text>
+<text x="74" y="742" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">format and migrations, protocols.</text>
+<rect x="332" y="610" width="256" height="172" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+<text x="346" y="634" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#1f2328">packages/ui</text>
+<text x="346" y="652" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">Browser, React.</text>
+<text x="346" y="670" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">Canvas grid (1,000-row pages,</text>
+<text x="346" y="688" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">scaled scrolling, ARIA mirror),</text>
+<text x="346" y="706" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">Canvas 2D chart layer with a</text>
+<text x="346" y="724" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">shared WebGL overlay, design</text>
+<text x="346" y="742" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">tokens.</text>
+<rect x="604" y="610" width="256" height="172" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+<text x="618" y="634" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#1f2328">packages/app</text>
+<text x="618" y="652" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">No Electron, Node or shell code.</text>
+<text x="618" y="670" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">The app: views, actions, workspace</text>
+<text x="618" y="688" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">wiring. Each shell passes a</text>
+<text x="618" y="706" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">Platform (engine, files,</text>
+<text x="618" y="724" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">clipboard, window, capabilities).</text>
+<rect x="876" y="610" width="256" height="172" rx="8" fill="#ffffff" stroke="#d0d7de"/>
+<text x="890" y="634" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#1f2328">packages/engine</text>
+<text x="890" y="652" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">Core runs anywhere; drivers per</text>
+<text x="890" y="670" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">runtime.</text>
+<text x="890" y="688" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">QueryService, top-K pages and row</text>
+<text x="890" y="706" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">indexes, cross-filter cubes,</text>
+<text x="890" y="724" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">result and Parquet caches, behind</text>
+<text x="890" y="742" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">a DuckDriver interface (native or</text>
+<text x="890" y="760" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">wasm).</text>
+<rect x="40" y="822" width="548" height="68" rx="8" fill="#ffffff" stroke="#d0d7de" stroke-dasharray="6 5"/>
+<text x="54" y="846" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#1f2328">Next (M6): MCP bridge</text>
+<text x="54" y="864" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">A second caller of the same command registry, through the same validation and</text>
+<text x="54" y="882" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">undo.</text>
+<rect x="612" y="822" width="548" height="68" rx="8" fill="#ffffff" stroke="#d0d7de" stroke-dasharray="6 5"/>
+<text x="626" y="846" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#1f2328">Next (M5): signed installers, auto-update, public deploy</text>
+<text x="626" y="864" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#59636e">Not shipped yet; packaging is unsigned today.</text>
+</svg>
