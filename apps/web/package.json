@@ -22,7 +22,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json",
     "test": "vitest run",
     "size": "vite build && node scripts/size.ts",
-    "e2e": "vite build && playwright test"
+    "e2e": "vite build && playwright test",
+    "hosting": "node scripts/write-vercel-json.ts"
   },
   "dependencies": {
     "@glassgrid/app": "workspace:*",
@@ -41,6 +42,7 @@
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "6.1.2",
     "jsdom": "30.1.1",
+    "path-to-regexp": "6.3.0",
     "typescript": "6.0.3",
     "vite": "8.3.4",
     "vitest": "5.0.5"

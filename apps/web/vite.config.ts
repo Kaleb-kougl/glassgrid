@@ -1,6 +1,9 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin } from 'vite';
 import { WEB_CSP } from './csp';
+import { HOSTING_MANIFEST_FILE, hostingManifest, parseBase, parseVersion } from './hosting';
 
 /*
  * The web shell's build. The production Content Security Policy is sent as
@@ -21,6 +24,31 @@ function cspForBuild(): Plugin {
 }
 
 /**
+ * Writes dist/glassgrid-hosting.json: the headers and rewrites a Next.js
+ * site needs to serve this build under its base (hosting.ts, the same rules
+ * as vercel.json). The release workflow ships it inside the tarball.
+ */
+function hostingManifestForBuild(base: string, version: string): Plugin {
+  return {
+    name: 'glassgrid:hosting-manifest',
+    apply: 'build',
+    generateBundle() {
+      this.emitFile({ type: 'asset', fileName: HOSTING_MANIFEST_FILE, source: `${JSON.stringify(hostingManifest({ base, version }), null, 2)}\n` });
+    },
+  };
+}
+
+/**
+ * `GLASSGRID_BASE`: the path the build is served under, `/` (default) or a
+ * subfolder such as `/glassgrid/` (both slashes required). Every URL the
+ * app builds goes through `import.meta.env.BASE_URL` (src/base.ts).
+ * `GLASSGRID_VERSION`: the release version for the hosting manifest
+ * (default: this package's version).
+ */
+const base = parseBase(process.env['GLASSGRID_BASE']);
+const version = parseVersion(process.env['GLASSGRID_VERSION'] || (JSON.parse(readFileSync(join(import.meta.dirname, 'package.json'), 'utf8')) as { version: string }).version);
+
+/**
  * `GLASSGRID_RENDER_PERF=1` compiles in the shared app's render-perf
  * instrumentation (as in the desktop build): React's profiling build, no
  * minification. Off by default: `__GG_RENDER_PERF__` is `false` and every
@@ -29,7 +57,8 @@ function cspForBuild(): Plugin {
 const renderPerf = process.env['GLASSGRID_RENDER_PERF'] === '1';
 
 export default defineConfig({
-  plugins: [react(), cspForBuild()],
+  base,
+  plugins: [react(), cspForBuild(), hostingManifestForBuild(base, version)],
   define: { __GG_RENDER_PERF__: JSON.stringify(renderPerf) },
   resolve: {
     // DuckDB-WASM imports apache-arrow ^17 for helpers the engine never calls; one copy (21, the app's) is enough.

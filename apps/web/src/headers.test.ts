@@ -3,11 +3,14 @@ import vercel from '../vercel.json';
 import { WEB_CSP, WEB_CSP_HEADER } from '../csp';
 
 /*
- * vercel.json is the production host's configuration: these checks keep its
+ * vercel.json (generated from hosting.ts, see hosting.test.ts) is a root
+ * deploy's configuration, and dist/glassgrid-hosting.json carries the same
+ * rules for a subfolder deploy. These checks keep its
  * Content-Security-Policy header identical to csp.ts (the <meta> copy in
  * index.html comes from there too) and hold the rest of the hosting
- * contract the demo depends on. The E2E suite serves dist/ with the same
- * file (e2e/serve.ts), so what it tests is what production sends.
+ * contract the demo depends on. The root E2E serves dist/ with the same
+ * file, and the subfolder E2E with dist/glassgrid-hosting.json
+ * (e2e/serve.ts), so what they test is what production sends.
  */
 
 type HeaderRule = { source: string; headers: { key: string; value: string }[] };

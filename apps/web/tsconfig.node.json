@@ -4,8 +4,10 @@
   // callbacks evaluated in the page).
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    // hosting.ts is imported by scripts Node runs directly (type stripping), so its imports name the .ts file.
+    "allowImportingTsExtensions": true,
     "lib": ["ES2023", "DOM"],
     "types": ["node"]
   },
-  "include": ["vite.config.ts", "csp.ts", "vitest.config.ts", "playwright.config.ts", "scripts", "e2e"]
+  "include": ["vite.config.ts", "csp.ts", "hosting.ts", "vitest.config.ts", "playwright.config.ts", "scripts", "e2e"]
 }

@@ -2,6 +2,8 @@
   // The web shell and gallery: browser-only, no Node typings.
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    // hosting.ts is imported by scripts Node runs directly (type stripping), so its imports name the .ts file.
+    "allowImportingTsExtensions": true,
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
     "types": ["vite/client"]
