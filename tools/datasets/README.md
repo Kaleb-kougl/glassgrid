@@ -17,7 +17,7 @@ against `pins.json` (the checked-in reference hashes).
 
 ## Requirements
 
-- Node.js 22.12+ (uses `tsx` to run the TypeScript directly; no build step).
+- Node.js 22.18+ (uses `tsx` to run the TypeScript directly; no build step).
 - `npm install` (or `pnpm install` once this folder is part of the workspace).
 - Network access to `d37ci6vzurychx.cloudfront.net` for the taxi data. Behind an
   HTTP proxy, set `NODE_USE_ENV_PROXY=1` so Node's `fetch` honours `HTTPS_PROXY`.

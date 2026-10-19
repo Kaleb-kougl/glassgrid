@@ -5,7 +5,7 @@ small pull requests are welcome.
 
 ## Setup
 
-- **Requirements:** Node.js 22.12 or newer (`.nvmrc` pins 24) and pnpm 10.
+- **Requirements:** Node.js 22.18 or newer (`.nvmrc` pins 24) and pnpm 10.
   Run `corepack enable` and the version is taken from `package.json`.
 - **Install and run:** `pnpm install`, then `pnpm dev` for the desktop app
   or `pnpm dev:web` for the web demo. The [README](README.md) lists every

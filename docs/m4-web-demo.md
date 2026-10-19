@@ -375,7 +375,7 @@ deployed from this branch. To connect it:
      app and its workspace dependencies, not Electron.
    - **Build Command**: `pnpm --filter @glassgrid/web build`. **Output
      Directory**: `dist`.
-   - **Node.js version**: 22.x or 24.x (the repo needs ≥ 22.12; CI uses
+   - **Node.js version**: 22.x or 24.x (the repo needs ≥ 22.18; CI uses
      24).
 3. **Production branch** `main`. Every push to it deploys to production.
 4. **Preview per PR.** With the Vercel GitHub integration installed, every

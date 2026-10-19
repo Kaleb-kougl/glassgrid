@@ -1,5 +1,7 @@
 # Glassgrid
 
+[![CI](https://github.com/Kaleb-kougl/glassgrid/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Kaleb-kougl/glassgrid/actions/workflows/ci.yml)
+
 Open a multi-gigabyte CSV on your own machine, scroll it in a canvas grid and
 cross-filter linked charts over it. An embedded DuckDB computes every number,
 in an Electron desktop app or entirely in the browser.
@@ -107,7 +109,7 @@ Vite 8 and electron-vite · Vitest, fast-check, Playwright, axe-core · pnpm 10 
 
 ## Develop
 
-Needs Node.js 22.12+ (CI uses 24, see `.nvmrc`) and pnpm 10 (`corepack enable`).
+Needs Node.js 22.18+ (CI uses 24, see `.nvmrc`) and pnpm 10 (`corepack enable`).
 
 ```sh
 pnpm install
