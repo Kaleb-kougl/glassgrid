@@ -78,6 +78,8 @@ export interface PlatformFiles {
   /** Offered on the empty state; absent or empty for none. */
   readonly samples?: readonly SampleDataset[];
   openSample?(id: string): Promise<OpenCsvResult>;
+  /** About to open something (pointer/focus on Open CSV or a sample, a file dragged over): warm a lazy engine up. */
+  prepare?(): void;
 }
 
 export interface PlatformClipboard {

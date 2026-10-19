@@ -497,9 +497,20 @@ accelerators).
 
 ## Left for integration
 
-- Ask before replacing a dirty workspace when opening another one or a CSV
-  (the commands do not; undo restores the previous one, and the recovery
-  snapshot follows the new, clean workspace).
+- ~~Ask before replacing a dirty workspace when opening another one or a
+  CSV.~~ Done on `pres-polish`: `useWorkspaceFiles().confirmReplace` runs
+  before every replacing open the person starts (Open CSV from any entry
+  point, a dropped file, Open workspace, Open Recent, OS hand-offs). With
+  unsaved work (`isWorkspaceDirty`) it shows a modal "Save changes to
+  trips.glassgrid?" (`SaveBeforeReplaceDialog`, the shared `Dialog`):
+  **Save** / **Save as…** dispatches `saveWorkspace` and the open goes
+  ahead only once saved; **Don't save** goes ahead; **Cancel** or Escape
+  opens nothing. The commands themselves still do not ask (an agent's
+  `openWorkspace { source: 'recent' }` replaces the workspace, and undo
+  restores it). Tests: `App.workspace-files.test.tsx` (4) and
+  `e2e/workspace-ui.spec.ts` (Cancel, then Save as… from File → Open CSV).
+- The fingerprint-mismatch banner now takes its own row between the title
+  bar and the panels instead of floating over the grid.
 - The AI confirmation UI for `write` tier (M6) before agents can save.
 - Web demo: the same format saved to OPFS or downloaded; implement
   `WorkspaceFilesApi` in `web-platform.ts` (the app UI is host-neutral).

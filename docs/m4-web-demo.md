@@ -50,15 +50,28 @@ main.tsx ── zod-jitless, route ──▶ app-route.tsx       engine-worker.t
 | `packages/app/src/App.tsx` | New optional prop `initialOpen` (additive) |
 | `packages/engine/src/wasm/arrow.ts`, `src/worker/engine-worker.ts` | CSP fixes and the OPFS feature check (below) |
 
-- **When DuckDB loads.** The worker is created when `/` mounts.
+- **When DuckDB loads: on first intent** (branch `pres-polish`).
+  - `createWorkerEngine({ start: 'lazy' })` creates no worker until
+    `start()`, a registration or the first request (a request waiting for a
+    port calls `PortEngineClient.onPortWanted`). Subscribing to engine
+    events at mount does not start it. `eager` stays the default
+    elsewhere (engine tests, the browser bench).
+  - The web demo starts it on a `?sample=` link right in `mountApp`, before
+    React mounts, and otherwise warms it up through
+    `Platform.files.prepare()`: pointer or focus on **Open CSV…** or a
+    sample, a file dragged over the window, and the file picker opening
+    (DuckDB-WASM downloads while the person picks a file).
+  - The start screen alone fetches no worker and no WebAssembly: the smoke
+    E2E checks the network for `engine-worker`, `duckdb-*` and `.wasm`
+    until a sample is hovered.
   - The worker script, DuckDB-WASM's JS glue (1.16 MB) and the EH build
-    (34 MB, 7.7 MB gzip) are fetched by the worker, after the page's own
-    JS. By the time someone clicks a sample, DuckDB is usually ready.
-  - The gallery route never starts it.
-  - Starting the engine only on first use would save the download for
-    visitors who never open data. It needs a lazy wrapper around
-    `EngineClientApi`, because the app subscribes to engine events at
-    mount. This is a follow-up if bandwidth matters.
+    (34 MB, 7.7 MB gzip) are then fetched by the worker. The gallery route
+    never starts it.
+  - Deep-link time to first chart did not change (medians of six
+    interleaved cold runs, eager → lazy: taxi 4,506 → 4,383 ms, retail
+    3,822 → 3,705 ms, sensors 3,850 → 3,816 ms; engine ready 2,340 →
+    2,354, 2,320 → 2,233, 2,342 → 2,312 ms). The machine was busier than
+    for the table below, so compare the pairs, not the absolute numbers.
 - **The stub engine is deleted.** That is `src/stub-engine/` (its 8 tests
   went with it), the badge and its CSS. `apache-arrow` stays in `apps/web`'s
   dependencies because `resolve.dedupe` needs to resolve it from the app.
@@ -421,7 +434,8 @@ available):**
 
 1. Open `https://<deployment>/`.
    - The start screen shows three samples.
-   - The console shows `[glassgrid] DuckDB-WASM v1.4.3 ready (parquet: true, cache: opfs, …)`.
+   - The Network panel shows no `.wasm` yet (the engine starts on intent).
+   - Point at a sample: the console shows `[glassgrid] DuckDB-WASM v1.4.3 ready (parquet: true, cache: opfs, …)`.
    - There are no errors and no CSP reports (Firefox: Console, filter
      "Content-Security-Policy"; Safari: Console, "Refused to…").
 2. Click **Taxi trips**.
@@ -453,12 +467,21 @@ available):**
 
 ## Known issues and follow-ups
 
-- **Bar labels show raw floating-point sums.** For example
-  "39,015,093.429999" for revenue by category: the chart layer does not
-  round `sum(DOUBLE)` labels. This predates the branch (`packages/ui`), and
-  the samples make it visible.
-- **Distinct counts are approximate** (`approx_count_distinct`): 66 sensors
-  for 64, 11 categories for 10. This also predates the branch.
+- ~~**Bar labels show raw floating-point sums.**~~ Fixed on `pres-polish`:
+  every number goes through core's `number-format.ts` (see
+  [m3-charts.md → Number formatting](m3-charts.md#number-formatting)).
+  Revenue by category now reads `39.0M` on the bar and `39,015,093.43` in
+  the tooltip.
+- ~~**Distinct counts are approximate.**~~ Fixed on `pres-polish`: the
+  profile counts exactly where it is cheap (every column up to 250,000
+  rows; text and boolean columns up to 5,000,000 rows) and marks the rest
+  `≈` (numbers and timestamps of large tables, clamped to the non-null
+  count and an integer column's range). The samples now show 64 sensors,
+  4 sites and 10 categories; `≈1.7M` pickup times. Counting every column
+  exactly made the samples' profile 0.9 to 1.3 s slower on DuckDB-WASM
+  (every chart waits for it), so numeric columns keep the estimate.
+  Follow-up: a Parquet file's row-group statistics could prove small
+  integer ranges, which would make those exact too.
 - **The web demo has no workspace save or open.**
   `capabilities.canSaveWorkspace` is false. A sample is an untitled
   workspace. Downloads or OPFS are the next step, as
@@ -471,7 +494,15 @@ available):**
   writing the browser test, this branch saw the second worker's
   `createSyncAccessHandle` fail while the first held the file. Samples are
   unaffected: they are read over HTTP, not from the cache.
-- **The engine starts eagerly on `/`** (see Architecture).
+- ~~**The engine starts eagerly on `/`.**~~ It starts on first intent (see
+  Architecture).
+- **The "Order value" histogram of the retail sample** is dominated by one
+  bar (bins of 100 over a long tail up to 4,000). A log scale or a
+  narrower default range would read better; the sample workspace is
+  generated (`tools/datasets`), so it was left as is.
+- **Phones.** Below 760px the panels stack (columns, grid, charts) in one
+  vertical scroll. It is usable for looking, not tuned: brushing on touch
+  and the column drag are untested.
 - **The registration HEAD shows as `net::ERR_ABORTED`** in DevTools. Its
   body is never read, which is harmless; the tests ignore aborted requests.
 - **Sample files are cached as immutable** under fixed names. Changing a

@@ -8,7 +8,7 @@ import type { Aggregate } from './spec/field.js';
  * (packages/ui/src/grid/format.ts) but trims floating-point noise the same
  * way (`trimFloat`).
  *
- * Rules (see docs/m4-web-demo.md, "Number formatting"):
+ * Rules (also in docs/m3-charts.md, "Number formatting"):
  *
  * - NULL, undefined and NaN print as an en dash `–`; ±Infinity as `∞`/`-∞`;
  *   `-0` (and negatives that round to zero) as `0`.

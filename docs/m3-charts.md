@@ -29,7 +29,7 @@ colorLabel?: string;
 height?: number;               // plot height, default 160
 selection?: IntervalSelection | null;   // controlled: this chart's own selection
 onBrush?: (selection: IntervalSelection | null, phase: 'move' | 'end') => void;
-formatValue?: (n: number) => string;    // measures; default grouped, up to 6 decimals
+formatValue?: (n: number) => string;    // measures; default core's formatMeasure (see Number formatting)
 colorKeys?: readonly string[];          // series keys in palette order (stable colours)
 testId?: string;
 ```
@@ -182,6 +182,32 @@ DPR 1; 3 runs per scenario, samples pooled. "Redraw" = a theme change
 - First render (page start to first layers, includes React mount):
   45–145 ms for canvas marks; the adapter on a cold JIT is 18 ms for the
   16K line and 115 ms for 1M scatter points.
+
+## Number formatting
+
+Added on `pres-polish`. One module, `packages/core/src/number-format.ts`
+(pure, unit-tested), decides how every number on screen reads: bar
+labels, tooltips, "View data", axis values, filter chips and history
+labels, row counts and the column list. The grid keeps DuckDB-like cell
+text (ungrouped, so IDs and years stay `2023`) but shares the noise
+trimming.
+
+| Where | Rule | Example |
+| --- | --- | --- |
+| Missing values | NULL, undefined, NaN → `–`; ±Infinity → `∞`/`-∞`; `-0` and negatives that round to zero → `0` | |
+| Integers, counts, row counts | exact, grouped; bigint (BIGINT, HUGEINT) formatted from the bigint | `2,000,000` |
+| Float noise | trimmed to 15 significant digits first | `39015093.429999996` → `39015093.43` |
+| Measures (tooltips, "View data", bar labels) | by aggregate and the aggregated column's type, one mode per result so a column of labels is consistent: `count` and integer columns → integers; `avg` → two fixed decimals; DECIMAL → its scale (≤ 6, from the result's Arrow type); `min`/`max` of a float → the column's own precision (≤ 6 decimals); a float `sum` → two fixed decimals unless every value of the result is whole; below 1, three significant digits | `9,399,854.36`, `4.29`, `0.0123` |
+| Bar labels | compact (three significant digits) once the chart's largest value reaches a million, or a billion for whole numbers; tooltips keep the full value | `39.0M`, `1,375,980` |
+| Axis ticks | d3 picks precision from the step; SI suffixes written like Intl's (`K`, `M`, `B`) | `100K`, `2.5M` |
+| Axis values, bin edges, scatter coordinates | the value's own precision, ≤ 6 decimals | `52.016 – 52.018` |
+| Range chips and brush summaries | both bounds share decimals: as many as they need, at least two on float and DECIMAL columns (the design's `2.00 – 6.00`), and no more than the span warrants | `5.00 – 16.00`, `3.14 – 7.20` |
+| Grid cells, FLOAT/DOUBLE | noise trimmed, and the numbers of one page padded to the same decimals (≤ 6) so digits line up | `4.2`, `4`, `4.28` → `4.20`, `4.00`, `4.28` |
+| Tiny or huge | a short exponent where grouping would mislead | `1.23e-7`, `4.00e21` |
+
+`Intl.NumberFormat` instances are created once per option set. Grid text
+is formatted once per page as it arrives (`tableToColumns`), never while
+painting.
 
 ## Limitations
 
