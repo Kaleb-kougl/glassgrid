@@ -20,8 +20,12 @@ async function openStart(page: Page) {
   return { problems, headers: response?.headers() ?? {} };
 }
 
-test('/ shows the start screen with the production headers and the three samples; DuckDB-WASM starts with Parquet', async ({ page }) => {
+test('/ shows the start screen with the production headers and the three samples, without starting DuckDB-WASM until a sample is pointed at', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'dark' });
+  const engineRequests: string[] = [];
+  page.on('request', (request) => {
+    if (/engine-worker|duckdb-|\.wasm$|duckdb-extensions/.test(request.url())) engineRequests.push(request.url());
+  });
   const { problems, headers } = await openStart(page);
 
   // The header policy (what the engine worker runs under) and the <meta> copy.
@@ -39,7 +43,16 @@ test('/ shows the start screen with the production headers and the three samples
   await expect(page.getByTestId('empty-state')).toBeVisible();
   await expect(page.getByText('The file is read in this browser and never uploaded.')).toBeVisible();
   for (const id of ['taxi', 'retail', 'sensors']) await expect(page.getByTestId(`sample-${id}`)).toBeVisible();
+
+  // The engine starts lazily: the start screen alone fetches no worker and no WebAssembly.
+  await page.waitForLoadState('networkidle');
+  await page.waitForTimeout(500);
+  expect(engineRequests).toEqual([]);
+  expect(problems.info.filter((line) => line.includes('DuckDB-WASM'))).toEqual([]);
+  // Pointing at a sample warms it up (DuckDB-WASM starts with Parquet) before the click.
+  await page.getByTestId('sample-sensors').hover();
   await expectEngineWithParquet(problems);
+  expect(engineRequests.some((url) => url.endsWith('.wasm'))).toBe(true);
 
   // A sample from the start screen puts its shareable link in the address bar.
   await page.getByTestId('sample-sensors').click();

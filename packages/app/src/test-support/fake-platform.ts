@@ -35,6 +35,7 @@ export function fakePlatform<E extends EngineClientLike>(engine: E, options: Fak
     privacyNote: 'The file is read on this computer and never uploaded.',
     ...(options.samples ? { samples: options.samples } : {}),
     openSample: vi.fn((_id: string): Promise<OpenCsvResult> => Promise.resolve(options.picked ?? cancelled)),
+    prepare: vi.fn(() => undefined),
   };
   const clipboard = { writeText: vi.fn((_text: string) => Promise.resolve()) };
   const shell = {

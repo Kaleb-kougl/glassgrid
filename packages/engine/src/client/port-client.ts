@@ -480,8 +480,13 @@ export class PortEngineClient implements EngineClientApi {
 
   private connectedPort(): Promise<EnginePort> {
     if (this.port) return Promise.resolve(this.port);
-    return new Promise((resolve) => this.waiters.push(resolve));
+    const waiting = new Promise<EnginePort>((resolve) => this.waiters.push(resolve));
+    this.onPortWanted();
+    return waiting;
   }
+
+  /** A request is waiting for a port and there is none: subclasses that start their engine lazily start it here. */
+  protected onPortWanted(): void {}
 
   private onResponse(raw: unknown): void {
     if (this.onControl(raw)) return;

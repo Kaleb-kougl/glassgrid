@@ -810,8 +810,11 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
     if (!event.dataTransfer.types.includes('Files')) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = 'copy';
+    if (!fileOver) files.prepare?.();
     setFileOver(true);
   };
+  // A hint that the person is about to open something: a lazily started engine warms up.
+  const prepareOpen = files.prepare ? { onPointerEnter: () => files.prepare?.(), onFocus: () => files.prepare?.() } : {};
   const onWindowDrop = (event: DragEvent) => {
     setFileOver(false);
     if (!event.dataTransfer.types.includes('Files')) return;
@@ -919,7 +922,7 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
                 <p className="empty__hint">{files.privacyNote}</p>
               </div>
               <div className="empty__actions">
-                <Button variant="primary" size="lg" onClick={() => void open()} disabled={opening} data-testid="open-csv-empty">
+                <Button variant="primary" size="lg" onClick={() => void open()} disabled={opening} data-testid="open-csv-empty" {...prepareOpen}>
                   {opening ? 'Opening…' : 'Open CSV…'}
                 </Button>
                 <kbd className="gg-kbd">{mod('O')}</kbd>
@@ -942,6 +945,7 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
                           onClick={() => void open(() => files.openSample?.(sample.id) ?? Promise.resolve({ status: 'cancelled' }))}
                           disabled={opening}
                           data-testid={`sample-${sample.id}`}
+                          {...prepareOpen}
                         >
                           {sample.label}
                           {sample.detail !== undefined && <span className="empty__sample-detail">{sample.detail}</span>}

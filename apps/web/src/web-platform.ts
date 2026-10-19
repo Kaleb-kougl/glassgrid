@@ -21,6 +21,8 @@ export interface WebEngine {
   registerFile(file: File): Promise<OpenCsvResult>;
   readonly samples?: readonly SampleDataset[];
   openSample?(id: string): Promise<OpenCsvResult>;
+  /** Start the engine ahead of a likely open (it starts lazily). */
+  prepare?(): void;
 }
 
 /** Files the picker offers: CSV and its usual MIME types, and Parquet (the engine opens it in place). */
@@ -83,6 +85,8 @@ export function createWebPlatform(web: WebEngine, options: WebPlatformOptions = 
     engine: web.engine,
     files: {
       pickCsv: async () => {
+        // DuckDB-WASM downloads while the person picks a file.
+        web.prepare?.();
         const file = await pick();
         return file ? web.registerFile(file) : { status: 'cancelled' };
       },
@@ -93,6 +97,7 @@ export function createWebPlatform(web: WebEngine, options: WebPlatformOptions = 
       ...(web.samples && web.samples.length > 0 && web.openSample
         ? { samples: web.samples, openSample: (id: string) => web.openSample?.(id) ?? Promise.resolve({ status: 'cancelled' as const }) }
         : {}),
+      ...(web.prepare ? { prepare: () => web.prepare?.() } : {}),
     },
     clipboard: {
       writeText: (text) => {

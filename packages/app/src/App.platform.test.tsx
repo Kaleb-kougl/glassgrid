@@ -113,6 +113,17 @@ describe('App on a Platform', () => {
     expect(files.pickCsv).not.toHaveBeenCalled();
   });
 
+  it('warms the engine up on a hint of intent: pointer or focus on Open CSV or a sample, a file dragged over', () => {
+    const { files } = renderApp({ samples: [{ id: 'taxi', label: 'NYC taxi trips' }] });
+    expect(files.prepare).not.toHaveBeenCalled();
+    fireEvent.pointerEnter(screen.getByTestId('sample-taxi'));
+    expect(files.prepare).toHaveBeenCalledTimes(1);
+    fireEvent.focus(screen.getByTestId('open-csv-empty'));
+    expect(files.prepare).toHaveBeenCalledTimes(2);
+    fireEvent.dragOver(screen.getByTestId('empty-state'), { dataTransfer: { types: ['Files'], dropEffect: 'none' } });
+    expect(files.prepare).toHaveBeenCalledTimes(3);
+  });
+
   it('shows no sample list without samples', () => {
     renderApp();
     expect(screen.queryByText('Or try a sample')).toBeNull();
