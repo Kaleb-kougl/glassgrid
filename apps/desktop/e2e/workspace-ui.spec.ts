@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
 import { parseWorkspace } from '@glassgrid/core';
 import { writeFixtureCsv } from './csv-fixture';
-import { answerClosePrompt, axe, clickMenuItem, closePrompts, digits, launchApp, mirrorRow, recentMenuLabels, removeWorkDir, rowsLoaded, screenshot, setTheme, stubDialogs } from './support';
+import { answerClosePrompt, axe, clickMenuItem, crashApp, closePrompts, digits, launchApp, mirrorRow, recentMenuLabels, removeWorkDir, rowsLoaded, screenshot, setTheme, stubDialogs } from './support';
 
 /*
  * Workspace files through the UI of the real app: Save (File → Save
@@ -47,13 +47,6 @@ const dot = (page: Page) => page.getByTestId('workspace-edited');
 
 async function recoverySnapshots(userData: string): Promise<string[]> {
   return (await readdir(join(userData, 'recovery')).catch(() => [])).filter((name) => name.endsWith('.glassgrid'));
-}
-
-/** Kills the main process, as a crash would: no close events, no prompts. */
-async function crash(app: ElectronApplication): Promise<void> {
-  const exited = new Promise((resolve) => app.process().once('exit', resolve));
-  app.process().kill('SIGKILL');
-  await exited;
 }
 
 test.describe('workspace files in the UI', () => {
@@ -257,7 +250,7 @@ test.describe('workspace files in the UI', () => {
     // Main's autosaver writes the report within its interval (5 s).
     await expect.poll(() => recoverySnapshots(userData), { timeout: 20_000 }).toHaveLength(1);
     app = undefined;
-    await crash(first.app);
+    await crashApp(first.app);
 
     const { app: second, page, rendererErrors } = await launch();
     const offer = page.getByRole('status').filter({ hasText: 'Unsaved changes from your last session' });
