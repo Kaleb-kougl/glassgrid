@@ -1,6 +1,6 @@
-import type { Table } from 'apache-arrow';
+import { DataType, type Table } from 'apache-arrow';
 import type { ColumnType } from '@glassgrid/core';
-import { formatterFor, kindForType, valueKind } from './format.js';
+import { alignDecimals, formatterFor, kindForType, valueKind } from './format.js';
 import { PagedGridSource, type PageColumns, type PagedSourceOptions } from './PagedGridSource.js';
 import type { GridCell } from './types.js';
 
@@ -53,6 +53,7 @@ export function tableToColumns(table: Table, columns: readonly { readonly name: 
     // The Arrow type decides (Decimal128, Time64, Interval, Date, Timestamp); the logical type is the fallback.
     const format = formatterFor(valueKind(fields[index], kindForType(column.type)));
     for (let r = 0; r < rows; r += 1) out[r] = format(vector.get(r));
-    return out;
+    // FLOAT/DOUBLE: the page's numbers share one number of decimals, so the digits line up.
+    return DataType.isFloat(fields[index]?.type) ? alignDecimals(out) : out;
   });
 }

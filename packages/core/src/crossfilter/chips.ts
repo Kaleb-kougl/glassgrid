@@ -2,6 +2,7 @@ import { isTemporalType, type ColumnType } from '../spec/column.js';
 import { type Filter, type FilterValue, type RangeBound } from '../spec/filter.js';
 import { parseTemporal } from '../sql/bins.js';
 import { effectiveColumnType, type WorkspaceState } from '../state/workspace.js';
+import { formatFilterNumber, formatInteger, formatNumericRange } from '../number-format.js';
 import { selectionOrder } from './model.js';
 
 /*
@@ -35,21 +36,9 @@ export interface FilterChip {
   readonly remove: ChipRemoval;
 }
 
-const MAX_DECIMALS = 6;
-
-function decimalsNeeded(value: number): number {
-  for (let digits = 0; digits < MAX_DECIMALS; digits += 1) {
-    const scale = 10 ** digits;
-    if (Math.abs(Math.round(value * scale) / scale - value) <= 1e-9 * Math.max(1, Math.abs(value))) return digits;
-  }
-  return MAX_DECIMALS;
-}
-
 /** A number for a chip: integers as is, floats and decimals with at least two decimals (`2.00`), grouped (`1,234.50`). */
 export function formatChipNumber(value: number, type: ColumnType | null): string {
-  const needed = decimalsNeeded(value);
-  const digits = type === 'float' || type === 'decimal' ? Math.max(2, needed) : needed;
-  return new Intl.NumberFormat('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value);
+  return formatFilterNumber(value, type);
 }
 
 /** A date or timestamp for a chip: `2024-03-01`, or `2024-03-01 06:30` with the time when it is not midnight. */
@@ -79,6 +68,11 @@ function list(values: readonly FilterValue[], type: ColumnType | null): string {
 export function filterCondition(filter: Filter, type: ColumnType | null = null): string {
   switch (filter.kind) {
     case 'range': {
+      if (typeof filter.min === 'number' && typeof filter.max === 'number' && (type === null || !isTemporalType(type))) {
+        // Both bounds with the same decimals, no more than the span warrants.
+        const [lo, hi] = formatNumericRange(filter.min, filter.max, type);
+        return `${lo} – ${hi}`;
+      }
       const min = filter.min === undefined ? null : formatValue(filter.min, type);
       const max = filter.max === undefined ? null : formatValue(filter.max, type);
       if (min !== null && max !== null) return `${min} – ${max}`;
@@ -89,12 +83,12 @@ export function filterCondition(filter: Filter, type: ColumnType | null = null):
       if (filter.values.length === 0) return 'matches nothing';
       if (filter.values.length === 1) return `= ${list(filter.values, type)}`;
       if (filter.values.length <= 3) return `in ${list(filter.values, type)}`;
-      return `in ${filter.values.length.toLocaleString('en-US')} values`;
+      return `in ${formatInteger(filter.values.length)} values`;
     case 'notIn':
       if (filter.values.length === 0) return 'any value';
       if (filter.values.length === 1) return `≠ ${list(filter.values, type)}`;
       if (filter.values.length <= 3) return `not in ${list(filter.values, type)}`;
-      return `not in ${filter.values.length.toLocaleString('en-US')} values`;
+      return `not in ${formatInteger(filter.values.length)} values`;
     case 'isNull':
       return 'is null';
     case 'notNull':

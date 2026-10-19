@@ -2,13 +2,23 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { resolvedTokens } from '../tokens.js';
-import { BAR_LABEL_WIDTH, BarChart, hitTestBars, layoutBars, type BarDatum } from './BarChart.js';
+import { BAR_LABEL_WIDTH, BarChart, barLabelFormatter, formatAggregate, hitTestBars, layoutBars, type BarDatum } from './BarChart.js';
 
 const data: BarDatum[] = [
   { key: '"Credit card"', label: 'Credit card', value: 2_688_301 },
   { key: '"Cash"', label: 'Cash', value: 631_488 },
   { key: 'null', label: 'null', isNull: true, value: 152_906 },
 ];
+
+describe('barLabelFormatter', () => {
+  it('keeps full values under a million and goes compact for every bar from there', () => {
+    expect(barLabelFormatter(data.slice(1), formatAggregate)(631_488)).toBe('631,488');
+    const compact = barLabelFormatter(data, formatAggregate);
+    expect(compact(2_688_301)).toBe('2.69M');
+    expect(compact(152_906)).toBe('153K');
+    expect(barLabelFormatter([{ key: 'x', label: 'x', value: null }], formatAggregate)).toBe(formatAggregate);
+  });
+});
 
 describe('layoutBars', () => {
   it('lays out 20px rows 6px apart and scales bars to the largest value', () => {

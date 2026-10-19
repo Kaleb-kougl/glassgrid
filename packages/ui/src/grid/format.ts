@@ -1,5 +1,5 @@
 import { DataType, TimeUnit, type Field } from 'apache-arrow';
-import { isNumericType, isTemporalType, type ColumnType, type FilterValue } from '@glassgrid/core';
+import { isNumericType, isTemporalType, trimFloat, type ColumnType, type FilterValue } from '@glassgrid/core';
 import type { GridCell } from './types.js';
 
 /*
@@ -135,7 +135,8 @@ function formatOther(value: unknown, kind: ValueKind): GridCell {
     case 'number':
       if (kind === 'date' && Number.isFinite(value)) return formatDate(value);
       if (kind === 'timestamp' && Number.isFinite(value)) return formatTimestamp(value);
-      return String(value);
+      // Doubles without binary noise (`0.30000000000000004` is `0.3`); integers and non-finite values as is.
+      return String(trimFloat(value));
     case 'bigint':
       if (kind === 'date') return formatDate(Number(value));
       if (kind === 'timestamp') return formatTimestamp(Number(value));
@@ -197,6 +198,37 @@ export function filterValue(value: unknown, kind: ValueKind): FilterValue {
   if (typeof value === 'number' || typeof value === 'string' || typeof value === 'boolean') return value;
   if (value instanceof Date) return value.getTime();
   return formatValue(value, kind);
+}
+
+const PLAIN_DECIMAL = /^-?\d+(?:\.(\d+))?$/;
+
+/**
+ * Pads the decimal cells of one page of a float column to the same number
+ * of decimals (`4.2`, `4`, `4.28` → `4.20`, `4.00`, `4.28`), so the digits
+ * line up in the right-aligned tabular figures. Only when every number on
+ * the page needs at most `maxDecimals`; exponents, NaN and NULLs stay as
+ * they are. Runs once per page as it arrives, not while painting.
+ */
+export function alignDecimals(cells: GridCell[], maxDecimals = 6): GridCell[] {
+  let decimals = 0;
+  for (const cell of cells) {
+    if (cell === null) continue;
+    const match = PLAIN_DECIMAL.exec(cell);
+    if (!match) continue;
+    const digits = match[1]?.length ?? 0;
+    if (digits > maxDecimals) return cells;
+    if (digits > decimals) decimals = digits;
+  }
+  if (decimals === 0) return cells;
+  for (let i = 0; i < cells.length; i += 1) {
+    const cell = cells[i];
+    if (cell === null || cell === undefined) continue;
+    const match = PLAIN_DECIMAL.exec(cell);
+    if (!match) continue;
+    const digits = match[1]?.length ?? 0;
+    if (digits < decimals) cells[i] = `${cell}${digits === 0 ? '.' : ''}${'0'.repeat(decimals - digits)}`;
+  }
+  return cells;
 }
 
 /** How a column's cells are drawn. */

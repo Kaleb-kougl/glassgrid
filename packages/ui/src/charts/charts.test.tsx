@@ -216,7 +216,7 @@ describe('ViewData', () => {
     render(<ViewData data={data} mark="line" label="Trips data" xLabel="day(t)" yLabel="sum(v)" maxRows={2} />);
     const table = screen.getByRole('table', { name: 'Trips data' });
     const rows = within(table).getAllByRole('row').map((row) => row.textContent);
-    expect(rows).toEqual(['day(t)sum(v)', '2023-01-01 00:00:00–', '2023-01-02 00:00:001,234.5']);
+    expect(rows).toEqual(['day(t)sum(v)', '2023-01-01 00:00:00–', '2023-01-02 00:00:001,234.50']);
     expect(table.querySelector('caption')?.textContent).toBe('First 2 of 3 rows');
   });
 

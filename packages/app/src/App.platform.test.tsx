@@ -59,7 +59,7 @@ describe('App on a Platform', () => {
     await openFromEmptyState();
     expect(files.pickCsv).toHaveBeenCalledOnce();
     expect(engine.open).toHaveBeenCalledWith(handle);
-    await waitFor(() => expect(gridCells()).toEqual(['1', 'alpha', '1.5', '2', 'null (empty value)', '2']));
+    await waitFor(() => expect(gridCells()).toEqual(['1', 'alpha', '1.5', '2', 'null (empty value)', '2.0']));
     expect(screen.getByTestId('file-name').textContent).toBe('trips.csv');
 
     // → chart

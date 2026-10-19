@@ -388,7 +388,7 @@ describe('filter chips', () => {
     expect(filterLabel({ kind: 'in', column: 'payment_type', values: ['Cash'] }, 'text')).toBe('payment_type = Cash');
     expect(filterCondition({ kind: 'range', column: 'n', min: 1234.5, minInclusive: true, maxInclusive: true }, 'decimal')).toBe('≥ 1,234.50');
     expect(filterCondition({ kind: 'range', column: 'n', max: 10, minInclusive: true, maxInclusive: false }, 'integer')).toBe('< 10');
-    expect(filterCondition({ kind: 'range', column: 'n', min: 0.125, max: 2, minInclusive: true, maxInclusive: false }, 'float')).toBe('0.125 – 2.00');
+    expect(filterCondition({ kind: 'range', column: 'n', min: 0.125, max: 2, minInclusive: true, maxInclusive: false }, 'float')).toBe('0.125 – 2.000');
     expect(filterCondition({ kind: 'in', column: 'c', values: ['a', null, 'b'] }, 'text')).toBe('in a, null, b');
     expect(filterCondition({ kind: 'in', column: 'c', values: [1, 2, 3, 4, 5] }, 'integer')).toBe('in 5 values');
     expect(filterCondition({ kind: 'in', column: 'c', values: [] }, 'text')).toBe('matches nothing');
