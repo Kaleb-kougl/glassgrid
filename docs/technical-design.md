@@ -2,7 +2,7 @@
 
 Oct 17, 2026 · Kaleb Kougl
 
-> Exported from the living design doc on 2026-10-17: https://claude.ai/code/artifact/92364e0a-803e-4d32-8345-937c7a34ca1b. Edit the doc first, then re-export.
+> Exported on 2026-10-17 from the living design doc (kept privately). Edit the doc first, then re-export.
 
 
 ## Overview
