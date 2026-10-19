@@ -1,0 +1,151 @@
+name: Release web demo
+
+# Builds the web demo for the portfolio's /glassgrid/ subfolder, tests that
+# build, and publishes it as a GitHub Release asset that the portfolio pins
+# and downloads at build time. See docs/deploy.md.
+#
+# - Push a tag web-vX.Y.Z: release glassgrid-web-X.Y.Z.tar.gz (+ .sha256),
+#   then tell the portfolio (repository_dispatch) if PORTFOLIO_DISPATCH_TOKEN
+#   is set.
+# - Run it by hand (workflow_dispatch) for a dry run: the same build, tests
+#   and tarball, uploaded as a workflow artifact; no release, no dispatch.
+
+on:
+  push:
+    tags: ['web-v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build and package (X.Y.Z or X.Y.Z-pre). A dry run: nothing is released."
+        required: true
+        default: 0.0.0-dryrun
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-web-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GLASSGRID_BASE: /glassgrid/
+  PORTFOLIO_REPOSITORY: Kaleb-kougl/sswe-portfolio
+
+jobs:
+  release:
+    name: Build, test and release the web demo
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write # gh release create
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Version
+        id: version
+        env:
+          EVENT: ${{ github.event_name }}
+          TAG: ${{ github.ref_name }}
+          INPUT: ${{ inputs.version }}
+        run: |
+          if [ "$EVENT" = push ]; then version="${TAG#web-v}"; else version="$INPUT"; fi
+          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "::error::Not a release version: '$version' (tag web-vX.Y.Z, or X.Y.Z as the input)"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "GLASSGRID_VERSION=$version" >> "$GITHUB_ENV"
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - name: Third-party notices are up to date
+        run: node scripts/third-party-notices.js --check
+
+      # Playwright's Chromium, cached as in ci.yml (same key, so the two workflows share it).
+      - name: Playwright version
+        id: playwright
+        run: echo "version=$(pnpm --filter @glassgrid/web exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright's Chromium
+        id: playwright-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+      - name: Install Chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm --filter @glassgrid/web exec playwright install --with-deps chromium
+      - name: Install Chromium's system dependencies
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm --filter @glassgrid/web exec playwright install-deps chromium
+
+      # Build for /glassgrid/ (GLASSGRID_BASE, GLASSGRID_VERSION from env) and check the first-load budget.
+      - name: Build and first-load budget
+        run: pnpm --filter @glassgrid/web size
+      # The same build in Chromium, served as the portfolio's Next.js site serves it (dist/glassgrid-hosting.json).
+      - name: Web E2E under /glassgrid/
+        run: pnpm --filter @glassgrid/web exec playwright test
+      - name: Upload browser test results
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: browser-test-results
+          path: apps/web/test-results/
+          if-no-files-found: ignore
+
+      # The tested dist/, as is.
+      - name: Package
+        id: package
+        run: scripts/package-web.sh --no-build "$GLASSGRID_VERSION"
+      - name: Upload the tarball
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: glassgrid-web-${{ steps.version.outputs.version }}
+          path: |
+            apps/web/release/${{ steps.package.outputs.name }}
+            apps/web/release/${{ steps.package.outputs.name }}.sha256
+          if-no-files-found: error
+
+      - name: GitHub Release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          FILE: ${{ steps.package.outputs.file }}
+          SHA256: ${{ steps.package.outputs.sha256 }}
+        run: |
+          prerelease=()
+          case "$GLASSGRID_VERSION" in *-*) prerelease=(--prerelease) ;; esac
+          notes="$(printf 'The web demo built for %s, version %s.\n\nsha256 of %s: %s\n\nThe archive holds the build at its root (index.html, assets/, samples/, duckdb-extensions/) and glassgrid-hosting.json, the headers and rewrites the host must apply. See docs/deploy.md.' \
+            "$GLASSGRID_BASE" "$GLASSGRID_VERSION" "$(basename "$FILE")" "$SHA256")"
+          gh release create "$TAG" "$FILE" "$FILE.sha256" \
+            --verify-tag --title "Web demo $GLASSGRID_VERSION" --notes "$notes" ${prerelease[@]+"${prerelease[@]}"}
+
+      - name: Portfolio dispatch token
+        id: dispatch
+        env:
+          TOKEN: ${{ secrets.PORTFOLIO_DISPATCH_TOKEN }}
+        run: |
+          if [ -n "$TOKEN" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::PORTFOLIO_DISPATCH_TOKEN is not set: bump the pinned Glassgrid version in $PORTFOLIO_REPOSITORY by hand."
+          fi
+      - name: Tell the portfolio (repository_dispatch glassgrid-release)
+        if: github.event_name == 'push' && steps.dispatch.outputs.enabled == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.PORTFOLIO_DISPATCH_TOKEN }}
+          URL: ${{ github.server_url }}/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ steps.package.outputs.name }}
+          SHA256: ${{ steps.package.outputs.sha256 }}
+        run: |
+          jq -n --arg version "$GLASSGRID_VERSION" --arg url "$URL" --arg sha256 "$SHA256" \
+            '{event_type: "glassgrid-release", client_payload: {version: $version, url: $url, sha256: $sha256}}' \
+            | gh api --method POST "repos/$PORTFOLIO_REPOSITORY/dispatches" --input -
+          echo "Sent glassgrid-release $GLASSGRID_VERSION to $PORTFOLIO_REPOSITORY: $URL"

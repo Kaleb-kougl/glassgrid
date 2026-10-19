@@ -64,6 +64,12 @@ jobs:
       # The web demo: first-load budget, then its production build in Chromium with vercel.json's headers.
       - run: pnpm --filter @glassgrid/web size
       - run: pnpm --filter @glassgrid/web exec playwright test
+      # The same tests on a build for the portfolio's /glassgrid/ subfolder (what release-web.yml ships),
+      # served as its Next.js site serves it (dist/glassgrid-hosting.json).
+      - name: Web E2E under /glassgrid/
+        run: pnpm --filter @glassgrid/web e2e
+        env:
+          GLASSGRID_BASE: /glassgrid/
       - name: Upload browser test results
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
