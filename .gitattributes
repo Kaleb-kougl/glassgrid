@@ -1,0 +1,25 @@
+# LF everywhere, on every OS: the Windows CI job and Windows clones see the
+# same bytes as Linux and macOS (tests compare file contents and hashes).
+* text=auto eol=lf
+
+# Workspace files are JSON; fixtures are compared byte for byte.
+*.glassgrid text eol=lf
+
+# Binary: never normalized, never diffed as text.
+*.parquet binary
+*.wasm binary
+*.png binary
+*.jpg binary
+*.ico binary
+*.icns binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+
+# Generated or bulky: collapse in GitHub diffs and keep out of language stats.
+pnpm-lock.yaml linguist-generated
+THIRD_PARTY_NOTICES.md linguist-generated
+docs/benchmarks/** linguist-generated
+packages/ui/tokens/glassgrid.css linguist-generated
+packages/ui/tokens/glassgrid.*.json linguist-generated
+*.cpuprofile -diff linguist-generated

@@ -4,6 +4,16 @@
   "private": true,
   "description": "Glassgrid's query engine (QueryService, sessions, caches, cubes) behind a DuckDB driver interface, with native (@duckdb/node-api) and DuckDB-WASM drivers.",
   "license": "MIT",
+  "author": "Kaleb Kougl",
+  "homepage": "https://github.com/Kaleb-kougl/glassgrid#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Kaleb-kougl/glassgrid.git",
+    "directory": "packages/engine"
+  },
+  "bugs": {
+    "url": "https://github.com/Kaleb-kougl/glassgrid/issues"
+  },
   "type": "module",
   "sideEffects": false,
   "exports": {

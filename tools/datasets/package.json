@@ -4,6 +4,16 @@
   "private": true,
   "description": "Reproducible, pinned benchmark CSVs for Glassgrid (NYC TLC taxi + seeded synthetic) and the web demo's synthetic sample datasets.",
   "license": "MIT",
+  "author": "Kaleb Kougl",
+  "homepage": "https://github.com/Kaleb-kougl/glassgrid#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Kaleb-kougl/glassgrid.git",
+    "directory": "tools/datasets"
+  },
+  "bugs": {
+    "url": "https://github.com/Kaleb-kougl/glassgrid/issues"
+  },
   "type": "module",
   "engines": {
     "node": ">=22.12.0"

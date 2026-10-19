@@ -4,6 +4,16 @@
   "private": true,
   "description": "Platform-neutral Glassgrid logic: types, schemas and protocols shared by every runtime.",
   "license": "MIT",
+  "author": "Kaleb Kougl",
+  "homepage": "https://github.com/Kaleb-kougl/glassgrid#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Kaleb-kougl/glassgrid.git",
+    "directory": "packages/core"
+  },
+  "bugs": {
+    "url": "https://github.com/Kaleb-kougl/glassgrid/issues"
+  },
   "type": "module",
   "sideEffects": false,
   "exports": {

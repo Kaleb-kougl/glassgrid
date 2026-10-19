@@ -4,6 +4,16 @@
   "private": true,
   "description": "Glassgrid in the browser: the shared app (@glassgrid/app) on the web platform with DuckDB-WASM (@glassgrid/engine/web) in a Web Worker, the sample workspaces, and the component gallery at /gallery.",
   "license": "MIT",
+  "author": "Kaleb Kougl",
+  "homepage": "https://github.com/Kaleb-kougl/glassgrid#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Kaleb-kougl/glassgrid.git",
+    "directory": "apps/web"
+  },
+  "bugs": {
+    "url": "https://github.com/Kaleb-kougl/glassgrid/issues"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",
