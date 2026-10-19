@@ -17,6 +17,7 @@ import { CATEGORIES, writeFixtureCsv } from './csv-fixture';
 import { fling, scrollSweep, type FlingResult, type MemorySample } from './grid-perf';
 import {
   APP_DIR,
+  answerClosePrompt,
   axe,
   chromiumFlags,
   countEntries,
@@ -88,6 +89,8 @@ test.describe('data path', () => {
     launched.process().stderr?.on('data', (chunk: Buffer) => logs.push(`[stderr] ${chunk.toString()}`));
 
     page = await launched.firstWindow();
+    // The last test leaves unsaved work: answer "Save changes?" with Don't Save when afterAll closes the app.
+    await answerClosePrompt(launched, 'dontSave');
     page.on('console', (message) => {
       logs.push(`[renderer:${message.type()}] ${message.text()}\n`);
       if (message.type() === 'error') rendererErrors.push(message.text());

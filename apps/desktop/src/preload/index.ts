@@ -142,6 +142,7 @@ const workspace: WorkspaceBridge = {
     workspaceMenuListeners.add(listener);
     return () => workspaceMenuListeners.delete(listener);
   },
+  setDocumentState: (state) => ipcRenderer.send(IpcChannel.workspaceDocumentState, state),
 };
 
 const bridge: GlassgridBridge = {

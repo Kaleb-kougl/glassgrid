@@ -3,9 +3,7 @@
  */
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { App, AUTOSAVE_DELAY_MS } from './App';
-import type { WorkspaceState } from '@glassgrid/core';
-import type { WorkspaceFileContext, WorkspaceFileOutcome, WorkspaceFilesApi } from './platform';
+import { App } from './App';
 import { fakeEngine, handle, tableId } from './test-support/fake-engine';
 import { fakePlatform, type FakePlatformOptions } from './test-support/fake-platform';
 import { stubLayout } from './test-support/jsdom';
@@ -33,17 +31,6 @@ async function openFromEmptyState() {
   fireEvent.click(screen.getByTestId('open-csv-empty'));
   await screen.findByTestId('grid');
   await waitFor(() => expect(screen.getByTestId('row-count').textContent).toBe('2 rows'));
-}
-
-function fakeWorkspaceFiles() {
-  return {
-    save: vi.fn(
-      (_context: WorkspaceFileContext, _options: { saveAs: boolean }): Promise<WorkspaceFileOutcome> =>
-        Promise.resolve({ status: 'done', displayName: 'trips.glassgrid' }),
-    ),
-    open: vi.fn((_context: WorkspaceFileContext): Promise<WorkspaceFileOutcome> => Promise.resolve({ status: 'done', displayName: 'other.glassgrid' })),
-    autosave: vi.fn((_state: WorkspaceState) => undefined),
-  } satisfies WorkspaceFilesApi;
 }
 
 beforeEach(() => {
@@ -145,84 +132,5 @@ describe('App on a Platform', () => {
     await openFromEmptyState();
     act(() => close());
     expect(engine.closeTable).toHaveBeenCalledWith(tableId);
-  });
-});
-
-describe('workspace files (persistence hooks)', () => {
-  it('hides save, open and the edited dot without workspace files, or without the capability', async () => {
-    renderApp();
-    await openFromEmptyState();
-    expect(screen.queryByTestId('save-workspace')).toBeNull();
-    expect(screen.queryByTestId('open-workspace')).toBeNull();
-    expect(screen.queryByTestId('workspace-edited')).toBeNull();
-    cleanup();
-
-    const api = fakeWorkspaceFiles();
-    renderApp({ workspaceFiles: api, capabilities: { canSaveWorkspace: false } });
-    await openFromEmptyState();
-    expect(screen.queryByTestId('save-workspace')).toBeNull();
-    fireEvent.keyDown(window, { key: 's', ctrlKey: true });
-    expect(api.save).not.toHaveBeenCalled();
-  });
-
-  it('saves by button and Ctrl+S, tracks unsaved changes and opens saved workspaces', async () => {
-    const api = fakeWorkspaceFiles();
-    const { workspace, engine } = renderApp({ workspaceFiles: api, capabilities: { canSaveWorkspace: true } });
-    expect(screen.getByTestId<HTMLButtonElement>('save-workspace').disabled).toBe(true);
-    expect(screen.queryByTestId('workspace-edited')).toBeNull();
-    await openFromEmptyState();
-    expect(screen.getByTestId('workspace-edited').textContent).toBe('Edited, not saved');
-
-    fireEvent.click(screen.getByTestId('save-workspace'));
-    await waitFor(() => expect(screen.queryByTestId('workspace-edited')).toBeNull());
-    expect(api.save).toHaveBeenCalledWith({ workspace, engine }, { saveAs: false });
-    expect(screen.getByText('Saved trips.glassgrid')).toBeDefined();
-
-    await act(() => workspace.registry.dispatch('setColumnType', { column: 'amount', type: 'text' }, { caller: 'user' }));
-    expect(screen.getByTestId('workspace-edited')).toBeDefined();
-    fireEvent.keyDown(window, { key: 's', ctrlKey: true, shiftKey: true });
-    await waitFor(() => expect(api.save).toHaveBeenLastCalledWith({ workspace, engine }, { saveAs: true }));
-    await waitFor(() => expect(screen.queryByTestId('workspace-edited')).toBeNull());
-    // Undo past the save point is an unsaved change again.
-    fireEvent.click(screen.getByTestId('undo'));
-    expect(screen.getByTestId('workspace-edited')).toBeDefined();
-
-    fireEvent.click(screen.getByTestId('open-workspace'));
-    await waitFor(() => expect(api.open).toHaveBeenCalledWith({ workspace, engine }));
-    expect(await screen.findByText('Opened other.glassgrid')).toBeDefined();
-  });
-
-  it('reports a failed save and keeps the edited dot', async () => {
-    const api = fakeWorkspaceFiles();
-    api.save.mockResolvedValueOnce({ status: 'failed', message: 'Could not save: disk full' });
-    renderApp({ workspaceFiles: api, capabilities: { canSaveWorkspace: true } });
-    await openFromEmptyState();
-    fireEvent.click(screen.getByTestId('save-workspace'));
-    expect((await screen.findByRole('alert')).textContent).toContain('Could not save: disk full');
-    expect(screen.getByTestId('workspace-edited')).toBeDefined();
-  });
-
-  it('autosaves after a quiet moment and offers recovery at start', async () => {
-    const offer = { id: 'autosave-1', displayName: 'trips.csv', savedAt: Date.UTC(2026, 9, 18, 12) };
-    const restore = vi.fn(() => Promise.resolve({ status: 'done' as const, displayName: 'trips.csv' }));
-    const api = { ...fakeWorkspaceFiles(), recovery: { check: vi.fn(() => Promise.resolve(offer)), restore } };
-    const { workspace, engine } = renderApp({ workspaceFiles: api, capabilities: { canSaveWorkspace: true } });
-
-    const toast = await screen.findByText(/Unsaved changes to trips\.csv from .* can be restored/);
-    fireEvent.click(within(toast.closest('[role="status"]') as HTMLElement).getByRole('button', { name: /Restore/ }));
-    await waitFor(() => expect(restore).toHaveBeenCalledWith(offer, { workspace, engine }));
-
-    await openFromEmptyState();
-    vi.useFakeTimers();
-    await act(() => workspace.registry.dispatch('setColumnType', { column: 'amount', type: 'text' }, { caller: 'user' }));
-    act(() => {
-      vi.advanceTimersByTime(AUTOSAVE_DELAY_MS - 1);
-    });
-    const before = api.autosave.mock.calls.length;
-    act(() => {
-      vi.advanceTimersByTime(1);
-    });
-    expect(api.autosave.mock.calls.length).toBe(before + 1);
-    expect(api.autosave).toHaveBeenLastCalledWith(workspace.store.getState());
   });
 });

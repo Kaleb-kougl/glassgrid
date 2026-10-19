@@ -84,6 +84,8 @@ export interface WorkspaceServiceDeps<Owner> {
   readonly autosaveIntervalMs?: number;
   /** OS-level recent documents (macOS Dock, Windows jump list). */
   readonly addRecentDocument?: (path: string) => void;
+  /** The recent list changed (an open or save added a file, or a missing one was dropped): rebuild File → Open Recent. */
+  readonly onRecentChanged?: () => void;
   /** Test-only: options passed to every atomic write of a workspace file. */
   readonly writeOptions?: Parameters<typeof writeFileAtomic>[2];
 }
@@ -205,7 +207,10 @@ export class WorkspaceService<Owner = unknown> {
         const path = await this.deps.appState.recentWorkspacePath(request.id);
         if (path === undefined) return { status: 'failed', code: 'not_found', message: 'That workspace is no longer in the recent list' };
         const result = await this.openPath(path);
-        if (result.status === 'failed' && result.code === 'io' && !(await isRegularFile(path))) await this.deps.appState.removeRecentWorkspace(path);
+        if (result.status === 'failed' && result.code === 'io' && !(await isRegularFile(path))) {
+          await this.deps.appState.removeRecentWorkspace(path);
+          this.deps.onRecentChanged?.();
+        }
         return result;
       }
       case 'external': {
@@ -258,17 +263,25 @@ export class WorkspaceService<Owner = unknown> {
       return { status: 'failed', code: 'data_unreadable', message: `Could not open ${basename(dataPath)}: ${describeIoError(error)}` };
     }
     if (context.recent !== null) await this.rememberRecent(context.recent);
+    const fingerprintMismatch = compareFingerprints(context.parsed.data.fingerprint, fingerprint);
+    // The data differs from what the workspace was saved with: the person may still point it at the right file.
+    let relinkToken: string | undefined;
+    if (fingerprintMismatch !== null) {
+      relinkToken = `ot_${randomUUID()}`;
+      this.pending.set(relinkToken, { kind: 'locate', context });
+    }
     return {
       status: 'opened',
       documentId: context.documentId,
       workspaceFile: context.workspaceFile,
       file: { handle: registered.handle, displayName: basename(dataPath), sizeBytes: registered.sizeBytes },
       dataFoundBy: via,
-      fingerprintMismatch: compareFingerprints(context.parsed.data.fingerprint, fingerprint),
+      fingerprintMismatch,
       workspace: context.parsed.workspace,
       warnings: context.parsed.warnings,
       migratedFrom: context.parsed.migratedFrom,
       recovered: context.recovered,
+      ...(relinkToken === undefined ? {} : { relinkToken }),
     };
   }
 
@@ -319,6 +332,7 @@ export class WorkspaceService<Owner = unknown> {
       // Logged by the store; the recent list is a convenience.
     }
     this.deps.addRecentDocument?.(path);
+    this.deps.onRecentChanged?.();
   }
 
   // --- Crash recovery -------------------------------------------------------------

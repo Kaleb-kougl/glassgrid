@@ -65,6 +65,8 @@ export type OpenWorkspaceOutcome =
       /** From reading the file (migration) and restoring it over the data (dropped charts, …). */
       readonly warnings: readonly WorkspaceWarning[];
       readonly recovered: boolean;
+      /** With a fingerprint mismatch: `locateWorkspaceData(relinkToken)` restores the workspace over another file; `cancelOpen` forgets it. */
+      readonly relinkToken: string | null;
     }
   | {
       /** The data file was not found: ask the person, then `locateWorkspaceData(token)` (or `bridge.cancelOpen`). */
@@ -149,6 +151,7 @@ export async function completeWorkspaceOpen(
     fingerprintMismatch: result.fingerprintMismatch,
     warnings: [...result.warnings, ...restored.warnings],
     recovered: result.recovered !== null,
+    relinkToken: result.relinkToken ?? null,
   };
 }
 

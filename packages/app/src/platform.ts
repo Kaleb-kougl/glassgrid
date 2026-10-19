@@ -1,6 +1,5 @@
-import type { MenuCommand, OpenCsvResult, ThemePreference, WorkspaceState } from '@glassgrid/core';
+import type { CloseAnswer, MenuCommand, OpenCsvResult, ThemePreference, WorkspaceBridge, WorkspaceMenuCommand } from '@glassgrid/core';
 import type { EngineClientLike } from './engine';
-import type { AppWorkspace } from './workspace';
 
 /*
  * Everything the app needs from the shell it runs in. The desktop shell
@@ -62,6 +61,24 @@ export interface PlatformClipboard {
   writeText(text: string): Promise<void>;
 }
 
+/**
+ * A native application-menu command: File → Open and View → Theme
+ * (`MenuCommand`), and the workspace-file items Open Workspace…, Open
+ * Recent, Save and Save As… (`WorkspaceMenuCommand`). The app turns each
+ * into the matching command on the registry.
+ */
+export type AppMenuCommand = MenuCommand | WorkspaceMenuCommand;
+
+/** What the window shows, for native chrome: the title and whether there are unsaved changes. */
+export interface DocumentChrome {
+  /** The workspace file's name, else the data file's; null with nothing open. */
+  readonly title: string | null;
+  /** Unsaved changes (`isWorkspaceDirty`); always false without workspace files. */
+  readonly edited: boolean;
+  /** The workspace's document id (opaque, from the shell), or null when untitled. */
+  readonly documentId: string | null;
+}
+
 export interface PlatformWindow {
   /**
    * Leave room at the start of the title bar for native window controls
@@ -70,17 +87,32 @@ export interface PlatformWindow {
   readonly titleBarInset: boolean;
   /** How shortcuts are written and read out: `⌘Z` (`mac`) or `Ctrl+Z` (`pc`). */
   readonly shortcuts: 'mac' | 'pc';
+  /**
+   * A native application menu owns the file shortcuts (⌘O, ⇧⌘O, ⌘S, ⇧⌘S)
+   * as accelerators and reports them through `onMenuCommand`; the page then
+   * leaves those keys alone, so each fires exactly once. False or absent
+   * (browsers): the page handles them itself.
+   */
+  readonly menuShortcuts?: boolean;
   /** Tell the native shell the theme preference in use (desktop: native frame colour, View menu ticks). */
   syncTheme?(preference: ThemePreference): void;
-  /** Native application-menu commands (desktop: File → Open, View → Theme). Returns an unsubscribe function. */
-  onMenuCommand?(listener: (command: MenuCommand) => void): () => void;
+  /** Native application-menu commands (desktop: File and View menus). Returns an unsubscribe function. */
+  onMenuCommand?(listener: (command: AppMenuCommand) => void): () => void;
   /**
    * The window or page is going away (`pagehide` on both shells today): the
    * app closes its engine table here. Returns an unsubscribe function.
-   * Persistence may later need a veto (unsaved changes); see
-   * docs/m4-app-package.md.
    */
   onBeforeClose(listener: () => void): () => void;
+  /**
+   * Veto for closing the window with unsaved work. The shell asks before it
+   * closes; the handler answers with core's `closeAnswer` (dirty, and the
+   * snapshot to save if the person picks Save). Desktop: main shows the
+   * native Save / Don't Save / Cancel dialog. One handler at a time; returns
+   * an unsubscribe function. Absent: the window closes without asking.
+   */
+  onCloseRequest?(handler: () => CloseAnswer | Promise<CloseAnswer>): () => void;
+  /** Show the document in native chrome (desktop: window title; macOS represented file and edited dot). */
+  setDocumentChrome?(chrome: DocumentChrome): void;
 }
 
 export interface PlatformCapabilities {
@@ -96,51 +128,43 @@ export interface PlatformCapabilities {
   readonly maxFileBytes: number | null;
 }
 
-/** Outcome of a workspace-file operation, as the UI reports it. */
-export type WorkspaceFileOutcome =
-  | { readonly status: 'done'; readonly displayName: string }
-  | { readonly status: 'cancelled' }
-  | { readonly status: 'failed'; readonly message: string };
-
-/** What a workspace-file operation may read and change. */
-export interface WorkspaceFileContext {
-  readonly workspace: AppWorkspace;
-  readonly engine: EngineClientLike;
-}
-
-/** An autosaved workspace found at start (crash recovery). */
-export interface RecoveryOffer {
-  readonly id: string;
-  /** Workspace or data file name to show. */
-  readonly displayName: string;
-  /** Epoch ms of the autosave. */
-  readonly savedAt: number;
-}
-
 /**
- * `.glassgrid` workspace files (M4 persistence, implemented by the shells
- * once core can serialise a workspace). Optional: without it the save/open
- * controls, the edited indicator and recovery stay hidden. The app owns the
- * UI (buttons, shortcut, edited dot, recovery toast, autosave timing); the
- * implementation owns the format, the file system and the data-file
- * fallbacks.
+ * `.glassgrid` workspace files: the host half of core's `WorkspaceBridge`
+ * (desktop: main through the preload, `window.glassgrid.workspace`; the web
+ * could implement it over OPFS and downloads). The app wires it with core's
+ * glue (docs/m4-persistence.md):
+ *
+ * - `provideWorkspacePersistence` implements the `saveWorkspace`,
+ *   `saveWorkspaceAs`, `openWorkspace` and `listRecentWorkspaces` commands
+ *   over `save`/`saveAs`/`open`/`listRecent`; every button, shortcut and menu
+ *   item dispatches those commands.
+ * - `reportUnsavedWork` feeds `updateRecovery`, the one autosave path (the
+ *   host writes crash-recovery snapshots on its own schedule).
+ * - `completeWorkspaceOpen` / `locateWorkspaceData` finish drops
+ *   (`openDropped`), located data files (`locateData`, `cancelOpen`) and
+ *   restored recovery snapshots (`listRecovery`, `restoreRecovery`,
+ *   `discardRecovery`).
+ * - `onOpenRequest` hands over files the OS opened with the app.
+ *
+ * Unsaved changes are core's digest-based `isWorkspaceDirty`. Optional:
+ * without it (or without `capabilities.canSaveWorkspace`) the save/open
+ * controls, the edited dot, the recent list and recovery stay hidden.
  */
-export interface WorkspaceFilesApi {
-  /** Save the workspace; `saveAs` asks for a location even when it has one. */
-  save(context: WorkspaceFileContext, options: { saveAs: boolean }): Promise<WorkspaceFileOutcome>;
-  /** Pick a `.glassgrid` file, reopen its data source and replace the workspace state. */
-  open(context: WorkspaceFileContext): Promise<WorkspaceFileOutcome>;
-  /** Called (debounced by the app) after workspace changes, for crash recovery. */
-  autosave?(state: WorkspaceState): void;
-  /** Crash recovery: checked once when the app starts. */
-  readonly recovery?: {
-    /** An autosave newer than the last save, if any; the app offers to restore it. */
-    check(): Promise<RecoveryOffer | null>;
-    restore(offer: RecoveryOffer, context: WorkspaceFileContext): Promise<WorkspaceFileOutcome>;
-  };
-  /** Opens started by the shell (File → Open Workspace…, a double-clicked file). Returns an unsubscribe function. */
-  onOpenRequest?(listener: () => void): () => void;
-}
+export type WorkspaceFilesApi = Pick<
+  WorkspaceBridge,
+  | 'save'
+  | 'saveAs'
+  | 'open'
+  | 'openDropped'
+  | 'locateData'
+  | 'cancelOpen'
+  | 'listRecent'
+  | 'listRecovery'
+  | 'restoreRecovery'
+  | 'discardRecovery'
+  | 'updateRecovery'
+  | 'onOpenRequest'
+>;
 
 /** Everything platform-specific, passed to `<App platform={…} />` once per window or page. */
 export interface Platform {
@@ -150,7 +174,7 @@ export interface Platform {
   readonly clipboard: PlatformClipboard;
   readonly window: PlatformWindow;
   readonly capabilities: PlatformCapabilities;
-  /** Absent until the persistence work provides it (and on shells that cannot save). */
+  /** `.glassgrid` files (desktop); absent on shells that cannot save them. */
   readonly workspaceFiles?: WorkspaceFilesApi;
 }
 

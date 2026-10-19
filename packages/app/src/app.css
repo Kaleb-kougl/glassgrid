@@ -456,3 +456,220 @@ body {
   justify-content: flex-end;
   gap: 8px;
 }
+
+/* --- Workspace files: title, start screen, banners, dialogs ---------------- */
+
+/* The data file after a saved workspace's name. */
+.topbar__data {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--gg-text-secondary);
+}
+
+.empty__workspaces {
+  width: 560px;
+  max-width: calc(100% - 32px);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.recent__title,
+.recovery__title {
+  margin: 0 0 6px;
+  font: var(--gg-type-label-caps);
+  letter-spacing: var(--gg-type-label-caps-tracking);
+  text-transform: uppercase;
+  color: var(--gg-text-secondary);
+}
+
+.recent__list,
+.recovery__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recent__item {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 10px;
+  border: none;
+  border-radius: var(--gg-radius-control);
+  background: transparent;
+  color: var(--gg-text-primary);
+  font: var(--gg-type-ui-md);
+  text-align: left;
+  cursor: pointer;
+}
+
+.recent__item:hover:not(:disabled) {
+  background: var(--gg-hover);
+}
+
+.recent__item:focus-visible {
+  outline: var(--gg-focus-width) solid var(--gg-focus);
+  outline-offset: calc(-1 * var(--gg-focus-width));
+}
+
+.recent__item:disabled {
+  cursor: default;
+  color: var(--gg-text-disabled);
+}
+
+.recent__name {
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.recent__folder,
+.recovery__detail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--gg-text-secondary);
+}
+
+/* A banner: a raised strip with a message and its actions (recovery offer, data mismatch). */
+.banner {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 10px 10px 14px;
+  border-radius: var(--gg-radius-card);
+  border: var(--gg-border-width) solid var(--gg-border-subtle);
+  background: var(--gg-raised-bg);
+  box-shadow: var(--gg-elev-1);
+  color: var(--gg-text-primary);
+  font: var(--gg-type-ui-md);
+}
+
+.banner--warning {
+  border-color: var(--gg-warning);
+  background: var(--gg-warning-bg);
+}
+
+.banner--info {
+  border-color: var(--gg-info);
+  background: var(--gg-info-bg);
+}
+
+.banner__icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--gg-warning);
+  color: var(--gg-raised-bg);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.banner__message {
+  flex: 1;
+  min-width: 0;
+}
+
+.banner-slot {
+  position: absolute;
+  top: calc(var(--gg-titlebar-h) + 8px);
+  left: 50%;
+  z-index: 30;
+  width: max-content;
+  max-width: min(760px, calc(100% - 32px));
+  transform: translateX(-50%);
+}
+
+.recovery {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.recovery__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.recovery__name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+/* --- Dialog (modal; the rest of the window is inert while it is open) ---- */
+.dialog-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--gg-ground) 60%, transparent);
+}
+
+.dialog {
+  width: 440px;
+  max-width: calc(100% - 32px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+  border-radius: var(--gg-radius-panel);
+  border: var(--gg-border-width) solid var(--gg-border-subtle);
+  background: var(--gg-raised-bg);
+  box-shadow: var(--gg-elev-2);
+  color: var(--gg-text-primary);
+}
+
+.dialog:focus-visible {
+  outline: none;
+}
+
+.dialog__title {
+  margin: 0;
+  font: var(--gg-type-heading-md);
+}
+
+.dialog__body p {
+  margin: 0;
+  color: var(--gg-text-secondary);
+}
+
+.dialog__body p + p {
+  margin-top: 8px;
+}
+
+.dialog__body strong {
+  color: var(--gg-text-primary);
+  font-weight: 600;
+}
+
+.dialog__body .dialog__error {
+  color: var(--gg-danger);
+}
+
+.dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
