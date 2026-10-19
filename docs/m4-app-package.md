@@ -286,6 +286,11 @@ carries `AppMenuCommand` (`MenuCommand | WorkspaceMenuCommand`).
 
 ### DuckDB-WASM engine (`m4-engine`)
 
+**Done on branch `m4-web`** (see [m4-web-demo.md](m4-web-demo.md)): the stub
+and its badge are gone, the web platform runs on `createWorkerEngine()`, and
+the CSP is also sent as a header (`apps/web/vercel.json`). The notes below
+are kept as they were written.
+
 - **Swap the stub.** In `apps/web/src/app-route.tsx`, replace
   `createStubEngine()` with an object of the `WebEngine` shape
   (`web-platform.ts`): `{ engine, registerFile(file: File): Promise<OpenCsvResult>, samples?, openSample? }`.

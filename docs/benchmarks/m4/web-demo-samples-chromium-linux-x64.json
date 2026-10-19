@@ -1,0 +1,144 @@
+{
+  "description": "Web demo, production build served with vercel.json headers from localhost (e2e/serve.ts), HeadlessChrome (Playwright 1.64 Chromium), cold: a new browser context per run (no HTTP cache, new DuckDB-WASM worker). Times are ms since navigation start, from apps/web/e2e/samples.spec.ts. Machine: Linux VM, 2 vCPU Xeon @ 2.1 GHz, load average ~2 (other worktrees building). Network is local, so downloads are nearly free: add the wasm (7.7 MB gzip) and Parquet transfer on a real connection.",
+  "date": "2026-10-18",
+  "duckdbWasm": "1.32.0 (DuckDB v1.4.3), EH build, single-threaded",
+  "runs": [
+    {
+      "taxi": {
+        "rows": 2000000,
+        "parquetBytes": 20760220,
+        "engineReadyMs": 1961,
+        "workspaceLoadedMs": 2316,
+        "firstChartMs": 3445,
+        "allChartsMs": 3549,
+        "charts": 4,
+        "brushMs": 259,
+        "brushRows": 718118,
+        "brushFromCube": 4
+      },
+      "retail": {
+        "rows": 1500000,
+        "parquetBytes": 11111098,
+        "engineReadyMs": 1682,
+        "workspaceLoadedMs": 1937,
+        "firstChartMs": 2891,
+        "allChartsMs": 2962,
+        "charts": 4,
+        "brushMs": 142,
+        "brushRows": 19296,
+        "brushFromCube": 4
+      },
+      "sensors": {
+        "rows": 1382400,
+        "parquetBytes": 8027894,
+        "engineReadyMs": 1589,
+        "workspaceLoadedMs": 1803,
+        "firstChartMs": 2744,
+        "allChartsMs": 3057,
+        "charts": 4,
+        "brushMs": 149,
+        "brushRows": 86285,
+        "brushFromCube": 4
+      }
+    },
+    {
+      "taxi": {
+        "rows": 2000000,
+        "parquetBytes": 20760220,
+        "engineReadyMs": 1705,
+        "workspaceLoadedMs": 2039,
+        "firstChartMs": 3086,
+        "allChartsMs": 3124,
+        "charts": 4,
+        "brushMs": 265,
+        "brushRows": 718118,
+        "brushFromCube": 4
+      },
+      "retail": {
+        "rows": 1500000,
+        "parquetBytes": 11111098,
+        "engineReadyMs": 1693,
+        "workspaceLoadedMs": 1988,
+        "firstChartMs": 3111,
+        "allChartsMs": 3137,
+        "charts": 4,
+        "brushMs": 102,
+        "brushRows": 19296,
+        "brushFromCube": 4
+      },
+      "sensors": {
+        "rows": 1382400,
+        "parquetBytes": 8027894,
+        "engineReadyMs": 1707,
+        "workspaceLoadedMs": 1905,
+        "firstChartMs": 2791,
+        "allChartsMs": 3285,
+        "charts": 4,
+        "brushMs": 180,
+        "brushRows": 86285,
+        "brushFromCube": 4
+      }
+    },
+    {
+      "taxi": {
+        "rows": 2000000,
+        "parquetBytes": 20760220,
+        "engineReadyMs": 1558,
+        "workspaceLoadedMs": 1903,
+        "firstChartMs": 3193,
+        "allChartsMs": 3230,
+        "charts": 4,
+        "brushMs": 360,
+        "brushRows": 718118,
+        "brushFromCube": 4
+      },
+      "retail": {
+        "rows": 1500000,
+        "parquetBytes": 11111098,
+        "engineReadyMs": 1604,
+        "workspaceLoadedMs": 1862,
+        "firstChartMs": 2716,
+        "allChartsMs": 2728,
+        "charts": 4,
+        "brushMs": 115,
+        "brushRows": 19296,
+        "brushFromCube": 4
+      },
+      "sensors": {
+        "rows": 1382400,
+        "parquetBytes": 8027894,
+        "engineReadyMs": 1590,
+        "workspaceLoadedMs": 1760,
+        "firstChartMs": 2633,
+        "allChartsMs": 3043,
+        "charts": 4,
+        "brushMs": 147,
+        "brushRows": 86285,
+        "brushFromCube": 4
+      }
+    }
+  ],
+  "medians": {
+    "taxi": {
+      "engineReadyMs": 1705,
+      "workspaceLoadedMs": 2039,
+      "firstChartMs": 3193,
+      "allChartsMs": 3230,
+      "brushMs": 265
+    },
+    "retail": {
+      "engineReadyMs": 1682,
+      "workspaceLoadedMs": 1937,
+      "firstChartMs": 2891,
+      "allChartsMs": 2962,
+      "brushMs": 115
+    },
+    "sensors": {
+      "engineReadyMs": 1590,
+      "workspaceLoadedMs": 1803,
+      "firstChartMs": 2744,
+      "allChartsMs": 3057,
+      "brushMs": 149
+    }
+  }
+}

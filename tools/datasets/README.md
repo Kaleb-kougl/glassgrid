@@ -1,6 +1,7 @@
 # @glassgrid/datasets
 
-Reproducible, pinned benchmark CSVs for Glassgrid. Two families:
+Reproducible, pinned benchmark CSVs for Glassgrid (two families below), and
+the web demo's sample datasets ([Web demo samples](#web-demo-samples-pnpm---filter-glassgriddatasets-samples)).
 
 | Dataset | Command | Rows | CSV size (approx.) |
 | --- | --- | --- | --- |
@@ -282,11 +283,46 @@ fails if a CSV with the same name, recipe and DuckDB version has a different has
 To pin a new dataset, copy those fields from its manifest. The taxi datasets aren't
 pinned yet: add them after the first run against the live TLC files.
 
+## Web demo samples (`pnpm --filter @glassgrid/datasets samples`)
+
+Three synthetic tables for the web demo (`apps/web`), written as Parquet with
+one `.glassgrid` workspace each into `apps/web/public/samples/` (committed;
+about 38 MB in all):
+
+| Sample | File | Rows | Parquet | Columns |
+| --- | --- | ---: | ---: | --- |
+| `taxi` | `taxi-trips-2025h1.parquet` | 2,000,000 | 20.8 MB | trips in a made-up city, Jan–Jun 2025: pickup time, zones, passengers, distance, duration, fare, tip, payment type, pickup lat/lon |
+| `retail` | `retail-orders-2023-2025.parquet` | 1,500,000 | 11.1 MB | orders of a made-up chain, 2023–2025: order id, time, region, channel, category, units, unit price, discount, revenue, segment, rating (mostly null) |
+| `sensors` | `sensor-readings-2025-09.parquet` | 1,382,400 | 8.0 MB | 64 sensors in four buildings every two minutes, Sept 2025: time, sensor, site, temperature, humidity, CO₂ (office only), battery, status |
+
+- **Made up from scratch** by seeded DuckDB SQL (`src/samples.ts`), so there
+  is no third-party data or licence to track: MIT like the rest of the repo.
+  The shapes are there to make charts worth brushing: rush hours, weekly and
+  holiday dips, airport runs, seasonal and Black-Friday peaks, daily
+  temperature cycles, a cold store whose door is left open now and then.
+- **Deterministic:** values come from `hash(row, seed, salt)` and integer
+  arithmetic, and DuckDB writes with one thread, so the same recipe
+  (`samples/1`) and DuckDB version give the same bytes (two runs compared).
+  `samples.manifest.json` records rows, bytes, SHA-256 and columns.
+- **Parquet:** zstd level 9, row groups of 122,880 rows, Parquet format v2
+  encodings (delta-encoded timestamps and ids), which DuckDB-WASM 1.32.0
+  (DuckDB 1.4.3) reads.
+- **Workspaces:** `<id>.glassgrid` (format v1), written with
+  `@glassgrid/core`'s serializer (valid by construction), with the column
+  types the engine infers from the Parquet file and four charts each. Every
+  chart is compiled against the file's columns and ranges before it is
+  written.
+- **Changing a sample:** the Parquet files are served as immutable (one year,
+  `apps/web/vercel.json`), so new bytes need a new file name (bump the
+  recipe, rename, regenerate, update `apps/web/src/samples.ts`). Each file
+  should stay under 25 MB (`apps/web/src/samples.test.ts` checks it).
+
 ## Layout
 
 ```
 src/taxi.ts          NYC TLC pipeline (download → cache → DuckDB sort → CSV + manifest)
 src/synthetic.ts     seeded generator (DuckDB SQL)
+src/samples.ts       the web demo's sample Parquet files and .glassgrid workspaces
 src/verify.ts        manifest + pins check
 src/lib/common.ts    CSV dialect, arg helpers, paths
 src/lib/duck.ts      DuckDB connection, DESCRIBE, COPY (single and chunked)

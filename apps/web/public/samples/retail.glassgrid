@@ -1,0 +1,173 @@
+{
+  "formatVersion": 1,
+  "app": {
+    "name": "Glassgrid",
+    "version": "0.0.0"
+  },
+  "savedAt": "2026-10-18T00:00:00.000Z",
+  "data": {
+    "fileName": "retail-orders-2023-2025.parquet",
+    "absolutePath": "/samples/retail-orders-2023-2025.parquet",
+    "relativePath": "retail-orders-2023-2025.parquet",
+    "fingerprint": {
+      "sizeBytes": 11111098,
+      "mtimeMs": 1792281600000,
+      "headTailSha256": "c70c13ef8bc1dad237a7af3ba23c0d955cc0bf49167f42da8cdff550a7700b18",
+      "key": "373148109a29ea38758e261540b24a4f"
+    }
+  },
+  "workspace": {
+    "columns": [
+      {
+        "name": "order_id",
+        "inferredType": "integer",
+        "typeOverride": null
+      },
+      {
+        "name": "ordered_at",
+        "inferredType": "timestamp",
+        "typeOverride": null
+      },
+      {
+        "name": "region",
+        "inferredType": "text",
+        "typeOverride": null
+      },
+      {
+        "name": "channel",
+        "inferredType": "text",
+        "typeOverride": null
+      },
+      {
+        "name": "category",
+        "inferredType": "text",
+        "typeOverride": null
+      },
+      {
+        "name": "units",
+        "inferredType": "integer",
+        "typeOverride": null
+      },
+      {
+        "name": "unit_price",
+        "inferredType": "float",
+        "typeOverride": null
+      },
+      {
+        "name": "discount_pct",
+        "inferredType": "integer",
+        "typeOverride": null
+      },
+      {
+        "name": "revenue",
+        "inferredType": "float",
+        "typeOverride": null
+      },
+      {
+        "name": "customer_segment",
+        "inferredType": "text",
+        "typeOverride": null
+      },
+      {
+        "name": "rating",
+        "inferredType": "integer",
+        "typeOverride": null
+      }
+    ],
+    "charts": [
+      {
+        "id": "chart_1",
+        "spec": {
+          "mark": "area",
+          "x": {
+            "column": "ordered_at",
+            "timeUnit": "month"
+          },
+          "y": {
+            "column": "revenue",
+            "aggregate": "sum"
+          },
+          "filters": []
+        },
+        "title": "Revenue per month"
+      },
+      {
+        "id": "chart_2",
+        "spec": {
+          "mark": "bar",
+          "x": {
+            "column": "category"
+          },
+          "y": {
+            "column": "revenue",
+            "aggregate": "sum"
+          },
+          "filters": []
+        },
+        "title": "Revenue by category"
+      },
+      {
+        "id": "chart_3",
+        "spec": {
+          "mark": "bar",
+          "x": {
+            "column": "channel"
+          },
+          "filters": []
+        },
+        "title": "Orders by channel"
+      },
+      {
+        "id": "chart_4",
+        "spec": {
+          "mark": "histogram",
+          "x": {
+            "column": "revenue",
+            "bin": "auto"
+          },
+          "filters": []
+        },
+        "title": "Order value"
+      }
+    ],
+    "selections": {},
+    "userFilters": [],
+    "grid": {
+      "sort": [],
+      "columnOrder": [],
+      "columnWidths": []
+    },
+    "layout": {
+      "cards": [
+        {
+          "chartId": "chart_1",
+          "x": 0,
+          "y": 0,
+          "w": 1,
+          "h": 1
+        },
+        {
+          "chartId": "chart_2",
+          "x": 0,
+          "y": 1,
+          "w": 1,
+          "h": 1
+        },
+        {
+          "chartId": "chart_3",
+          "x": 0,
+          "y": 2,
+          "w": 1,
+          "h": 1
+        },
+        {
+          "chartId": "chart_4",
+          "x": 0,
+          "y": 3,
+          "w": 1,
+          "h": 1
+        }
+      ]
+    }
+  }
+}

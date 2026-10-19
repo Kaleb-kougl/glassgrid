@@ -12,7 +12,7 @@ as its embedded engine; nothing leaves your machine.
 | Path | What |
 | --- | --- |
 | `apps/desktop` | Electron app: main, preload, React renderer, engine host (utility process) |
-| `apps/web` | Browser build (DuckDB-WASM), placeholder for now |
+| `apps/web` | The web demo: the same app on DuckDB-WASM in a Web Worker, with three sample workspaces; see [docs/m4-web-demo.md](docs/m4-web-demo.md) |
 | `packages/core` | Platform-neutral TypeScript: types, Zod schemas, protocols, SQL |
 | `packages/engine` | The query engine, with native (`@duckdb/node-api`) and DuckDB-WASM drivers and the web worker; see [docs/m4-engine-portability.md](docs/m4-engine-portability.md) |
 | `packages/ui` | Shared React components |
@@ -31,7 +31,7 @@ Arrow IPC bytes.
 ```sh
 pnpm install
 pnpm dev          # desktop app with hot reload
-pnpm dev:web      # web placeholder
+pnpm dev:web      # web demo (vite dev server)
 pnpm build        # build desktop (electron-vite) and web (vite)
 pnpm lint         # ESLint, including the core/renderer boundary rules
 pnpm typecheck    # tsc for every package and process

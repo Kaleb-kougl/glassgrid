@@ -84,6 +84,12 @@ export interface AppProps {
    * its own when none is given.
    */
   workspace?: AppWorkspace;
+  /**
+   * Opened once when the app mounts, exactly like clicking Open with this
+   * as the picker (busy state, size limit, error toast with Retry). The web
+   * demo passes `() => files.openSample(id)` for `/?sample=<id>` links.
+   */
+  initialOpen?: () => Promise<unknown>;
 }
 
 /** Started by an "Open" click or a drop; finished by the first rows of the new data source painted. */
@@ -185,7 +191,7 @@ function chartCallers(past: readonly UndoEntry[]): Map<string, 'user' | 'ai'> {
   return callers;
 }
 
-export function App({ platform, workspace: givenWorkspace }: AppProps) {
+export function App({ platform, workspace: givenWorkspace, initialOpen }: AppProps) {
   const [ownWorkspace] = useState(() => (givenWorkspace === undefined ? createAppWorkspace() : null));
   const workspace = (givenWorkspace ?? ownWorkspace) as AppWorkspace;
   const { store, registry } = workspace;
@@ -596,6 +602,16 @@ export function App({ platform, workspace: givenWorkspace }: AppProps) {
   useEffect(() => {
     retryOpen.current = open;
   }, [open]);
+
+  // The shell's initial open (a shared sample link): once per app, even under StrictMode's double mount.
+  const initialOpenStarted = useRef(false);
+  useEffect(() => {
+    if (!initialOpen || initialOpenStarted.current) return;
+    initialOpenStarted.current = true;
+    void open(initialOpen);
+    // Read once at mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ---------------------------------------------------------------------------
   // Charts: creation (default chart rules), brushing and the cross-filter timing

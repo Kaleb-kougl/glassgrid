@@ -2,7 +2,7 @@
   "name": "@glassgrid/web",
   "version": "0.0.0",
   "private": true,
-  "description": "Glassgrid in the browser: the shared app (@glassgrid/app) on the web platform, plus the component gallery at /gallery. DuckDB-WASM lands in M4 integration; until then a temporary in-memory stub engine.",
+  "description": "Glassgrid in the browser: the shared app (@glassgrid/app) on the web platform with DuckDB-WASM (@glassgrid/engine/web) in a Web Worker, the sample workspaces, and the component gallery at /gallery.",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -17,10 +17,12 @@
   "dependencies": {
     "@glassgrid/app": "workspace:*",
     "@glassgrid/core": "workspace:*",
+    "@glassgrid/engine": "workspace:*",
     "@glassgrid/ui": "workspace:*",
     "apache-arrow": "21.2.0",
     "react": "19.3.1",
-    "react-dom": "19.3.1"
+    "react-dom": "19.3.1",
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@playwright/test": "1.64.1",
