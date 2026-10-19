@@ -682,3 +682,40 @@ body {
 .chart-view__plot--pending {
   min-height: 174px; /* a line, area or histogram plot: 160px plus the x axis */
 }
+
+/* --- Narrow windows (phones, split screens): the panels stack and the page scrolls ---- */
+@media (max-width: 760px) {
+  .topbar {
+    gap: 4px;
+  }
+
+  /* The agent indicator and the file size are status text: they go first when space is short. */
+  .topbar .gg-agent,
+  .topbar__size {
+    display: none;
+  }
+
+  .workspace {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .workspace > .panel {
+    width: auto;
+    flex: none;
+  }
+
+  .columns {
+    max-height: 168px;
+  }
+
+  .grid-panel {
+    height: 60vh;
+    min-height: 320px;
+  }
+
+  .charts {
+    height: 85vh;
+    min-height: 420px;
+  }
+}
