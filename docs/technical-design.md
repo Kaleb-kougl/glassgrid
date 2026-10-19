@@ -507,13 +507,15 @@ Result: partly met on the Linux dev VM (medians of three 10M-row E2E runs on the
 
 ### M4 · Persistence and web demo (week 4)
 
-- [ ] `.glassgrid` save and open: `formatVersion`, fingerprint, relative → absolute → locate fallback
-- [ ] Autosave for crash recovery; atomic writes
-- [ ] DuckDB-WASM adapter on a pinned version; OPFS cache
-- [ ] Three sample datasets as Parquet; Vercel deploy with a preview per PR
-- [ ] Web first-load JS < 400 KB gzip, excluding DuckDB-WASM
+- [x] `.glassgrid` save and open: `formatVersion`, fingerprint, relative → absolute → locate fallback
+- [x] Autosave for crash recovery; atomic writes
+- [x] DuckDB-WASM adapter on a pinned version; OPFS cache
+- [ ] Three sample datasets as Parquet; Vercel deploy with a preview per PR (samples done; Vercel config ready, not yet deployed)
+- [x] Web first-load JS < 400 KB gzip, excluding DuckDB-WASM
 
 **Exit gate:** workspace round-trip and migration fixture tests green; the public demo link opens a sample workspace in Chrome, Firefox and Safari.
+
+Result: partly met. Round-trip and migration fixture tests are green (core 266, desktop 91, desktop E2E 16 passed incl. save/reopen, dirty state, close veto, locate and crash recovery). On the production build served with the production headers, each `/?sample=taxi|retail|sensors` link opens its workspace in Chromium (first chart 2.7–3.2 s cold on localhost; Parquet through the served signed extension). Web first-load JS is 251 kB gzip. Not yet done: the public deploy (needs the Vercel account) and the Firefox and Safari passes (checklist in the [web demo notes](m4-web-demo.md)). See also [persistence](m4-persistence.md), [engine portability](m4-engine-portability.md) and [app package](m4-app-package.md) notes.
 
 **Demo:** a shareable link to a live, cross-filtered sample workspace.
 
