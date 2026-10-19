@@ -5,7 +5,15 @@
   "description": "Glassgrid desktop app: open multi-GB CSV files locally.",
   "license": "MIT",
   "author": "Kaleb Kougl",
-  "homepage": "https://github.com/kalebkougl/glassgrid",
+  "homepage": "https://github.com/Kaleb-kougl/glassgrid#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Kaleb-kougl/glassgrid.git",
+    "directory": "apps/desktop"
+  },
+  "bugs": {
+    "url": "https://github.com/Kaleb-kougl/glassgrid/issues"
+  },
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",

@@ -1,0 +1,11 @@
+# gitleaks false positives (gitleaks git --log-opts=--all): every hit is the "key" field of a
+# .glassgrid data fingerprint (a hash of file metadata), not a credential.
+75d37049fbc633757768e5d7d8b5e49947c75f27:apps/web/public/samples/retail.glassgrid:generic-api-key:16
+75d37049fbc633757768e5d7d8b5e49947c75f27:apps/web/public/samples/sensors.glassgrid:generic-api-key:16
+75d37049fbc633757768e5d7d8b5e49947c75f27:apps/web/public/samples/taxi.glassgrid:generic-api-key:16
+b29be8d7a94525df3714a1d532ae71757965559f:packages/core/src/workspace-file/test-support.ts:generic-api-key:11
+b29be8d7a94525df3714a1d532ae71757965559f:packages/core/test/fixtures/workspace/invalid-v1-unknown-mark.glassgrid:generic-api-key:16
+b29be8d7a94525df3714a1d532ae71757965559f:packages/core/test/fixtures/workspace/v0-basic.glassgrid:generic-api-key:11
+b29be8d7a94525df3714a1d532ae71757965559f:packages/core/test/fixtures/workspace/v1-full.glassgrid:generic-api-key:16
+b29be8d7a94525df3714a1d532ae71757965559f:packages/core/test/workspace-file.fixtures.test.ts:generic-api-key:80
+d63c76391bbf1da88f363ad4fa13e914060c8ad4:docs/m4-persistence.md:generic-api-key:36

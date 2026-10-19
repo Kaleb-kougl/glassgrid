@@ -5,6 +5,14 @@
   "description": "Open multi-GB CSV files locally, browse them in a virtualized grid and chart them. Powered by DuckDB.",
   "license": "MIT",
   "author": "Kaleb Kougl",
+  "homepage": "https://github.com/Kaleb-kougl/glassgrid#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Kaleb-kougl/glassgrid.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Kaleb-kougl/glassgrid/issues"
+  },
   "type": "module",
   "packageManager": "pnpm@10.34.7",
   "engines": {

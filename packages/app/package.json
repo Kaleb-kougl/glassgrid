@@ -4,6 +4,16 @@
   "private": true,
   "description": "The Glassgrid React app (workspace, grid, charts, cross-filtering), shared by the desktop and web shells through a Platform interface.",
   "license": "MIT",
+  "author": "Kaleb Kougl",
+  "homepage": "https://github.com/Kaleb-kougl/glassgrid#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Kaleb-kougl/glassgrid.git",
+    "directory": "packages/app"
+  },
+  "bugs": {
+    "url": "https://github.com/Kaleb-kougl/glassgrid/issues"
+  },
   "type": "module",
   "sideEffects": [
     "*.css",
