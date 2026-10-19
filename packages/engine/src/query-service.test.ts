@@ -144,6 +144,41 @@ describe('profile', () => {
     });
     expect(byName['text_col']).toMatchObject({ type: 'text', nullFraction: 0.25, min: 'apple', max: 'cherry' });
     expect(byName['empty_col']).toMatchObject({ nullFraction: 1, distinctCount: 0, min: null, max: null });
+    // Small tables count distinct values exactly.
+    expect(profile.columns.every((column) => column.distinctApproximate === false)).toBe(true);
+  });
+
+  it('counts distinct values exactly on small tables, and categories exactly on larger ones', async () => {
+    const small = await h.service.profile(fixture.table);
+    const amount = small.value.columns.find((column) => column.name === 'amount');
+    expect(amount).toMatchObject({ distinctCount: ROWS, distinctApproximate: false });
+
+    // Over the exact limit: numbers are estimated (and clamped), text stays exact.
+    const estimating = await createHarness({ exactDistinctMaxRows: ROWS - 1 });
+    try {
+      const table = estimating.register(fixture.path).table;
+      await estimating.service.count(table);
+      const { value } = await estimating.service.profile(table);
+      const byName = Object.fromEntries(value.columns.map((column) => [column.name, column]));
+      expect(byName['amount']?.distinctApproximate).toBe(true);
+      // HyperLogLog: an estimate near the true 25,000, never above the row count.
+      expect(byName['amount']?.distinctCount).toBeGreaterThan(ROWS * 0.8);
+      expect(byName['amount']?.distinctCount).toBeLessThanOrEqual(ROWS);
+      const text = value.columns.filter((column) => column.type === 'text');
+      expect(text.length).toBeGreaterThan(0);
+      expect(text.every((column) => column.distinctApproximate === false)).toBe(true);
+    } finally {
+      await estimating.dispose();
+    }
+
+    // Over both limits: every column is an estimate.
+    const large = await createHarness({ exactDistinctMaxRows: 0, exactCategoryDistinctMaxRows: 0 });
+    try {
+      const { value } = await large.service.profile(large.register(fixture.path).table);
+      expect(value.columns.every((column) => column.distinctApproximate === true)).toBe(true);
+    } finally {
+      await large.dispose();
+    }
   });
 
   it('is served from the result cache the second time', async () => {
@@ -154,9 +189,7 @@ describe('profile', () => {
     expect(first.value.rowCount).toBe(ROWS);
     const amount = first.value.columns.find((column) => column.name === 'amount');
     expect(amount?.nullFraction).toBe(0);
-    // HyperLogLog: an estimate near the true 25,000.
-    expect(amount?.distinctCount).toBeGreaterThan(ROWS * 0.8);
-    expect(amount?.distinctCount).toBeLessThan(ROWS * 1.2);
+    expect(amount?.distinctCount).toBe(ROWS);
   });
 });
 

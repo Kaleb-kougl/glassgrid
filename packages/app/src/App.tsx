@@ -5,6 +5,7 @@ import {
   crossfilterPlan,
   effectiveColumnType,
   filterChips,
+  formatInteger,
   isNumericType,
   stateColumns,
   tableIdForFile,
@@ -67,7 +68,7 @@ import {
   toIndexSelection,
 } from './views/grid-source';
 import { TopBar } from './views/TopBar';
-import { LocateDataDialog, MismatchBanner, RecentWorkspaces, RecoveryOffers } from './views/WorkspaceFileViews';
+import { LocateDataDialog, MismatchBanner, RecentWorkspaces, RecoveryOffers, SaveBeforeReplaceDialog } from './views/WorkspaceFileViews';
 import { workspaceFilesOf, type Platform } from './platform';
 import { createAppWorkspace, type AppWorkspace } from './workspace';
 import { isWorkspaceFileName, useWorkspaceFiles } from './workspace-files';
@@ -123,7 +124,6 @@ interface ToastState {
   action?: ToastAction;
 }
 
-const numberFormat = new Intl.NumberFormat('en-US');
 const compact = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 2 });
 const percent = new Intl.NumberFormat('en-US', { style: 'percent', maximumFractionDigits: 1 });
 
@@ -145,9 +145,14 @@ function isEditableTarget(target: EventTarget | null): boolean {
   return target.isContentEditable || target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement;
 }
 
-/** Distinct counts as the column list shows them: exact below a million, then compact (8.41M). */
-export function formatDistinct(count: number): string {
-  return count < 1_000_000 ? numberFormat.format(count) : compact.format(count);
+/**
+ * Distinct counts as the column list shows them: grouped below a million,
+ * then compact (8.41M), with `≈` when the engine estimated it (numbers and
+ * timestamps of large tables, see the engine's EXACT_DISTINCT_MAX_ROWS).
+ */
+export function formatDistinct(count: number, approximate = false): string {
+  const text = count < 1_000_000 ? formatInteger(count) : compact.format(count);
+  return approximate ? `≈${text}` : text;
 }
 
 /** The share of NULLs in a column, as the column list reads it out: `no nulls`, `<0.1% null`, `12.5% null`. */
@@ -428,7 +433,7 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
           const more = failed.length > 1 ? ` (and in ${failed.length - 1} more ${failed.length === 2 ? 'column' : 'columns'})` : '';
           showToast({
             tone: 'info',
-            message: `${numberFormat.format(first.failedCasts)} ${first.failedCasts === 1 ? 'value' : 'values'} in ${first.column} couldn’t be read as ${first.type} and show as null${more}`,
+            message: `${formatInteger(first.failedCasts)} ${first.failedCasts === 1 ? 'value' : 'values'} in ${first.column} couldn’t be read as ${first.type} and show as null${more}`,
             ...(initial ? {} : { action: { label: 'Undo', shortcut: mod('Z'), onClick: () => dispatch('undo') } }),
           });
         }
@@ -570,8 +575,12 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
 
   // The Retry action of an open error re-runs the latest `open` (called from an event handler).
   const retryOpen = useRef<(pick?: () => Promise<unknown>) => Promise<void>>(() => Promise.resolve());
+  // Asks before an open replaces unsaved work (set once the workspace-file hook below exists).
+  const confirmReplace = useRef<() => boolean | Promise<boolean>>(() => true);
   const open = useCallback(
     async (pick?: () => Promise<unknown>) => {
+      const go = confirmReplace.current();
+      if (go !== true && !(await go)) return;
       setOpening(true);
       const start = `${OPEN_TO_FIRST_ROWS_MEASURE}:start:${performance.now()}`;
       performance.mark(start);
@@ -754,7 +763,10 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
   // Workspace files (.glassgrid): only when the platform provides them
 
   const workspaceFiles = useWorkspaceFiles({ api: workspaceFilesOf(platform), workspace, engine, shell, state, toast: showToast });
-  const modal = workspaceFiles.locate !== null;
+  const modal = workspaceFiles.locate !== null || workspaceFiles.replacePrompt !== null;
+  useLayoutEffect(() => {
+    confirmReplace.current = workspaceFiles.confirmReplace;
+  }, [workspaceFiles.confirmReplace]);
   /** The latest of both, for the key and menu handlers (subscribed once, not on every render). */
   const latestFiles = useRef({ workspaceFiles, modal });
   useLayoutEffect(() => {
@@ -805,8 +817,11 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
     if (!event.dataTransfer.types.includes('Files')) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = 'copy';
+    if (!fileOver) files.prepare?.();
     setFileOver(true);
   };
+  // A hint that the person is about to open something: a lazily started engine warms up.
+  const prepareOpen = files.prepare ? { onPointerEnter: () => files.prepare?.(), onFocus: () => files.prepare?.() } : {};
   const onWindowDrop = (event: DragEvent) => {
     setFileOver(false);
     if (!event.dataTransfer.types.includes('Files')) return;
@@ -824,7 +839,7 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
   const profiled = profile?.table === tableId ? profile : null;
   const profiling = tableId !== null && profiled === null;
   const distinctByColumn = useMemo(
-    () => new Map((profiled?.columns ?? []).map((column) => [column.name, column.distinctCount])),
+    () => new Map((profiled?.columns ?? []).map((column) => [column.name, { count: column.distinctCount, approximate: column.distinctApproximate === true }])),
     [profiled],
   );
   const nullsByColumn = useMemo(() => new Map((profiled?.columns ?? []).map((column) => [column.name, formatNulls(column.nullFraction)])), [profiled]);
@@ -902,6 +917,16 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
         }
       />)}
 
+      {/* In the layout (not over it): the panels below move down while the notice is up. */}
+      {workspaceFiles.mismatch && (
+        <MismatchBanner
+          notice={workspaceFiles.mismatch}
+          busy={workspaceFiles.busy}
+          onLocate={workspaceFiles.relinkData}
+          onDismiss={workspaceFiles.dismissMismatch}
+          inert={modal}
+        />
+      )}
       <main className="workspace" inert={modal}>
         {state.dataSource === null ? (
           <section className="panel empty" aria-label="Open a file" data-testid="empty-state" data-over={fileOver}>
@@ -914,7 +939,7 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
                 <p className="empty__hint">{files.privacyNote}</p>
               </div>
               <div className="empty__actions">
-                <Button variant="primary" size="lg" onClick={() => void open()} disabled={opening} data-testid="open-csv-empty">
+                <Button variant="primary" size="lg" onClick={() => void open()} disabled={opening} data-testid="open-csv-empty" {...prepareOpen}>
                   {opening ? 'Opening…' : 'Open CSV…'}
                 </Button>
                 <kbd className="gg-kbd">{mod('O')}</kbd>
@@ -937,6 +962,7 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
                           onClick={() => void open(() => files.openSample?.(sample.id) ?? Promise.resolve({ status: 'cancelled' }))}
                           disabled={opening}
                           data-testid={`sample-${sample.id}`}
+                          {...prepareOpen}
                         >
                           {sample.label}
                           {sample.detail !== undefined && <span className="empty__sample-detail">{sample.detail}</span>}
@@ -982,7 +1008,15 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
                       name={column.name}
                       type={effectiveColumnType(column)}
                       inferredType={column.inferredType}
-                      distinct={distinct === undefined ? '–' : formatDistinct(distinct)}
+                      distinct={
+                        distinct === undefined ? (
+                          '–'
+                        ) : distinct.approximate ? (
+                          <span title="Estimated distinct count (HyperLogLog). Text columns and small tables are counted exactly.">{formatDistinct(distinct.count, true)}</span>
+                        ) : (
+                          formatDistinct(distinct.count)
+                        )
+                      }
                       nulls={nullsByColumn.get(column.name)}
                       profiling={profiling}
                       selected={selectedColumns.includes(column.name)}
@@ -1029,11 +1063,11 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
                     profiling ? 'Reading…' : ''
                   ) : filters.length > 0 && totalRows !== null ? (
                     <>
-                      <strong>{numberFormat.format(rowCount)}</strong> of {numberFormat.format(totalRows)} rows
+                      <strong>{formatInteger(rowCount)}</strong> of {formatInteger(totalRows)} rows
                     </>
                   ) : (
                     <>
-                      <strong>{numberFormat.format(rowCount)}</strong> rows
+                      <strong>{formatInteger(rowCount)}</strong> rows
                     </>
                   )}
                 </div>
@@ -1177,14 +1211,7 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
           Drop to open
         </div>
       )}
-      {workspaceFiles.mismatch && (
-        <MismatchBanner
-          notice={workspaceFiles.mismatch}
-          busy={workspaceFiles.busy}
-          onLocate={workspaceFiles.relinkData}
-          onDismiss={workspaceFiles.dismissMismatch}
-        />
-      )}
+      {workspaceFiles.replacePrompt && <SaveBeforeReplaceDialog prompt={workspaceFiles.replacePrompt} busy={workspaceFiles.busy} />}
       {workspaceFiles.locate && (
         <LocateDataDialog
           prompt={workspaceFiles.locate}

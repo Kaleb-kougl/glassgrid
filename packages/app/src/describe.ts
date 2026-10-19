@@ -1,11 +1,10 @@
-import { resolveAxis, type ChartSpec, type ChartState, type CubeColumn, type Field, type Filter, type FilterValue, type UndoEntry, type WorkspaceState, type YField } from '@glassgrid/core';
+import { formatNumber, formatNumericRange, resolveAxis, type ChartSpec, type ChartState, type CubeColumn, type Field, type Filter, type FilterValue, type UndoEntry, type WorkspaceState, type YField } from '@glassgrid/core';
 
 /*
  * Words for state: shelf expressions, filter conditions, chart titles and
  * history labels. Kept free of React so Node tests can import it.
  */
 
-const grouped = new Intl.NumberFormat('en-US', { maximumFractionDigits: 6 });
 
 /** `month(pickup_datetime)`, `bin(trip_distance, 1)` or the bare column. */
 export function fieldExpression(field: Field): string {
@@ -29,6 +28,9 @@ export function yExpression(y: YField | undefined): string {
 export function resolvedField(spec: ChartSpec, channel: 'x' | 'y', columns: readonly CubeColumn[]): Field | undefined {
   const field: Field | undefined = channel === 'x' ? spec.x : spec.y;
   if (!field) return undefined;
+  // Before the profile arrives (no min/max at all) the compiler's fallback is not what will be drawn: keep `auto` until it does.
+  const column = columns.find((candidate) => candidate.name === field.column);
+  if (column === undefined || column.min === undefined || column.max === undefined) return field;
   const axis = resolveAxis(spec, channel, columns);
   if (axis?.kind === 'time' && field.timeUnit === undefined) return { ...field, timeUnit: axis.unit, bin: undefined };
   if (axis?.kind === 'width' && field.bin === 'auto') return { ...field, bin: axis.width };
@@ -72,7 +74,7 @@ export function chartTitle(chart: Pick<ChartState, 'spec' | 'title'>): string {
 
 export function formatFilterValue(value: FilterValue | string | number): string {
   if (value === null) return 'null';
-  if (typeof value === 'number') return grouped.format(value);
+  if (typeof value === 'number') return formatNumber(value);
   return String(value);
 }
 
@@ -87,6 +89,10 @@ export function filterCondition(filter: Filter): string {
       return `in ${values.length} values`;
     }
     case 'range': {
+      if (typeof filter.min === 'number' && typeof filter.max === 'number') {
+        const [lo, hi] = formatNumericRange(filter.min, filter.max);
+        return `${lo} – ${hi}`;
+      }
       const min = filter.min === undefined ? null : formatFilterValue(filter.min);
       const max = filter.max === undefined ? null : formatFilterValue(filter.max);
       if (min !== null && max !== null) return `${min} – ${max}`;

@@ -46,15 +46,16 @@ export function safeDomain(domain: readonly [number, number] | null, kind: Exclu
   return [lo - pad, lo + pad];
 }
 
-const SI_FIX: Readonly<Record<string, string>> = { G: 'B' };
+/** d3's SI prefixes as the app's compact numbers write them (`k` → `K`, `G` → `B`, like Intl's `39.0M`, `812K`). */
+const SI_FIX: Readonly<Record<string, string>> = { k: 'K', G: 'B' };
 
-/** Number tick formatter: grouped digits below 10,000, compact SI (`2.5M`, `1B`) above. */
+/** Number tick formatter: grouped digits below 10,000, compact SI (`2.5M`, `100K`, `1B`) above. */
 function numberTickFormat(domain: readonly [number, number], count: number) {
   const scale = scaleLinear().domain(domain as [number, number]);
   const max = Math.max(Math.abs(domain[0]), Math.abs(domain[1]));
   if (max >= 10_000) {
     const si = scale.tickFormat(count, '~s');
-    return (value: number) => (value === 0 ? '0' : si(value).replace(/[G]$/, (unit) => SI_FIX[unit] ?? unit).replace('−', '-'));
+    return (value: number) => (value === 0 ? '0' : si(value).replace(/[kG]$/, (unit) => SI_FIX[unit] ?? unit).replace('−', '-'));
   }
   // ',f': grouped fixed-point; d3 picks the decimals from the tick step.
   const fixed = scale.tickFormat(count, ',f');

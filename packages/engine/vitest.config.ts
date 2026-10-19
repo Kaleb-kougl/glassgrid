@@ -21,6 +21,7 @@ const DRIVER_NEUTRAL = [
   'src/bench.test.ts',
   'src/crossfilter-bench.test.ts',
   'src/m4-bench.test.ts',
+  'src/web/**',
 ];
 
 export default defineConfig({

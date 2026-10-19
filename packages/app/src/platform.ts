@@ -54,6 +54,12 @@ export interface PlatformFiles {
   readonly samples?: readonly SampleDataset[];
   /** Open one of `samples` by id; resolves like `pickCsv`. Required when `samples` is non-empty. */
   openSample?(id: string): Promise<OpenCsvResult>;
+  /**
+   * The person is about to open something (pointer or focus on an open
+   * button or a sample, a file dragged over the window): a shell whose
+   * engine starts lazily warms it up. Optional; cheap to call repeatedly.
+   */
+  prepare?(): void;
 }
 
 export interface PlatformClipboard {

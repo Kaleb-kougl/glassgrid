@@ -99,8 +99,10 @@ layout, spacing, type and colour are meant to match.
   every column shows the profiling indicator until it finishes and the
   header says "Profiling…" rather than "Profiling 5 of 9". Sorting and
   filters are not locked while the file is read.
-- **Distinct counts** are exact below a million and compact above
-  (`8.41M`), as in the design; they are HyperLogLog estimates.
+- **Distinct counts** are grouped below a million and compact above
+  (`8.41M`), as in the design. They are exact on small tables and for
+  text and boolean columns; elsewhere they are HyperLogLog estimates and
+  read `≈1.7M` (see m4-web-demo.md, known issues).
 - **Agent (state E) is v2.** Only the inactive AgentIndicator is wired; the
   "by AI" variants of HistoryItem, ShelfChip and ChartCard exist and are
   tested, the activity panel is not built.

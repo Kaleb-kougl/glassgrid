@@ -8,7 +8,7 @@ import { createWebPlatform } from './web-platform';
 
 /**
  * `/`: the shared app on the web platform, with DuckDB-WASM in a Web Worker
- * as its engine. `/?sample=<id>` opens that sample workspace at start
+ * as its engine (started lazily, see web-engine.ts). `/?sample=<id>` opens that sample workspace at start
  * (shareable: opening a sample from the start screen puts its link in the
  * address bar, and opening any other file takes it out again).
  */
@@ -35,6 +35,8 @@ export function mountApp(root: HTMLElement): void {
   });
   const platform = createWebPlatform(web);
   const linked = sampleFromSearch(window.location.search);
+  // A sample link opens data right away: start DuckDB-WASM now, before the app mounts. Otherwise it starts on intent.
+  if (linked) web.worker.start();
   const initialOpen = linked ? () => platform.files.openSample?.(linked.id) ?? Promise.resolve({ status: 'cancelled' as const }) : undefined;
 
   createRoot(root).render(

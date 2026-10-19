@@ -52,6 +52,17 @@ describe('web platform', () => {
     expect(await platform.files.openDropped({ name: 'not-a-file' })).toEqual({ status: 'failed', message: 'not-a-file is not a file' });
   });
 
+  it('passes prepare through and starts the engine when the picker opens, before a file is chosen', async () => {
+    const order: string[] = [];
+    const prepare = vi.fn(() => order.push('prepare'));
+    const { platform } = setup({ web: { prepare }, pick: () => (order.push('pick'), Promise.resolve(null)) });
+    platform.files.prepare?.();
+    expect(prepare).toHaveBeenCalledTimes(1);
+    await platform.files.pickCsv();
+    expect(order).toEqual(['prepare', 'prepare', 'pick']);
+    expect('prepare' in setup().platform.files).toBe(false);
+  });
+
   it('offers the engine’s samples when it has them', async () => {
     expect(setup().platform.files.samples).toBeUndefined();
     const openSample = vi.fn((_id: string) => Promise.resolve(opened));

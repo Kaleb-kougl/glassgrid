@@ -2,13 +2,25 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { resolvedTokens } from '../tokens.js';
-import { BAR_LABEL_WIDTH, BarChart, hitTestBars, layoutBars, type BarDatum } from './BarChart.js';
+import { BAR_LABEL_WIDTH, BarChart, barLabelFormatter, formatAggregate, hitTestBars, layoutBars, type BarDatum } from './BarChart.js';
 
 const data: BarDatum[] = [
   { key: '"Credit card"', label: 'Credit card', value: 2_688_301 },
   { key: '"Cash"', label: 'Cash', value: 631_488 },
   { key: 'null', label: 'null', isNull: true, value: 152_906 },
 ];
+
+describe('barLabelFormatter', () => {
+  it('keeps counts exact, and goes compact for every bar once other values reach a million', () => {
+    expect(barLabelFormatter(data, formatAggregate)(2_688_301)).toBe('2,688,301');
+    const sums = data.map((d) => ({ ...d, value: (d.value ?? 0) + 0.25 }));
+    expect(barLabelFormatter(sums.slice(1), formatAggregate)(631_488.25)).toBe('631,488.25');
+    const compact = barLabelFormatter(sums, formatAggregate);
+    expect(compact(2_688_301.25)).toBe('2.69M');
+    expect(compact(152_906.25)).toBe('153K');
+    expect(barLabelFormatter([{ key: 'x', label: 'x', value: null }], formatAggregate)).toBe(formatAggregate);
+  });
+});
 
 describe('layoutBars', () => {
   it('lays out 20px rows 6px apart and scales bars to the largest value', () => {

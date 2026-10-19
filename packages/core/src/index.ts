@@ -7,6 +7,7 @@ export * from './protocol/bridge.js';
 export * from './protocol/ipc.js';
 export * from './protocol/workspace.js';
 export * from './format.js';
+export * from './number-format.js';
 export * from './spec/index.js';
 export * from './sql/index.js';
 export * from './state/index.js';

@@ -287,6 +287,87 @@ describe('workspace files: opening', () => {
   });
 });
 
+describe('workspace files: asking before replacing unsaved work', () => {
+  async function dirtyWorkspace() {
+    const app = renderApp();
+    await openCsv();
+    await act(() => app.workspace.registry.dispatch('addChart', { columns: ['category'] }, { caller: 'user' }));
+    await waitFor(() => expect(dot()).not.toBeNull());
+    return app;
+  }
+
+  it('does not ask when nothing is unsaved', async () => {
+    const { api, files } = renderApp();
+    await openCsv();
+    fireEvent.click(screen.getByTestId('open-workspace'));
+    await waitFor(() => expect(api.open).toHaveBeenCalledOnce());
+    expect(screen.queryByTestId('save-before-replace')).toBeNull();
+    fireEvent.click(screen.getByTestId('open-csv'));
+    await waitFor(() => expect(files.pickCsv).toHaveBeenCalledTimes(2));
+  });
+
+  it('Cancel (or Escape) keeps the unsaved work and opens nothing', async () => {
+    const { api, files, workspace } = await dirtyWorkspace();
+    fireEvent.click(screen.getByTestId('open-workspace'));
+    const dialog = await screen.findByRole('alertdialog', { name: 'Save this workspace?' });
+    expect(within(dialog).getByText(/has unsaved changes/).textContent).toContain('this workspace on trips.csv');
+    expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'Save as…' }));
+    expect(screen.getByTestId('topbar').hasAttribute('inert')).toBe(true);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(api.open).not.toHaveBeenCalled();
+    expect(workspace.store.getState().charts).toHaveLength(1);
+
+    // A CSV from the native menu asks the same; Escape is Cancel.
+    fireEvent.click(screen.getByTestId('open-csv'));
+    fireEvent.keyDown(await screen.findByRole('alertdialog'), { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(files.pickCsv).toHaveBeenCalledOnce();
+    expect(dot()).not.toBeNull();
+  });
+
+  it('Don’t save goes ahead without saving', async () => {
+    const { api, files } = await dirtyWorkspace();
+    fireEvent.click(screen.getByTestId('open-csv'));
+    fireEvent.click(await screen.findByTestId('save-before-replace-discard'));
+    await waitFor(() => expect(files.pickCsv).toHaveBeenCalledTimes(2));
+    expect(api.save).not.toHaveBeenCalled();
+  });
+
+  it('Save writes the workspace before the open; a failed or cancelled save stops it', async () => {
+    const { api, workspace } = await dirtyWorkspace();
+    api.save.mockResolvedValueOnce({ status: 'failed', message: 'Could not save trips.glassgrid: disk full' });
+    fireEvent.click(screen.getByTestId('open-workspace'));
+    fireEvent.click(await screen.findByTestId('save-before-replace-save'));
+    expect((await screen.findByRole('alert')).textContent).toContain('disk full');
+    expect(api.open).not.toHaveBeenCalled();
+    expect(dot()).not.toBeNull();
+
+    fireEvent.click(screen.getByTestId('open-workspace'));
+    fireEvent.click(await screen.findByTestId('save-before-replace-save'));
+    expect(await screen.findByText('Opened trips.glassgrid')).toBeDefined();
+    expect(api.save).toHaveBeenCalledTimes(2);
+    expect(api.save.mock.calls[1]?.[0]).toMatchObject({ documentId: null, snapshot: { workspace: { charts: [{ id: 'chart_2' }] } } });
+    expect(api.save.mock.invocationCallOrder[1]).toBeLessThan(api.open.mock.invocationCallOrder[0] ?? 0);
+    // Undo brings the replaced workspace back.
+    fireEvent.click(screen.getByTestId('undo'));
+    await waitFor(() => expect(workspace.store.getState().charts.map((chart) => chart.id)).toEqual(['chart_2']));
+  });
+
+  it('asks before an OS hand-off or a dropped workspace replaces unsaved work', async () => {
+    const { api, openRequest } = await dirtyWorkspace();
+    act(() => openRequest({ token: 'ot_external-2', fileName: 'other.glassgrid' }));
+    fireEvent.click(await screen.findByTestId('save-before-replace-cancel'));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(api.open).not.toHaveBeenCalled();
+
+    const workspaceFile = new File(['{}'], 'other.glassgrid');
+    fireEvent.drop(screen.getByTestId('app'), { dataTransfer: { types: ['Files'], files: [workspaceFile] } });
+    fireEvent.click(await screen.findByTestId('save-before-replace-discard'));
+    await waitFor(() => expect(api.openDropped).toHaveBeenCalledWith(workspaceFile));
+  });
+});
+
 describe('workspace files: the start screen', () => {
   it('lists recent workspaces and opens one through openWorkspace', async () => {
     const { api } = renderApp({ files: fakeWorkspaceFiles({ recent: [recentEntry] }) });

@@ -99,7 +99,7 @@ const workerSide = readdirSync(join(dist, 'assets'))
   .map((file) => ({ file, ...sizeOf(file) }))
   .sort((a, b) => b.raw - a.raw);
 if (workerSide.length > 0) {
-  console.info('\nEngine worker side (fetched by the worker after the page loads; not first-load):');
+  console.info('\nEngine worker side (fetched by the worker once the engine starts: on a sample link, or on the first intent to open data; not first-load):');
   for (const asset of workerSide) console.info(`  ${asset.file.padEnd(40)} ${kB(asset.raw).padStart(10)}  ${kB(asset.gzip).padStart(9)} gzip`);
 }
 

@@ -78,7 +78,7 @@ export function fakeEngine() {
     profile: vi.fn(() =>
       Promise.resolve({
         rowCount: 2,
-        columns: table.columns.map((c, i) => ({ ...c, nullFraction: 0, distinctCount: [2, 12_345, 8_410_000][i] ?? 0, min: null, max: null })),
+        columns: table.columns.map((c, i) => ({ ...c, nullFraction: 0, distinctCount: [2, 12_345, 8_410_000][i] ?? 0, distinctApproximate: i === 2, min: null, max: null })),
         ...timing,
       }),
     ),

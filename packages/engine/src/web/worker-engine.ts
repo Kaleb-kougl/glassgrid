@@ -29,6 +29,12 @@ export interface WorkerEngineOptions extends Omit<WorkerInit, 'kind' | 'bundles'
   createWorker?: () => Worker;
   /** Restarts allowed within a minute before the client gives up (default 3). */
   maxRestarts?: number;
+  /**
+   * `eager` (default) starts the worker at once. `lazy` waits for `start()`
+   * or the first thing that needs the engine (a registration or a request),
+   * so a page that never opens data never downloads DuckDB-WASM.
+   */
+  start?: 'eager' | 'lazy';
 }
 
 export interface RegisteredSource {
@@ -46,8 +52,12 @@ export interface WorkerEngineInfo {
 
 /** `EngineClientApi` plus what the browser needs: sources, start-up info and shutdown. */
 export interface WorkerEngine extends EngineClientApi {
-  /** Resolves once DuckDB-WASM is running (again after a restart). */
+  /** Resolves once DuckDB-WASM is running (again after a restart). With `start: 'lazy'`, it waits for the start. */
   readonly ready: Promise<WorkerEngineInfo>;
+  /** True once the worker was started (always, unless `start: 'lazy'` and nothing needed it yet). */
+  readonly started: boolean;
+  /** Start the worker now if it is not running yet (lazy engines: warm up on a hint of intent). Idempotent. */
+  start(): void;
   /** Register a picked or dropped file; open it with `open(handle)`. Files over `maxSourceBytes` are refused (`too_large`). */
   registerFile(file: File): Promise<RegisteredSource>;
   /** Register a sample dataset (CSV or Parquet) by URL; only `allowedOrigins` (default: this origin). */
@@ -79,13 +89,24 @@ class WorkerEngineClient extends PortEngineClient implements WorkerEngine {
   private rejectReady: (error: Error) => void = () => undefined;
   ready: Promise<WorkerEngineInfo>;
   private terminated = false;
+  started = false;
 
   constructor(private readonly options: WorkerEngineOptions) {
     super((message) => this.onWorkerMessage(message));
     const { bundles, createWorker: _createWorker, maxRestarts: _maxRestarts, ...rest } = options;
     this.init = { kind: 'gg:init', bundles: bundles ?? DEFAULT_DUCKDB_BUNDLES, ...rest };
     this.ready = this.newReady();
+    if (options.start !== 'lazy') this.start();
+  }
+
+  start(): void {
+    if (this.started || this.terminated) return;
+    this.started = true;
     this.spawn();
+  }
+
+  protected override onPortWanted(): void {
+    this.start();
   }
 
   registerFile(file: File): Promise<RegisteredSource> {
@@ -98,6 +119,7 @@ class WorkerEngineClient extends PortEngineClient implements WorkerEngine {
   }
 
   cacheSelfTest(mode: 'write' | 'read' | 'clean'): Promise<{ ok: boolean; detail: Record<string, unknown> }> {
+    this.start();
     const worker = this.worker;
     if (!worker) return Promise.reject(new EngineRequestError('engine_unavailable', 'The engine is not running'));
     this.nextRegistration += 1;
@@ -161,6 +183,7 @@ class WorkerEngineClient extends PortEngineClient implements WorkerEngine {
   }
 
   private register(source: Source): Promise<RegisteredSource> {
+    this.start();
     const worker = this.worker;
     if (!worker) return Promise.reject(new EngineRequestError('engine_unavailable', 'The engine is not running'));
     const handle = toFileHandle(crypto.randomUUID());

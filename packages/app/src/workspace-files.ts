@@ -59,6 +59,17 @@ export interface MismatchNotice {
   readonly relinkToken: string | null;
 }
 
+/** "Save changes before opening another file?": asked before an open would replace unsaved work. */
+export interface ReplacePrompt {
+  /** The workspace file's name, or null for untitled work. */
+  readonly workspaceName: string | null;
+  /** The data file the unsaved work is on. */
+  readonly dataFileName: string;
+  readonly answer: (choice: ReplaceChoice) => void;
+}
+
+export type ReplaceChoice = 'save' | 'discard' | 'cancel';
+
 export interface WorkspaceFilesUi {
   /** The platform saves and opens workspaces. */
   readonly enabled: boolean;
@@ -70,6 +81,16 @@ export interface WorkspaceFilesUi {
   readonly recovery: readonly RecoverySnapshotInfo[];
   readonly locate: LocatePrompt | null;
   readonly mismatch: MismatchNotice | null;
+  /** The save-before-replacing prompt, while it is open. */
+  readonly replacePrompt: ReplacePrompt | null;
+  /**
+   * Before anything replaces the workspace (a CSV, another workspace, a
+   * drop, an OS hand-off): when there is unsaved work, ask Save / Don't
+   * save / Cancel. True when the open may go ahead (nothing unsaved:
+   * synchronously, so the open starts in the same event; saved; or
+   * discarded on purpose), false when it should not.
+   */
+  readonly confirmReplace: () => boolean | Promise<boolean>;
   readonly save: (saveAs: boolean) => void;
   readonly open: (request: OpenWorkspaceRequest) => void;
   /** File-menu workspace items. */
@@ -130,6 +151,7 @@ export function useWorkspaceFiles({ api, workspace, engine, shell, state, toast 
   const [recovery, setRecovery] = useState<readonly RecoverySnapshotInfo[]>([]);
   const [locate, setLocate] = useState<LocatePrompt | null>(null);
   const [mismatch, setMismatch] = useState<MismatchNotice | null>(null);
+  const [replacePrompt, setReplacePrompt] = useState<ReplacePrompt | null>(null);
   const mismatchRef = useRef<MismatchNotice | null>(null);
   const showMismatch = useCallback((next: MismatchNotice | null) => {
     mismatchRef.current = next;
@@ -231,29 +253,62 @@ export function useWorkspaceFiles({ api, workspace, engine, shell, state, toast 
     [store, toast, forgetToken, showMismatch],
   );
 
-  const open = useCallback(
-    (request: OpenWorkspaceRequest) => {
-      void run(async () => (await registry.dispatch('openWorkspace', request, { caller: 'user' })).value as OpenWorkspaceOutcome).then((outcome) => settle(outcome));
+  /** Saves through the commands (Save As when untitled or asked); resolves with the outcome, reported as a toast. */
+  const saveNow = useCallback(
+    async (saveAs: boolean): Promise<SaveWorkspaceOutcome | undefined> => {
+      if (!enabled) return undefined;
+      const outcome = await run(async () => (await registry.dispatch(saveAs ? 'saveWorkspaceAs' : 'saveWorkspace', {}, { caller: 'user' })).value as SaveWorkspaceOutcome);
+      if (!live.current || outcome === undefined) return outcome;
+      if (outcome.status === 'saved') {
+        setRecentVersion((version) => version + 1);
+        toast({ tone: 'info', message: `Saved ${outcome.workspaceFile.fileName}` });
+      } else if (outcome.status === 'failed') {
+        toast({ tone: 'error', message: outcome.message });
+      }
+      return outcome;
     },
-    [registry, run, settle],
+    [enabled, registry, run, toast],
   );
 
   const save = useCallback(
     (saveAs: boolean) => {
-      if (!enabled) return;
-      void run(async () => (await registry.dispatch(saveAs ? 'saveWorkspaceAs' : 'saveWorkspace', {}, { caller: 'user' })).value as SaveWorkspaceOutcome).then(
-        (outcome) => {
-          if (!live.current || outcome === undefined) return;
-          if (outcome.status === 'saved') {
-            setRecentVersion((version) => version + 1);
-            toast({ tone: 'info', message: `Saved ${outcome.workspaceFile.fileName}` });
-          } else if (outcome.status === 'failed') {
-            toast({ tone: 'error', message: outcome.message });
-          }
-        },
-      );
+      void saveNow(saveAs);
     },
-    [enabled, registry, run, toast],
+    [saveNow],
+  );
+
+  // One prompt at a time: a second open while it is up waits for the same answer.
+  const pendingReplace = useRef<Promise<boolean> | null>(null);
+  const confirmReplace = useCallback((): boolean | Promise<boolean> => {
+    const current = store.getState();
+    if (!enabled || !isWorkspaceDirty(current)) return true;
+    if (pendingReplace.current) return pendingReplace.current;
+    const asked = new Promise<ReplaceChoice>((resolve) => {
+      setReplacePrompt({ workspaceName: current.document?.fileName ?? null, dataFileName: current.dataSource?.fileName ?? 'the data', answer: resolve });
+    }).then(async (choice) => {
+      if (live.current) setReplacePrompt(null);
+      if (choice === 'cancel') return false;
+      if (choice === 'discard') return true;
+      // Save (Save As when untitled): go ahead only once it is on disk.
+      return (await saveNow(false))?.status === 'saved';
+    });
+    pendingReplace.current = asked;
+    void asked.finally(() => {
+      pendingReplace.current = null;
+    });
+    return asked;
+  }, [enabled, store, saveNow]);
+
+  const open = useCallback(
+    (request: OpenWorkspaceRequest) => {
+      void (async () => {
+        const go = confirmReplace();
+        if (go !== true && !(await go)) return;
+        const outcome = await run(async () => (await registry.dispatch('openWorkspace', request, { caller: 'user' })).value as OpenWorkspaceOutcome);
+        settle(outcome);
+      })();
+    },
+    [registry, run, settle, confirmReplace],
   );
 
   const runMenuCommand = useCallback(
@@ -270,9 +325,13 @@ export function useWorkspaceFiles({ api, workspace, engine, shell, state, toast 
   const openDropped = useCallback(
     (file: DroppedFileRef) => {
       if (deps === null) return;
-      void run(async () => completeWorkspaceOpen(deps, await deps.bridge.openDropped(file))).then((outcome) => settle(outcome));
+      void (async () => {
+        const go = confirmReplace();
+        if (go !== true && !(await go)) return;
+        settle(await run(async () => completeWorkspaceOpen(deps, await deps.bridge.openDropped(file))));
+      })();
     },
-    [deps, run, settle],
+    [deps, run, settle, confirmReplace],
   );
 
   const locateData = useCallback(() => {
@@ -362,6 +421,8 @@ export function useWorkspaceFiles({ api, workspace, engine, shell, state, toast 
     recovery: enabled ? recovery : [],
     locate,
     mismatch: shownMismatch,
+    replacePrompt,
+    confirmReplace,
     save,
     open,
     runMenuCommand,

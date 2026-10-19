@@ -1,7 +1,7 @@
 import type { Table } from 'apache-arrow';
 import { scaleBand, scaleLinear } from 'd3-scale';
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import type { FilterValue } from '@glassgrid/core';
+import { compactLabels, formatCompact, type FilterValue } from '@glassgrid/core';
 import { chartColumnsFromArrow, OTHER_SERIES_KEY } from '../charts/arrow.js';
 import { barPath, chartFonts, ellipsize, measuringContext, sizeCanvas, type ChartFonts } from '../charts/canvas.js';
 import { seriesColors } from '../charts/colors.js';
@@ -50,7 +50,13 @@ export interface BarChartProps {
   valueLabel: string;
   /** Accessible name of the chart. */
   label: string;
+  /** Values in tooltips and the accessible description (exact; default `formatAggregate`). */
   formatValue?: (value: number) => string;
+  /**
+   * Values drawn after the bars. Default: `formatValue`, or compact text
+   * (`39.0M`) for every bar once the largest value reaches a million.
+   */
+  formatLabel?: (value: number) => string;
   /** Colour series of segmented bars (from `barDataFromArrow`). */
   series?: readonly ChartSeries[];
   /** Name of the colour field, for the legend. */
@@ -270,6 +276,16 @@ export function barDataFromArrow(table: Table, data: ChartColumns = chartColumns
 }
 
 /**
+ * The default bar label: `formatValue`, or compact text for every bar once
+ * the largest value reaches a million (`39.0M` instead of `39,015,093.43`;
+ * counts stay exact up to a billion; the tooltip keeps the full value). See
+ * core's `compactLabels`.
+ */
+export function barLabelFormatter(data: readonly BarDatum[], formatValue: (value: number) => string): (value: number) => string {
+  return compactLabels(data.map((d) => d.value ?? Number.NaN)) ? formatCompact : formatValue;
+}
+
+/**
  * Horizontal bar chart drawn on a canvas with d3-scale and the resolved chart
  * tokens. Selection is shown by an outline and a bold label, not by colour
  * alone; unselected bars fade. Keyboard: the chart is one tab stop (a
@@ -283,6 +299,7 @@ export function BarChart({
   valueLabel,
   label,
   formatValue = formatAggregate,
+  formatLabel,
   series,
   colorLabel,
   colorKeys,
@@ -315,18 +332,20 @@ export function BarChart({
     return () => observer.disconnect();
   }, []);
 
+  const labelFormat = useMemo(() => formatLabel ?? barLabelFormatter(data, formatValue), [formatLabel, data, formatValue]);
+
   const layout = useMemo(() => {
     const ctx = measuringContext();
     let maxLabel = 0;
     if (ctx) {
       ctx.font = fonts.valueBold;
-      for (const d of data) maxLabel = Math.max(maxLabel, ctx.measureText(d.value === null ? '–' : formatValue(d.value)).width);
+      for (const d of data) maxLabel = Math.max(maxLabel, ctx.measureText(d.value === null ? '–' : labelFormat(d.value)).width);
     } else {
-      maxLabel = Math.max(0, ...data.map((d) => (d.value === null ? 1 : formatValue(d.value).length) * 7));
+      maxLabel = Math.max(0, ...data.map((d) => (d.value === null ? 1 : labelFormat(d.value).length) * 7));
     }
     return layoutBars(data, width, Math.ceil(maxLabel));
     // fontsVersion: re-measure once the webfonts are in.
-  }, [data, width, formatValue, fonts, fontsVersion]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [data, width, labelFormat, fonts, fontsVersion]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const activeIndex = Math.min(active, Math.max(0, data.length - 1));
 
@@ -338,10 +357,10 @@ export function BarChart({
     if (!ctx) return;
     canvas.style.height = `${layout.height}px`;
     ctx.clearRect(0, 0, layout.width, layout.height);
-    drawBars(ctx, layout, data, { selected, tokens, fonts, formatValue, colors, focusIndex: keyboardFocus ? activeIndex : -1 });
+    drawBars(ctx, layout, data, { selected, tokens, fonts, formatValue: labelFormat, colors, focusIndex: keyboardFocus ? activeIndex : -1 });
     chartPerfHook()?.('paint', 'bar', performance.now() - start);
     drawnRef.current?.();
-  }, [layout, data, selected, tokens, fonts, formatValue, colors, keyboardFocus, activeIndex]);
+  }, [layout, data, selected, tokens, fonts, labelFormat, colors, keyboardFocus, activeIndex]);
 
   const pointFromEvent = useCallback((event: { clientX: number; clientY: number }): Point | null => {
     const canvas = canvasRef.current;

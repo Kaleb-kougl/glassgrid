@@ -39,7 +39,7 @@ describe('scales', () => {
     const big = makeScale('number', [0, 3_000_000_000], [0, 100]);
     expect(big.ticks(3).map(big.tickFormat(3))).toEqual(['0', '1B', '2B', '3B']);
     const counts = makeScale('number', [0, 30_000], [0, 100]);
-    expect(counts.ticks(3).map(counts.tickFormat(3))).toEqual(['0', '10k', '20k', '30k']);
+    expect(counts.ticks(3).map(counts.tickFormat(3))).toEqual(['0', '10K', '20K', '30K']);
   });
 
   it('places time ticks on UTC calendar boundaries with multi-scale labels', () => {
@@ -56,11 +56,18 @@ describe('scales', () => {
 });
 
 describe('chart text', () => {
-  it('prints aggregates exactly (grouped, up to 6 decimals; tiny values keep their digits)', () => {
+  it('prints aggregates through the shared number rules (integers exact, two decimals, small values significant)', () => {
     expect(formatAggregate(2_688_301)).toBe('2,688,301');
-    expect(formatAggregate(3.14159265)).toBe('3.141593');
-    expect(formatAggregate(0.00001234)).toBe('0.00001234');
+    expect(formatAggregate((39_015_093.43 - 1e-8))).toBe('39,015,093.43');
+    expect(formatAggregate(3.14159265)).toBe('3.14');
+    expect(formatAggregate(0.00001234)).toBe('0.0000123');
     expect(formatAggregate(Number.NaN)).toBe('–');
+  });
+
+  it('prints axis values at their own precision', () => {
+    expect(formatAxisValue(3.14159265, 'number')).toBe('3.141593');
+    expect(formatAxisValue(0.1 + 0.2, 'number')).toBe('0.3');
+    expect(formatRange(52.016, 52.018, 'number')).toBe('52.016 – 52.018');
   });
 
   it('detects the bucket resolution of timestamps', () => {

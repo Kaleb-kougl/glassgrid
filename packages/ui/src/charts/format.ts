@@ -1,22 +1,32 @@
+import { DataType, type Table } from 'apache-arrow';
 import { utcFormat } from 'd3-time-format';
+import { formatMeasure, formatNumber } from '@glassgrid/core';
 import { formatDate, formatTimestamp } from '../grid/format.js';
 import type { AxisKind, BrushValue } from './types.js';
 
 /*
  * Chart text. Tooltips and "View data" show exact values from the result
- * rows (grouped digits, full precision up to 6 decimals), never values read
- * back from pixel positions. Dates and timestamps go through the shared
- * formatter (grid/format.ts) so a chart and the grid print a value the same way.
+ * rows, never values read back from pixel positions. Numbers go through
+ * core's number-format module (one set of rules for the whole app, see
+ * packages/core/src/number-format.ts); dates and timestamps through the
+ * shared formatter (grid/format.ts), so a chart and the grid print a value
+ * the same way.
  */
 
-const grouped = new Intl.NumberFormat('en-US', { maximumFractionDigits: 6 });
-
-/** An aggregate or measure as shown in tooltips, bar labels and "View data": `2,688,301`, `3.141593`. */
+/**
+ * A measure without further context (tooltips, legends, "View data" when
+ * the caller passes no `formatValue`): integers exact and grouped
+ * (`2,688,301`), other values with two decimals (`3.14`), small ones with
+ * three significant digits (`0.0123`).
+ */
 export function formatAggregate(value: number): string {
-  if (Number.isNaN(value)) return '–';
-  // Very small magnitudes would round to 0 with 6 decimals: keep their digits.
-  if (value !== 0 && Math.abs(value) < 1e-4 && Number.isFinite(value)) return String(Number(value.toPrecision(6)));
-  return grouped.format(value);
+  return formatMeasure(value);
+}
+
+/** The DECIMAL scale of result column `name` (`y`, `count`), or null when it is not a DECIMAL. */
+export function decimalScaleOf(table: Table, name = 'y'): number | null {
+  const type: unknown = table.schema.fields.find((field) => field.name === name)?.type;
+  return DataType.isDecimal(type) ? type.scale : null;
 }
 
 /** How finely a set of timestamps is bucketed, from their alignment. */
@@ -73,10 +83,10 @@ export function formatTimeAt(ms: number, resolution: TimeResolution): string {
   }
 }
 
-/** A value of an axis of `kind` as exact text (numbers grouped, time as the shared timestamp text). */
+/** A value of an axis of `kind` as exact text (numbers grouped at their own precision, time as the shared timestamp text). */
 export function formatAxisValue(value: number, kind: AxisKind, resolution: TimeResolution = 'millisecond'): string {
   if (kind === 'time') return resolution === 'millisecond' || resolution === 'second' ? formatTimestamp(value) : formatTimeAt(value, resolution);
-  return formatAggregate(value);
+  return formatNumber(value);
 }
 
 /** A half-open bin `[lo, hi)` as text: `3 – 4`, `Jan 2023 – Feb 2023`. */

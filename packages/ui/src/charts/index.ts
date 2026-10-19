@@ -3,6 +3,7 @@ export { chartColumnsFromArrow, fillNumbers, axisKindOf, valueKey, OTHER_SERIES_
 export { vectorFromValues } from './arrow-build.js';
 export {
   formatAggregate,
+  decimalScaleOf,
   formatAxisValue,
   formatRange,
   formatTimeAt,

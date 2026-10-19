@@ -1,7 +1,7 @@
 import { tableFromArrays, Table, vectorFromArray, TimestampMillisecond, DateDay, Utf8, Float64, Int64, Bool, makeData, makeVector, Field, Schema, RecordBatch, Struct } from 'apache-arrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ArrowPagedSource, tableToColumns } from './ArrowPagedSource.js';
-import { filterValue, formatDate, formatInterval, formatTime, formatTimestamp, formatValue } from './format.js';
+import { alignDecimals, filterValue, formatDate, formatInterval, formatTime, formatTimestamp, formatValue } from './format.js';
 import { isAbortError, PagedGridSource, type PageColumns, type PagedSourceOptions } from './PagedGridSource.js';
 import { MAX_SYNTHETIC_ROWS, syntheticCell, SyntheticSource } from './SyntheticSource.js';
 import type { GridCell, GridColumn, GridSourceChange } from './types.js';
@@ -361,7 +361,7 @@ describe('ArrowPagedSource', () => {
     expect(page[0]?.[0]).toBe('2023-01-01');
     expect(page[1]).toEqual(['1000', '1001', '1002', '1003']);
     expect(page[2]?.[1]).toBeNull();
-    expect(page[3]?.[0]).toBe('250');
+    expect(page[3]).toEqual(['250.00', '250.25', null, '250.75']);
     expect(page[3]?.[2]).toBeNull();
     expect(page[4]?.[3]).toBe('2023-01-01 00:16:43');
     expect(page[5]).toEqual(['true', 'false', 'true', 'false']);
@@ -388,6 +388,20 @@ describe('ArrowPagedSource', () => {
     expect(source.getCell(2_499, 1)).toBe('n2499');
     expect(source.getCell(2_001, 1)).toBeNull();
     expect(calls[0]?.[2]).toBeInstanceOf(AbortSignal);
+  });
+
+  it('aligns the decimals of a float page and drops binary noise', () => {
+    const table = tableFromArrays({ t: Float64Array.from([4.28, 4.2, 4, 0.1 + 0.2, -0, Number.NaN]) });
+    expect(tableToColumns(table, [{ name: 't', type: 'float' }], 6)).toEqual([['4.28', '4.20', '4.00', '0.30', '0.00', 'NaN']]);
+    // Integers are not padded.
+    expect(tableToColumns(tableFromArrays({ n: Int32Array.from([1, 20]) }), [{ name: 'n', type: 'integer' }], 2)).toEqual([['1', '20']]);
+  });
+
+  it('alignDecimals pads plain decimals only, and only up to six', () => {
+    expect(alignDecimals(['1', '-2.5', null, '3.125'])).toEqual(['1.000', '-2.500', null, '3.125']);
+    expect(alignDecimals(['1', '1e-7', 'NaN', 'Infinity'])).toEqual(['1', '1e-7', 'NaN', 'Infinity']);
+    expect(alignDecimals(['1.5', '0.1234567'])).toEqual(['1.5', '0.1234567']);
+    expect(alignDecimals(['7', '8'])).toEqual(['7', '8']);
   });
 
   it('builds a table from plain arrays too', () => {

@@ -1,6 +1,6 @@
 import { memo, type ReactNode } from 'react';
 import { formatterFor, type ValueKind } from '../grid/format.js';
-import { formatAggregate } from './format.js';
+import { measureFormatter } from '@glassgrid/core';
 import type { AxisKind, ChartColumns, ChartMark } from './types.js';
 
 export interface ViewDataProps {
@@ -35,7 +35,8 @@ interface Column {
 
 function columnsFor(props: ViewDataProps): Column[] {
   const { data, mark, xLabel, yLabel, colorLabel } = props;
-  const measure = props.formatValue ?? formatAggregate;
+  // Without a formatter from the caller, one mode for the whole column (all integers, or two decimals throughout).
+  const measure = props.formatValue ?? measureFormatter({}, mark === 'heatmap' ? (data.count ?? data.y) : data.y);
   const x = (row: number) =>
     data.categories ? (data.categories[row]?.label ?? '') : formatDimension(data.x[row] ?? Number.NaN, data.xValueKind, data.xKind);
   const xEnd = (row: number) => formatDimension(data.xEnd?.[row] ?? Number.NaN, data.xValueKind, data.xKind);

@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import {
   compileChartQuery,
   effectiveColumnType,
+  formatInteger,
   isNumericType,
+  measureFormatter,
   isTemporalType,
   specForMark,
   type Aggregate,
@@ -24,6 +26,7 @@ import {
   barDataFromArrow,
   chartColumnsFromArrow,
   ChartCard,
+  decimalScaleOf,
   Heatmap,
   Histogram,
   LineChart,
@@ -214,9 +217,19 @@ export function ChartView({
   const yLabel = fellBack ? (spec.y?.column ?? 'y') : twoAxes(spec.mark) ? axisExpression(spec, 'y', compileColumns) : yExpression(spec.y);
   const colorLabel = spec.color?.column;
 
+  // Measures: one number format per result, from the aggregate, the column's type and the result's DECIMAL scale.
+  const yType = typeOf(spec.y?.column);
+  const yAggregate = spec.y?.aggregate;
+  const formatValue = useMemo(() => {
+    if (!result || !adapted) return undefined;
+    // Heatmaps colour by row count; scatter plots draw no measure.
+    if (mark === 'heatmap' || mark === 'scatter' || !spec.y) return measureFormatter({ aggregate: 'count' }, mark === 'heatmap' ? (adapted.count ?? adapted.y) : adapted.y);
+    return measureFormatter({ aggregate: yAggregate ?? 'count', type: yType, scale: decimalScaleOf(result.table, 'y') }, adapted.y);
+  }, [result, adapted, mark, spec.y, yAggregate, yType]);
+
   let body: ReactNode = null;
   if (result && adapted) {
-    const common = { table: result.table, data: adapted, tokens, label: title, xLabel, yLabel, onDrawn: drawn, testId: `${testId}-chart` };
+    const common = { table: result.table, data: adapted, tokens, label: title, xLabel, yLabel, onDrawn: drawn, testId: `${testId}-chart`, formatValue };
     switch (mark) {
       case 'bar':
         body = bars && (
@@ -227,6 +240,7 @@ export function ChartView({
             onToggle={(bar) => onBrushEnd(chart.id, toggleBar(selectedKeys, bars.rows, bar))}
             tokens={tokens}
             valueLabel={yLabel}
+            {...(formatValue ? { formatValue } : {})}
             label={`${title}: bar chart of ${yLabel} by ${xLabel}`}
             {...(colorLabel === undefined ? {} : { colorLabel })}
             colorKeys={colorKeys}
@@ -276,7 +290,6 @@ export function ChartView({
     else dropOnColor(column);
   };
 
-  const yType = typeOf(spec.y?.column);
   const countRows: MenuEntry = {
     kind: 'radio',
     id: 'rows',
@@ -373,7 +386,7 @@ export function ChartView({
       shelves={shelves}
       status={status}
       error={data.status === 'error' ? { message: data.message, ...(data.path ? { detail: data.path } : {}) } : undefined}
-      rowsLabel={result ? `${result.table.numRows.toLocaleString('en-US')} ${result.table.numRows === 1 ? 'row' : 'rows'}` : '–'}
+      rowsLabel={result ? `${formatInteger(result.table.numRows)} ${result.table.numRows === 1 ? 'row' : 'rows'}` : '–'}
       onDropColumn={dropOnCard}
       viewData={{
         on: viewData,
@@ -386,6 +399,7 @@ export function ChartView({
             xLabel={xLabel}
             yLabel={yLabel}
             {...(colorLabel === undefined || mark === 'heatmap' ? {} : { colorLabel })}
+            {...(formatValue ? { formatValue } : {})}
             testId={`${testId}-data`}
           />
         ) : null,
@@ -393,7 +407,7 @@ export function ChartView({
     >
       {/* A press on the plot may start a brush or click: build the cross-filter cubes while the pointer moves. */}
       <div
-        className="chart-view__plot"
+        className={result || data.status === 'error' ? 'chart-view__plot' : 'chart-view__plot chart-view__plot--pending'}
         data-mark={mark}
         onPointerDownCapture={(event) => {
           if (event.button === 0) onBrushStart(chart.id);
