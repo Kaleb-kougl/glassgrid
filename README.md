@@ -11,9 +11,10 @@ in an Electron desktop app or entirely in the browser.
 <sub>The web demo on its 2M-row taxi sample: brush a date range, click a bar, undo.
 Also as [MP4](docs/images/showcase/crossfilter-demo.mp4) and [WebM](docs/images/showcase/crossfilter-demo.webm).</sub>
 
-<!-- TODO(deploy): the demo URL below is the only link to the deployment in this file. Replace it, and drop the "not deployed yet" note, after the first Vercel deploy. -->
-**Try it:** web demo at <https://glassgrid.vercel.app> (**TODO: not deployed yet**),
-with sample links `/?sample=taxi`, `/?sample=retail` and `/?sample=sensors`.
+<!-- TODO(deploy): the demo URL below is the only link to the deployment in this file. Drop the "not live yet" note once the portfolio serves the first web-v* release (docs/deploy.md). -->
+**Try it:** web demo at <https://kalebkougl-portfolio.vercel.app/glassgrid/>
+(**TODO: not live until the first release is picked up by the portfolio**),
+with sample links `?sample=taxi`, `?sample=retail` and `?sample=sensors`.
 **Desktop:** there is no signed download yet (milestone M5); `pnpm package`
 builds an unsigned installer for your OS (see [Develop](#develop)).
 
@@ -128,6 +129,11 @@ pnpm e2e:web      # web demo E2E on the production build with production headers
 pnpm package      # electron-builder installer for the current OS (unsigned)
 pnpm showcase     # rebuild, then regenerate docs/images/showcase (2–5 min; about 2 more on first run)
 ```
+
+The web demo is served from the portfolio's `/glassgrid/` subfolder:
+`GLASSGRID_BASE=/glassgrid/ pnpm e2e:web` runs its E2E on a build for that
+base, and `pnpm package:web 0.1.0` packs such a build as a release tarball
+in `apps/web/release/` ([publishing](docs/deploy.md)).
 
 E2E writes benchmark JSON to `apps/desktop/e2e-results/`. On Linux without a
 display, run it under `xvfb-run -a`. Electron downloads its binary on first use;

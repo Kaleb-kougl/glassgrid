@@ -19,7 +19,7 @@ and [m4-persistence.md](m4-persistence.md) (the `.glassgrid` format).
 | Header CSP | `script-src 'self' 'wasm-unsafe-eval'` with no `'unsafe-eval'`. It is sent as a header, so it also covers the engine worker. Two code-generation paths were found and removed (below). |
 | Budget | First-load JS for `/` is **247.6 kB gzip** of 400 kB. The worker side (1.6 MB of JS plus 34 MB of WASM) loads in the worker and is not part of first load. |
 | Opening a sample (Chromium, localhost, cold) | Navigation to the last chart drawn takes **3.0 to 3.2 s**: DuckDB-WASM ready at about 1.7 s, the workspace loaded at about 2.0 s, charts after about 1.0 to 1.3 s more. A brush takes 115 to 265 ms until every view is painted. |
-| Vercel | `apps/web/vercel.json` holds the build, rewrites and headers. Nothing is deployed yet: see [Deploying](#deploying-vercel). |
+| Hosting | Changed after M4: the demo is served as a static subfolder of the portfolio site, `/glassgrid/`, from a released tarball. `apps/web/hosting.ts` holds the headers and rewrites for both a root deploy (`vercel.json`) and the subfolder (`glassgrid-hosting.json`). Nothing is deployed yet: see [Hosting](#hosting). |
 
 ## Architecture
 
@@ -37,13 +37,15 @@ main.tsx ── zod-jitless, route ──▶ app-route.tsx       engine-worker.t
 | File | What |
 | --- | --- |
 | `apps/web/src/app-route.tsx` | Mounts the app. It creates the workspace and the DuckDB-WASM web engine, reads `?sample=` into `initialOpen`, and keeps `?sample=` in the address bar in step with what is open. |
-| `apps/web/src/web-engine.ts` | `createDuckdbWebEngine`. It wraps `createWorkerEngine({ extensionRepository: origin + '/duckdb-extensions' })` into the web platform's `WebEngine` (`registerFile`, `samples`, `openSample`). It logs `[glassgrid] DuckDB-WASM v1.4.3 ready (parquet: …, cache: …)` and sets `performance` marks. |
+| `apps/web/src/web-engine.ts` | `createDuckdbWebEngine`. It wraps `createWorkerEngine({ extensionRepository: origin + base + 'duckdb-extensions' })` into the web platform's `WebEngine` (`registerFile`, `samples`, `openSample`). It logs `[glassgrid] DuckDB-WASM v1.4.3 ready (parquet: …, cache: …)` and sets `performance` marks. |
 | `apps/web/src/samples.ts` | The sample catalog and `openSampleWorkspace` |
 | `apps/web/src/web-platform.ts` | Unchanged apart from comments, `.parquet` in the picker and the 1 GiB limit (the worker's own cap) |
 | `apps/web/src/zod-jitless.ts` | `z.config({ jitless: true })`, imported first (see CSP) |
 | `apps/web/csp.ts` | The policy: `WEB_CSP` (meta) and `WEB_CSP_HEADER` (header) |
-| `apps/web/vercel.json` | Build, rewrites, headers |
-| `apps/web/e2e/serve.ts` | Serves `dist/` with `vercel.json`'s rewrites and headers, Range and HEAD |
+| `apps/web/src/base.ts` | The base path (`import.meta.env.BASE_URL`): every URL the app builds goes through it |
+| `apps/web/hosting.ts` | The headers and rewrites, in one place; `vercel.json` and `dist/glassgrid-hosting.json` come from it |
+| `apps/web/vercel.json` | Build, rewrites, headers for a root deploy (generated) |
+| `apps/web/e2e/serve.ts` | Serves `dist/` with `vercel.json`'s rewrites and headers at the root, or `glassgrid-hosting.json`'s under a base (as Next.js would), with Range and HEAD |
 | `apps/web/public/duckdb-extensions/` | The signed Parquet extension. The [README](../apps/web/public/duckdb-extensions/README.md) has sources, hashes and how to refresh it. |
 | `apps/web/public/samples/` | The sample Parquet files, workspaces and `samples.manifest.json` |
 | `tools/datasets/src/samples.ts` | Generates the samples and the workspaces |
@@ -297,8 +299,10 @@ form-action 'none'; frame-ancestors 'none'          ← header only (a <meta> ma
   - The start-up line reports `cross-origin isolated: false`.
 - **How the tests see production's headers.** `apps/web/e2e/serve.ts` reads
   `vercel.json` and applies its `rewrites` and `headers` (path-to-regexp's
-  `(.*)` and `\\.` subset). It also implements HEAD, Range, ETag and
-  Last-Modified. Playwright runs against it instead of `vite preview`.
+  `(.*)` and `\\.` subset). Under a base (`GLASSGRID_BASE=/glassgrid/`) it
+  reads `dist/glassgrid-hosting.json` instead and compiles its sources with
+  path-to-regexp 6, as Next.js does. It also implements HEAD, Range, ETag
+  and Last-Modified. Playwright runs against it instead of `vite preview`.
 
 ## Bundle budget
 
@@ -355,53 +359,41 @@ now declares `data:,`. The web app already did.
 `pnpm --filter @glassgrid/web size` and the web E2E, after the engine's
 browser test.
 
-## Deploying (Vercel)
+## Hosting
 
-The step-by-step for the first publish (GitHub repository, Vercel import,
-previews, `scripts/check-deploy.sh`) is [deploy.md](deploy.md). Nothing is
-deployed from this branch. To connect it:
+Changed after M4. The plan was a Vercel project of its own with a preview
+per PR. The demo is now served as a static subfolder of the portfolio site,
+`https://kalebkougl-portfolio.vercel.app/glassgrid/` (a Next.js app on
+Vercel). The step-by-step (GitHub, releases, the portfolio's side,
+`scripts/check-deploy.sh`) is in [deploy.md](deploy.md).
 
-1. **Create the project.** In Vercel, **Add New → Project**, then import
-   the GitHub repository.
-2. **Set the project settings.**
-   - **Root Directory**: `apps/web`. Keep "Include source files outside of
-     the Root Directory in the Build Step" on (the default): the build needs
-     the workspace packages.
-   - **Framework Preset**: Other. `vercel.json` sets `"framework": null`,
-     the commands and the output.
-   - **Install Command** (from `vercel.json`):
-     `pnpm install --frozen-lockfile --filter @glassgrid/web...`. Vercel
-     detects pnpm 10 from `packageManager`. The filter installs only the web
-     app and its workspace dependencies, not Electron.
-   - **Build Command**: `pnpm --filter @glassgrid/web build`. **Output
-     Directory**: `dist`.
-   - **Node.js version**: 22.x or 24.x (the repo needs ≥ 22.18; CI uses
-     24).
-3. **Production branch** `main`. Every push to it deploys to production.
-4. **Preview per PR.** With the Vercel GitHub integration installed, every
-   push to a pull request's branch builds a preview deployment with its
-   own URL. Vercel's bot comments the URL on the PR and updates the
-   deployment status check. Nothing in the repo is needed for this. To
-   build only when the web app could have changed, set **Ignored Build
-   Step** to
-   `git diff --quiet HEAD^ HEAD -- ../../apps/web ../../packages ../../pnpm-lock.yaml`.
-5. **After the first deploy, check the headers:**
-
-   ```sh
-   curl -sI https://<deployment>/ | grep -i -E 'content-security-policy|x-content-type|cross-origin'
-   curl -sI https://<deployment>/duckdb-extensions/v1.4.3/wasm_eh/parquet.duckdb_extension.wasm | grep -i -E 'content-type|cache-control'
-   curl -sI -H 'Accept-Encoding: br, gzip' https://<deployment>/assets/<duckdb-eh-hash>.wasm | grep -i -E 'content-type|content-encoding|cache-control'
-   curl -s -o /dev/null -w '%{http_code} %{size_download}\n' -H 'Range: bytes=0-3' https://<deployment>/samples/taxi-trips-2025h1.parquet   # 206 4
-   ```
-
-   - If the WASM comes back without `content-encoding`, the first visit
-     downloads 34 MB instead of about 8 MB. Check whether Vercel
-     compresses `application/wasm`. If not, a build step could precompress
-     it, or it could move to a CDN path that does; `connect-src` would then
-     need that origin.
-6. **Open the demo links.** Open `https://<deployment>/?sample=taxi` and
-   the other two, then run the manual checklist below in Firefox and
-   Safari.
+- **Base path.** `GLASSGRID_BASE=/glassgrid/` sets Vite's `base`. Vite
+  prefixes the entry, chunks, the worker, DuckDB's `.wasm` and the fonts;
+  `src/base.ts` does the rest (samples, the extension repository, the
+  gallery route). The default is `/`, so `pnpm dev:web`, the root build and
+  its tests are unchanged.
+- **Sample workspaces** record `"absolutePath": "/samples/<file>"`. That is
+  metadata from the generator: the web loader fetches the workspace and
+  registers the Parquet file from the samples base (`<base>samples/`) and
+  never reads `absolutePath`, so the committed files did not change.
+- **Headers and rewrites** come from `apps/web/hosting.ts`.
+  `pnpm --filter @glassgrid/web hosting` writes `vercel.json` from it, and
+  `vite build` writes `dist/glassgrid-hosting.json`: the same rules as
+  Next.js `headers()` and `rewrites()` entries under the base, with the
+  name, version and base. `src/hosting.test.ts` compiles each source with
+  path-to-regexp 6.3.0 and Next.js's options, and checks that every file
+  the build serves gets the same headers under `/glassgrid/` as
+  `vercel.json` gives it at the root.
+- **Release.** A `web-vX.Y.Z` tag runs `.github/workflows/release-web.yml`:
+  checks, a `/glassgrid/` build with its budget and E2E, then
+  `glassgrid-web-X.Y.Z.tar.gz` (the build at the archive root) and its
+  sha256 on a GitHub Release. The portfolio pins a version and unpacks the
+  tarball into `public/glassgrid/` when it builds.
+- **Compression.** Not verified on a live deployment. If Vercel does not
+  compress `application/wasm`, the first visit downloads 34 MB instead of
+  about 8 MB. A build step could then write Brotli-precompressed copies, or
+  the `.wasm` could move to a CDN path that compresses; `connect-src` would
+  then need that origin.
 
 ## Firefox and Safari
 

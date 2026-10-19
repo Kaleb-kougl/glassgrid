@@ -24,8 +24,9 @@ pnpm e2e:web    # web demo in Chromium
 ```
 
 - **CI runs all of the above.** It also runs the desktop E2E on macOS,
-  Windows and Linux (`.github/workflows/ci.yml`). Pull requests get a
-  Vercel preview of the web demo.
+  Windows and Linux, and the web E2E on a build for the portfolio's
+  `/glassgrid/` subfolder (`.github/workflows/ci.yml`). Web demo releases
+  are tags; see [docs/deploy.md](docs/deploy.md).
 - **Dependency changes:** if a pull request changes production
   dependencies, run `node scripts/third-party-notices.js` and commit the
   updated `THIRD_PARTY_NOTICES.md`. CI checks that it is current.
