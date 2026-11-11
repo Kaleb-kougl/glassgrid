@@ -1,4 +1,4 @@
-import type { FileHandle } from '@glassgrid/core';
+import { LIVE_FLIGHTS_HANDLE, type FileHandle, type LiveState } from '@glassgrid/core';
 import { fixtureCsv } from '../../src/testing/fixture';
 import { runScenario, type ScenarioStep } from '../../src/testing/scenario';
 import { createWorkerEngine, isAbandoned, type WorkerEngine, type WorkerEngineInfo, type WorkerEngineOptions } from '../../src/web';
@@ -157,6 +157,125 @@ const api = {
     });
     return { ...first, cache: { ...first.cache, reread } };
   },
+
+  /**
+   * Live flights in the worker (docs/live-flights-l2.md): replay the
+   * 30-minute fixture over HTTP through the served Parquet extension into
+   * flight_states, then poll this server's stand-in for /api/flights, and
+   * pause it as a hidden page would.
+   */
+  liveFlights: () =>
+    withEngine(
+      {
+        extensionRepository: `${location.origin}/duckdb-extensions`,
+        live: { url: `${location.origin}/api/flights`, fixtures: { 'flights-bay-30min': `${location.origin}/samples/flights/flights-bay-30min.parquet` } },
+      },
+      async (engine) => {
+        const live = engine.live;
+        const waitFor = (predicate: (state: LiveState) => boolean) =>
+          new Promise<LiveState>((resolve) => {
+            const stop = live.onState((state) => {
+              if (predicate(state)) {
+                stop();
+                resolve(state);
+              }
+            });
+          });
+        const started = performance.now();
+        const ended = waitFor((state) => state.feed?.ended === true);
+        await live.start({ kind: 'replay', fixture: 'flights-bay-30min', intervalMs: 1_000, speed: 120, retentionMs: null });
+        const replay = await ended;
+        const replayMs = performance.now() - started;
+
+        const polled = waitFor((state) => state.feed?.kind === 'live' && state.feed.status === 'live');
+        // The replay ended, so the feed is stopped: starting (not setSource, which only chooses) switches to live.
+        const switched = await live.start({ kind: 'live' });
+        const afterPoll = await polled;
+        await live.setVisible(false);
+        const hidden = await live.state();
+        await live.setVisible(true);
+        const shown = await live.state();
+        const stopped = await live.stop();
+        return { replay, replayMs, switchedRows: switched.rowCount, afterPoll, hidden, shown, stopped };
+      },
+    ),
+
+  /**
+   * L4: the day fixture loaded whole, then the 30-minute one, then the day again (twice round), each followed by
+   * the queries a flights workspace makes (views, a count, a histogram, a cube, the map). Reports the feed's state
+   * and DuckDB's memory and attached databases after each step, so a store that is not freed on a switch shows.
+   */
+  archiveSwitches: () =>
+    withEngine(
+      {
+        extensionRepository: `${location.origin}/duckdb-extensions`,
+        live: {
+          fixtures: {
+            'flights-bay-30min': `${location.origin}/samples/flights/flights-bay-30min.parquet`,
+            'flights-bay-day': `${location.origin}/samples/flights/flights-bay-day.parquet`,
+          },
+        },
+      },
+      async (engine) => {
+        const live = engine.live;
+        const settled = (fixture: string) =>
+          new Promise<LiveState>((resolve) => {
+            const check = (state: LiveState) => {
+              const source = state.source;
+              if (source?.kind !== 'archive' || source.fixture !== fixture || state.feed === null) return false;
+              return state.feed.status === 'live' || state.feed.status === 'backoff';
+            };
+            const stop = live.onState((state) => {
+              if (check(state)) {
+                stop();
+                resolve(state);
+              }
+            });
+            void live.state().then((state) => {
+              if (check(state)) {
+                stop();
+                resolve(state);
+              }
+            });
+          });
+        const steps: { fixture: string; status: string; rows: number; error: string | null; ms: number; memoryMb: number | null; databases: number | null }[] = [];
+        for (const fixture of ['flights-bay-day', 'flights-bay-30min', 'flights-bay-day', 'flights-bay-30min', 'flights-bay-day'] as const) {
+          const started = performance.now();
+          const done = settled(fixture);
+          await live.start({ kind: 'archive', fixture });
+          const state = await done;
+          const ms = performance.now() - started;
+          if (state.feed?.status === 'live') {
+            const { table } = await engine.open(LIVE_FLIGHTS_HANDLE);
+            await engine.profile(table.id);
+            await engine.count(table.id, { filters: [{ kind: 'range', column: 'lat', min: 37.3, max: 38 }] });
+            const spec = { mark: 'histogram' as const, x: { column: 'altBaroFt', bin: 1000 }, filters: [] };
+            await engine.aggregate(table.id, spec);
+            await engine.prepareCrossfilter(table.id, { dimension: { column: 'altBaroFt', bin: { kind: 'width', width: 1000 } }, targets: [{ kind: 'aggregate', spec: { mark: 'bar', x: { column: 'category' }, filters: [] } }, { kind: 'count', filters: [] }] });
+            await engine.mapQuery(table.id, { spec: { kind: 'map' }, query: 'latest', dataClockMs: state.lastBatch?.dataClockMs ?? 0 });
+            // The grid under the map's viewport filter: its first page, then (after the filter settled) a deep page.
+            // Before the L4 review fix these built filtered row-number indexes (a copy of every matching row in the
+            // store's database), and closing the live table while one built left ~650 MB with DuckDB-WASM, so the
+            // next "Load full day" ran out of memory.
+            const pages = engine.pageFetcher(table.id, { viewId: 'grid', filters: [{ kind: 'range', column: 'lon', min: -122.9, max: -121.6 }] });
+            await pages(0, 1000);
+            await new Promise((resolve) => setTimeout(resolve, 2_000));
+            await pages(20_000, 1000);
+            // As the app does when its flights workspace is undone: a newer filter's index starts building, then
+            // the live table is closed and the source switched while it builds.
+            const next = engine.pageFetcher(table.id, { viewId: 'grid', filters: [{ kind: 'range', column: 'lon', min: -122.8, max: -121.7 }] });
+            await next(0, 1000);
+            await new Promise((resolve) => setTimeout(resolve, 1_600));
+            void next(30_000, 1000).catch(() => undefined);
+            await new Promise((resolve) => setTimeout(resolve, 100));
+            await engine.closeTable(table.id);
+          }
+          const stats = await engine.cacheStats();
+          steps.push({ fixture, status: state.feed?.status ?? 'none', rows: state.rowCount, error: state.feed?.error ?? null, ms, memoryMb: stats.live ? Math.round(stats.live.memoryBytes / 1024 ** 2) : null, databases: stats.live?.databases ?? null });
+        }
+        return steps;
+      },
+    ),
 
   /** The M4 browser bench (see bench.ts). */
   bench: (csvPath: string, parquetPath: string | null, runs: number): Promise<BenchResult> => runBench(csvPath, parquetPath, runs),

@@ -18,7 +18,7 @@
       "rows": 2000000,
       "bytes": 20760220,
       "sha256": "0b89c4b256dc80bfe8eddb47777abfa52f3b45502af4a512984cca2ac8c106dc",
-      "workspaceSha256": "be957b66e77e54b534db86aad0cb8bf7ef99f8140f4d1e9e52330e601b4e3753",
+      "workspaceSha256": "f8f88fe617d2840d3f9c09fc3b3dae2070572a4c5e2182c000576b90e642e20e",
       "columns": [
         {
           "name": "pickup_at",
@@ -75,7 +75,7 @@
       "rows": 1500000,
       "bytes": 11111098,
       "sha256": "ffea02dd838c35f863cef977896902964a9d022886c6c6f6e6f8e1a408acf04a",
-      "workspaceSha256": "57cb9a922f1afac9ebb8b8472536eb73912a20ca99f579822b9f86f5bc0108ee",
+      "workspaceSha256": "52f1860f8f24d71a95ddf0dd9b60ec7277d1208ac64f6e4c50d890f32e3baaba",
       "columns": [
         {
           "name": "order_id",
@@ -132,7 +132,7 @@
       "rows": 1382400,
       "bytes": 8027894,
       "sha256": "86475cbb115e6aee46aaac3a48638e610118375d3504ebbd31468f87a51e02e2",
-      "workspaceSha256": "6fda0fe815e5e935ed3e4b5f6099541fccf4b504125eef9d1bcfd1ed7851c438",
+      "workspaceSha256": "0d7b74474cd016f7a970af5bd937af74ace3e21380eac77508322140032c4074",
       "columns": [
         {
           "name": "recorded_at",

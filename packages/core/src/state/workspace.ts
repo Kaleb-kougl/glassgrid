@@ -4,6 +4,8 @@ import { FingerprintSchema } from '../protocol/engine.js';
 import { ChartSpecSchema } from '../spec/chart.js';
 import { ColumnTypeSchema, ProfileValueSchema, type ColumnType } from '../spec/column.js';
 import { FilterSchema } from '../spec/filter.js';
+import { MapSpecSchema } from '../spec/map.js';
+import { MAX_REPLAY_SPEED } from '../flights/live.js';
 import { SortKeySchema } from '../spec/rows.js';
 
 /*
@@ -77,6 +79,51 @@ export const ChartStateSchema = z.strictObject({
 });
 export type ChartState = z.infer<typeof ChartStateSchema>;
 
+export const MapIdSchema = SafeIdSchema;
+export type MapId = z.infer<typeof MapIdSchema>;
+
+/** Most map views one workspace may hold. */
+export const MAX_MAP_VIEWS = 8;
+
+/**
+ * A map's visible box in degrees, as the map component reports it after a
+ * pan or zoom (`MapBounds`): west ≤ east, south ≤ north.
+ */
+export const MapBoundsSchema = z
+  .strictObject({
+    west: z.number().min(-180).max(180),
+    south: z.number().min(-90).max(90),
+    east: z.number().min(-180).max(180),
+    north: z.number().min(-90).max(90),
+  })
+  .refine((bounds) => bounds.west <= bounds.east && bounds.south <= bounds.north, { message: 'Bounds need west ≤ east and south ≤ north' });
+export type MapViewportBounds = z.infer<typeof MapBoundsSchema>;
+
+/**
+ * A map view card (docs/live-flights-l3-data.md): aircraft at their latest
+ * fix with trails, over the open table. Like a chart it has an id, a spec
+ * and an optional title, and a layout card.
+ *
+ * Since L4 (docs/live-flights-l4.md) its viewport is its selection: while
+ * `filterToView` is on (absent means on), every other view (charts, the
+ * grid, other maps) queries with `lat` and `lon` ranges of `viewport`, and
+ * the map itself does not, as a chart never queries with its own brush.
+ * Both fields are view state: not saved in workspace files (format 2 has
+ * neither), and `viewport` changes record no undo entry
+ * (`setMapViewport`).
+ */
+export const MapViewStateSchema = z.strictObject({
+  id: MapIdSchema,
+  spec: MapSpecSchema,
+  /** The card title; absent means "Map". */
+  title: z.string().trim().min(1).max(MAX_CHART_TITLE).optional(),
+  /** Whether the viewport filters the other views ("Filter to map view"); absent means true. */
+  filterToView: z.boolean().optional(),
+  /** The box the map last reported showing; absent until it has (the map is loading, or not shown). */
+  viewport: MapBoundsSchema.optional(),
+});
+export type MapViewState = z.infer<typeof MapViewStateSchema>;
+
 /** Narrowest and widest a grid column may be dragged (px, padding included). */
 export const MIN_GRID_COLUMN_WIDTH = 48;
 export const MAX_GRID_COLUMN_WIDTH = 2_000;
@@ -141,7 +188,11 @@ export function gridColumnOrder(state: {
   return ordered;
 }
 
-/** Position of a chart card on the dashboard grid, in grid units. */
+/**
+ * Position of a view's card on the dashboard grid, in grid units. `chartId`
+ * names a chart or (since format 2) a map view; the field keeps its format-1
+ * name so saved layouts stay valid.
+ */
 export const LayoutCardSchema = z.strictObject({
   chartId: ChartIdSchema,
   x: z.number().int().nonnegative(),
@@ -190,6 +241,36 @@ export type UserFilter = z.infer<typeof UserFilterSchema>;
 /** Most filters not tied to a view a workspace may hold. */
 export const MAX_USER_FILTERS = 64;
 
+/**
+ * The data clock the views are "as of" (milestone L4, docs/live-flights-l4.md):
+ * T, the time the map shows (each aircraft at its latest fix ≤ T, trails
+ * and the selected track up to T) and, with `chartsFollowTime`, the end of
+ * the charts' and grid's time window.
+ *
+ * - `live`: T follows the newest data (the live feed's data clock, or the
+ *   end of an archived day or file).
+ * - `paused`: T = `atMs`.
+ * - `playing`: T = `atMs + (now - since) × speed`, `now` and `since` being
+ *   the wall clock (the app clamps T to the data's range and stops at its
+ *   end).
+ *
+ * View state: never saved, and changing it records no undo entry
+ * (`setTime`), like the grid's cell selection.
+ */
+export const TimeCursorSchema = z.strictObject({
+  mode: z.enum(['live', 'paused', 'playing']),
+  /** Epoch ms: T when paused, T at `since` when playing; null when live. */
+  atMs: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).nullable(),
+  /** Wall clock (epoch ms) when playing started from `atMs`; null otherwise. */
+  since: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).nullable(),
+  /** Data time per wall time while playing, 1 to MAX_REPLAY_SPEED. */
+  speed: z.number().min(1).max(MAX_REPLAY_SPEED),
+});
+export type TimeCursor = z.infer<typeof TimeCursorSchema>;
+
+/** The cursor of a workspace that never set one: follow the newest data, 10× when played. */
+export const DEFAULT_TIME_CURSOR: TimeCursor = Object.freeze({ mode: 'live', atMs: null, since: null, speed: 10 });
+
 /** Main's opaque id for a `.glassgrid` file a window opened or saved. The path stays in main. */
 export const DocumentIdSchema = z.string().regex(/^doc_[A-Za-z0-9-]{8,64}$/, 'Invalid document id');
 export type DocumentId = z.infer<typeof DocumentIdSchema>;
@@ -217,6 +298,8 @@ export const WorkspaceStateSchema = z.strictObject({
   dataSource: DataSourceSchema.nullable(),
   columns: z.array(ColumnStateSchema),
   charts: z.array(ChartStateSchema),
+  /** Map views, in the order they were added. */
+  maps: z.array(MapViewStateSchema).max(MAX_MAP_VIEWS),
   /**
    * One selection per view (chart id or "grid"); see Cross-filtering. Each
    * view queries with every selection except its own, plus `userFilters`.
@@ -224,6 +307,15 @@ export const WorkspaceStateSchema = z.strictObject({
   selections: z.record(ViewIdSchema, SelectionSchema),
   /** Filters that apply to every view, in the order they were added. */
   userFilters: z.array(UserFilterSchema).max(MAX_USER_FILTERS),
+  /** The time cursor (L4, view state); absent means `DEFAULT_TIME_CURSOR`. */
+  time: TimeCursorSchema.optional(),
+  /**
+   * Charts and the grid follow the time cursor (L4): they then query only
+   * fixes in the window of TIME_FOLLOW_WINDOW_MS up to T. Absent means
+   * false: charts describe every loaded fix. Not saved (view state), but
+   * undoable (`setChartsFollowTime`), as it changes what the charts show.
+   */
+  chartsFollowTime: z.boolean().optional(),
   grid: GridStateSchema,
   layout: LayoutStateSchema,
   /**
@@ -241,6 +333,7 @@ export function createInitialWorkspaceState(): WorkspaceState {
     dataSource: null,
     columns: [],
     charts: [],
+    maps: [],
     selections: {},
     userFilters: [],
     grid: createInitialGridState(),

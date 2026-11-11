@@ -82,6 +82,15 @@ export function seconds(sinceMs: number): number {
   return Math.round((performance.now() - sinceMs) / 10) / 100;
 }
 
+/**
+ * The command-line arguments, without the `--` separator that
+ * `pnpm --filter <pkg> <script> -- --flag` passes through (pnpm 10 forwards
+ * it verbatim, and `parseArgs` would read everything after it as positionals).
+ */
+export function cliArgs(argv: readonly string[] = process.argv.slice(2)): string[] {
+  return argv[0] === '--' ? argv.slice(1) : [...argv];
+}
+
 /** Runs `main`, printing a readable error and exiting non-zero on failure. */
 export function runCli(main: () => Promise<void>): void {
   main().catch((err: unknown) => {

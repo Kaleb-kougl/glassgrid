@@ -1,0 +1,217 @@
+{
+  "benchmark": "map-perf",
+  "date": "2026-11-10",
+  "runsPerScenario": 3,
+  "targetP95Ms": 16.7,
+  "conditions": {
+    "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+    "dpr": 1,
+    "viewport": "1280x800",
+    "browser": "Chromium 153.0.8010.12 (headless)",
+    "os": "linux x64",
+    "cpu": "2 × Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "memoryGb": 7.8,
+    "build": "production build (vite build), served by e2e/serve.ts with the production headers",
+    "interaction": "10 s per run by the wall clock: 4 wheel zooms (one tick per 100 ms) and 5 mouse drags (a move per frame, at most one per 16 ms)"
+  },
+  "scenarios": {
+    "aircraft-183-trails-playing": {
+      "note": "183 aircraft, 5-minute trails, playing (dead reckoning every frame), a synthetic poll every 10 s",
+      "glyphs": 183,
+      "trailSegments": 6859,
+      "frameIntervalMs": {
+        "count": 650,
+        "p50": 66.6,
+        "p95": 66.8,
+        "max": 100.1
+      },
+      "framesOver16_7ms": 650,
+      "framesOver33_4ms": 647,
+      "aircraftLayerCpuMs": {
+        "count": 653,
+        "p50": 0.2,
+        "p95": 0.7,
+        "max": 22.6
+      },
+      "perRun": [
+        {
+          "durationMs": 12850,
+          "frameIntervalMs": {
+            "count": 214,
+            "p50": 66.6,
+            "p95": 83.3,
+            "max": 100.1
+          },
+          "aircraftLayerCpuMs": {
+            "count": 215,
+            "p50": 0.2,
+            "p95": 0.7,
+            "max": 22.6
+          }
+        },
+        {
+          "durationMs": 12733,
+          "frameIntervalMs": {
+            "count": 217,
+            "p50": 50.1,
+            "p95": 66.7,
+            "max": 83.3
+          },
+          "aircraftLayerCpuMs": {
+            "count": 218,
+            "p50": 0.2,
+            "p95": 0.71,
+            "max": 11.3
+          }
+        },
+        {
+          "durationMs": 12833,
+          "frameIntervalMs": {
+            "count": 219,
+            "p50": 50.1,
+            "p95": 66.7,
+            "max": 83.4
+          },
+          "aircraftLayerCpuMs": {
+            "count": 220,
+            "p50": 0.2,
+            "p95": 0.6,
+            "max": 8.2
+          }
+        }
+      ]
+    },
+    "aircraft-183-no-trails-playing": {
+      "note": "attribution: the same without trails",
+      "glyphs": 183,
+      "trailSegments": 0,
+      "frameIntervalMs": {
+        "count": 708,
+        "p50": 50,
+        "p95": 66.7,
+        "max": 100
+      },
+      "framesOver16_7ms": 708,
+      "framesOver33_4ms": 679,
+      "aircraftLayerCpuMs": {
+        "count": 711,
+        "p50": 0.1,
+        "p95": 0.5,
+        "max": 8.8
+      },
+      "perRun": [
+        {
+          "durationMs": 12433,
+          "frameIntervalMs": {
+            "count": 240,
+            "p50": 50,
+            "p95": 66.7,
+            "max": 83.3
+          },
+          "aircraftLayerCpuMs": {
+            "count": 241,
+            "p50": 0.1,
+            "p95": 0.4,
+            "max": 8.8
+          }
+        },
+        {
+          "durationMs": 12550,
+          "frameIntervalMs": {
+            "count": 235,
+            "p50": 50,
+            "p95": 66.7,
+            "max": 100
+          },
+          "aircraftLayerCpuMs": {
+            "count": 236,
+            "p50": 0.1,
+            "p95": 0.43,
+            "max": 7.2
+          }
+        },
+        {
+          "durationMs": 12733,
+          "frameIntervalMs": {
+            "count": 233,
+            "p50": 50,
+            "p95": 66.7,
+            "max": 100
+          },
+          "aircraftLayerCpuMs": {
+            "count": 234,
+            "p50": 0.1,
+            "p95": 0.5,
+            "max": 5.6
+          }
+        }
+      ]
+    },
+    "basemap-only": {
+      "note": "control: the basemap and one stationary aircraft, paused",
+      "glyphs": 1,
+      "trailSegments": 38,
+      "frameIntervalMs": {
+        "count": 862,
+        "p50": 50,
+        "p95": 66.7,
+        "max": 100
+      },
+      "framesOver16_7ms": 644,
+      "framesOver33_4ms": 527,
+      "aircraftLayerCpuMs": {
+        "count": 645,
+        "p50": 0.1,
+        "p95": 0.3,
+        "max": 2.2
+      },
+      "perRun": [
+        {
+          "durationMs": 11900,
+          "frameIntervalMs": {
+            "count": 283,
+            "p50": 50,
+            "p95": 66.7,
+            "max": 83.3
+          },
+          "aircraftLayerCpuMs": {
+            "count": 213,
+            "p50": 0.1,
+            "p95": 0.34,
+            "max": 1.2
+          }
+        },
+        {
+          "durationMs": 12066,
+          "frameIntervalMs": {
+            "count": 295,
+            "p50": 49.9,
+            "p95": 66.7,
+            "max": 83.2
+          },
+          "aircraftLayerCpuMs": {
+            "count": 223,
+            "p50": 0.1,
+            "p95": 0.39,
+            "max": 2
+          }
+        },
+        {
+          "durationMs": 12000,
+          "frameIntervalMs": {
+            "count": 284,
+            "p50": 50,
+            "p95": 66.7,
+            "max": 100
+          },
+          "aircraftLayerCpuMs": {
+            "count": 209,
+            "p50": 0.1,
+            "p95": 0.3,
+            "max": 2.2
+          }
+        }
+      ]
+    }
+  }
+}

@@ -27,6 +27,8 @@ describe('web platform', () => {
     expect('onMenuCommand' in platform.window).toBe(false);
     expect(platform.capabilities).toEqual({ canSaveWorkspace: false, canOpenFromPath: false, maxFileBytes: WEB_MAX_FILE_BYTES });
     expect(platform.workspaceFiles).toBeUndefined();
+    // Map views draw on the basemap under the base (docs/live-flights-l3-data.md).
+    expect(platform.map).toEqual({ assetsBase: '/map/', attribution: [] });
     expect(platform.files.privacyNote).toBe('The file is read in this browser and never uploaded.');
   });
 
@@ -123,5 +125,24 @@ describe('routes', () => {
     expect(isGalleryRoute({ pathname: '/', search: '?gallery' })).toBe(true);
     expect(isGalleryRoute({ pathname: '/', search: '' })).toBe(false);
     expect(isGalleryRoute({ pathname: '/galleryx', search: '?theme=dark' })).toBe(false);
+  });
+});
+
+describe('page visibility (the live-flights feed pauses on it)', () => {
+  it('reports the current visibility at once, then every change', () => {
+    const state: { visibilityState: DocumentVisibilityState } = { visibilityState: 'visible' };
+    const doc = Object.assign(new EventTarget(), state);
+    const web = { engine: {} as EngineClientLike, registerFile: vi.fn(() => Promise.resolve(opened)) };
+    const platform = createWebPlatform(web, { nav: { platform: 'Linux', clipboard: {} } as unknown as Navigator, target: new EventTarget(), doc });
+    const seen: boolean[] = [];
+    const stop = platform.window.onVisibilityChange?.((visible) => seen.push(visible));
+    doc.visibilityState = 'hidden';
+    doc.dispatchEvent(new Event('visibilitychange'));
+    doc.visibilityState = 'visible';
+    doc.dispatchEvent(new Event('visibilitychange'));
+    stop?.();
+    doc.visibilityState = 'hidden';
+    doc.dispatchEvent(new Event('visibilitychange'));
+    expect(seen).toEqual([true, false, true]);
   });
 });

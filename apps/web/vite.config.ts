@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin } from 'vite';
 import { WEB_CSP } from './csp';
+import { devFlightsProxy } from './dev-proxy';
 import { HOSTING_MANIFEST_FILE, hostingManifest, parseBase, parseVersion } from './hosting';
 
 /*
@@ -56,7 +57,7 @@ const version = parseVersion(process.env['GLASSGRID_VERSION'] || (JSON.parse(rea
  */
 const renderPerf = process.env['GLASSGRID_RENDER_PERF'] === '1';
 
-export default defineConfig({
+export default defineConfig(({ command, isPreview }) => ({
   base,
   plugins: [react(), cspForBuild(), hostingManifestForBuild(base, version)],
   define: { __GG_RENDER_PERF__: JSON.stringify(renderPerf) },
@@ -78,5 +79,10 @@ export default defineConfig({
     // (streaming compilation; ~34 MB each, never inlined).
     assetsInlineLimit: (file) => (/\.(woff2?|ttf|otf|wasm)$/.test(file) ? false : undefined),
   },
-  preview: { port: 4173, strictPort: true },
-});
+  // `pnpm dev:web`: `/api/flights` (the live-flights relay, outside the base) goes to the portfolio's dev server,
+  // or GLASSGRID_FLIGHTS_PROXY (dev-proxy.ts). Dev only: read only for the dev server, so a malformed value never
+  // stops a build or `vite preview`, and no effect on the build or its headers.
+  ...(command === 'serve' && isPreview !== true ? { server: { proxy: devFlightsProxy(process.env) } } : {}),
+  // Vite's preview inherits `server.proxy` unless it has its own: none, so `vite preview` serves only dist/.
+  preview: { port: 4173, strictPort: true, proxy: {} },
+}));

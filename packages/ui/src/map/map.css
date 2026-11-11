@@ -1,0 +1,50 @@
+/* The live-flights map (MapView.tsx). Loaded with the lazy map chunk, after maplibre-gl.css. */
+
+.gg-map {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 200px;
+  overflow: hidden;
+  background: var(--gg-map-water);
+  color: var(--gg-text-primary);
+}
+
+.gg-map__canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.gg-map .maplibregl-canvas:focus-visible {
+  outline: 2px solid var(--gg-focus);
+  outline-offset: -2px;
+}
+
+.gg-map .maplibregl-ctrl-attrib {
+  font: var(--gg-type-ui-xs);
+  background-color: var(--gg-raised-bg);
+  color: var(--gg-text-secondary);
+  opacity: 0.92;
+}
+
+.gg-map .maplibregl-ctrl-attrib a {
+  color: var(--gg-accent-text);
+}
+
+.gg-map .maplibregl-ctrl-attrib-button {
+  background-color: var(--gg-raised-bg);
+}
+
+.gg-map__message {
+  position: absolute;
+  left: var(--gg-space-3, 12px);
+  right: var(--gg-space-3, 12px);
+  top: var(--gg-space-3, 12px);
+  margin: 0;
+  padding: var(--gg-space-2, 8px) var(--gg-space-3, 12px);
+  border-radius: 6px;
+  background: var(--gg-raised-bg);
+  color: var(--gg-text-primary);
+  font: var(--gg-type-ui-sm);
+  box-shadow: var(--gg-elev-1);
+}

@@ -329,9 +329,10 @@ export abstract class PagedGridSource implements GridDataSource {
   /**
    * Drops every page and cancels every request (new sort or filters), and
    * optionally swaps the row count and columns. Late pages of the old view
-   * are discarded.
+   * are discarded. `keepPosition` tells the grid to stay where it is (see
+   * GridSourceChange).
    */
-  reset(next: { rowCount?: number; columns?: readonly GridColumn[] } = {}): void {
+  reset(next: { rowCount?: number; columns?: readonly GridColumn[]; keepPosition?: boolean } = {}): void {
     this.generation += 1;
     for (const request of this.requests.values()) request.controller.abort(abortError());
     this.requests.clear();
@@ -346,7 +347,7 @@ export abstract class PagedGridSource implements GridDataSource {
     this.wantLast = -1;
     if (next.rowCount !== undefined) this._rowCount = Math.max(0, Math.floor(next.rowCount));
     if (next.columns !== undefined) this._columns = next.columns;
-    this.emit({ kind: 'reset' });
+    this.emit(next.keepPosition === true ? { kind: 'reset', keepPosition: true } : { kind: 'reset' });
   }
 
   /** Changes the row count (e.g. when the count arrives after the first page) without dropping pages. */

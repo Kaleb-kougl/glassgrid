@@ -119,6 +119,15 @@ export interface PlatformWindow {
   onCloseRequest?(handler: () => CloseAnswer | Promise<CloseAnswer>): () => void;
   /** Show the document in native chrome (desktop: window title; macOS represented file and edited dot). */
   setDocumentChrome?(chrome: DocumentChrome): void;
+  /**
+   * The page became visible or hidden (web: `document.visibilityState`).
+   * Calls the listener once with the current visibility, then on every
+   * change; returns an unsubscribe function. The app forwards it to the
+   * engine, whose live-flights source stops polling while the page is
+   * hidden (docs/live-flights-l2.md). Absent: never paused (the desktop
+   * shell, which has no live feed wired; see the notes).
+   */
+  onVisibilityChange?(listener: (visible: boolean) => void): () => void;
 }
 
 export interface PlatformCapabilities {
@@ -132,6 +141,19 @@ export interface PlatformCapabilities {
   readonly canOpenFromPath: boolean;
   /** Largest data file the engine accepts, in bytes; null for no limit (desktop). The web demo is bounded by WASM memory. */
   readonly maxFileBytes: number | null;
+}
+
+/**
+ * What the map view (`@glassgrid/ui/map`, a lazily loaded MapLibre chunk)
+ * needs from the shell: where its basemap is served and whose credit it
+ * carries (docs/live-flights-l3-data.md). Without it a map view card says
+ * maps are not available here (the desktop today).
+ */
+export interface PlatformMap {
+  /** URL prefix of the basemap's style, tiles, glyphs and sprites, ending in `/` (web: `<base>map/`). */
+  readonly assetsBase: string;
+  /** The basemap's attribution lines, shown after the data source's. */
+  readonly attribution: readonly string[];
 }
 
 /**
@@ -182,6 +204,8 @@ export interface Platform {
   readonly capabilities: PlatformCapabilities;
   /** `.glassgrid` files (desktop); absent on shells that cannot save them. */
   readonly workspaceFiles?: WorkspaceFilesApi;
+  /** The basemap for map views (web); absent where maps cannot be shown. */
+  readonly map?: PlatformMap;
 }
 
 /** Whether the save/open controls show: the capability and an implementation. */

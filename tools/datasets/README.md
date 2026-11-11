@@ -1,7 +1,10 @@
 # @glassgrid/datasets
 
-Reproducible, pinned benchmark CSVs for Glassgrid (two families below), and
-the web demo's sample datasets ([Web demo samples](#web-demo-samples-pnpm---filter-glassgriddatasets-samples)).
+Reproducible, pinned benchmark CSVs for Glassgrid (two families below),
+the web demo's sample datasets ([Web demo samples](#web-demo-samples-pnpm---filter-glassgriddatasets-samples)),
+Bay Area flight fixtures from adsb.lol, which are ODbL-licensed data
+([Flight data](#flight-data-globe-history-record-flights)), and the
+live-flights map's public-domain basemap ([Basemap](#basemap-basemap)).
 
 | Dataset | Command | Rows | CSV size (approx.) |
 | --- | --- | --- | --- |
@@ -317,17 +320,100 @@ about 38 MB in all):
   recipe, rename, regenerate, update `apps/web/src/samples.ts`). Each file
   should stay under 25 MB (`apps/web/src/samples.test.ts` checks it).
 
+## Flight data (`globe-history`, `record-flights`)
+
+Real ADS-B traffic over the San Francisco Bay Area (lat 37.0 to 38.5,
+lon -123.0 to -121.5) from [adsb.lol](https://adsb.lol), in Glassgrid's
+flight-point layout (`packages/core/src/flights`). **This data is not MIT:
+it is © adsb.lol contributors under the
+[ODbL 1.0](https://opendatacommons.org/licenses/odbl/1.0/)**, and anything
+derived from it that is shared must stay under the ODbL with the
+attribution. Notes and numbers: [docs/live-flights-l0.md](../../docs/live-flights-l0.md).
+
+```sh
+# One UTC day from the archive release v<date>-planes-readsb-<release> (streams about 3.7 GB, writes about 15 MB)
+pnpm --filter @glassgrid/datasets globe-history -- --date 2026-11-09 --release prod-0
+pnpm --filter @glassgrid/datasets globe-history -- --date 2026-11-09 --reuse-cache   # redo the outputs from out/cache, no download
+pnpm --filter @glassgrid/datasets globe-history -- --date 2026-11-09 --from-file a.tar.aa --from-file a.tar.ab
+
+# Live: poll adsb.lol every 10 s (endpoint not yet verified, see src/lib/adsblol.ts)
+pnpm --filter @glassgrid/datasets record-flights -- --minutes 30 --raw out/flights/responses.ndjson
+
+pnpm --filter @glassgrid/datasets test       # tar reader, archive pipeline, live recorder (mocked), committed fixtures
+```
+
+- **`globe-history`** finds the release's tar parts in
+  `github.com/adsblol/globe_history_<year>` (the releases API, else by
+  probing `<tag>.tar.aa`, `.ab`, ... until a 404), streams them in order as
+  one tar through `src/lib/tar.ts` (resuming a cut-off part with an HTTP
+  Range request), gunzips each `traces/<xx>/trace_full_<hex>.json` and keeps
+  the fixes inside the box and the day. The tar never touches the disk.
+  Output, by default in `apps/web/public/samples/flights/` (committed):
+  `flights-bay-day.parquet` (every fix of the day), `flights-bay-30min.parquet`
+  (the busiest 30 minutes by distinct aircraft, plus a 60 s lead-in),
+  `flights.manifest.json` (rows, bytes, SHA-256, columns, release tag, asset
+  names, sizes and SHA-256, filters, measurements) and `LICENSE-ODbL.md`.
+  About 3 minutes on a 2-core VM at 22 MB/s.
+- **`record-flights`** writes `out/flights/flights-live-<start>.parquet` and
+  a manifest, same columns with `source = 'live'`. It backs off on 429 and
+  5xx (honouring `Retry-After`) and stops on any other HTTP error.
+- **Parquet layout:** `FlightPoint`'s fields in order; `ts` is
+  TIMESTAMP (millisecond precision), `lat`/`lon` DECIMAL(7,5)/(8,5), sorted
+  by (hex, ts), zstd level 19, one writer thread: the same input gives the
+  same bytes. `src/flights-fixture.test.ts` checks the committed files
+  against their manifest.
+- **Changing the fixtures:** the web host serves `/samples/*.parquet` as
+  immutable, so a different day needs new file names.
+
+## Basemap (`basemap`)
+
+```sh
+NODE_USE_ENV_PROXY=1 pnpm --filter @glassgrid/datasets basemap              # the pinned commits
+NODE_USE_ENV_PROXY=1 pnpm --filter @glassgrid/datasets basemap -- --latest  # each repository's HEAD (git ls-remote)
+```
+
+Writes the live-flights map's basemap into `apps/web/public/map/` (about
+137 KB in all): `basemap.geojson` (Natural Earth 10m land, minor islands,
+lakes, urban areas and populated places, and OurAirports' large and
+medium airports with their open runways as rectangles and centrelines,
+clipped to the flights box plus 0.25°), `basemap.json` (what the map
+component loads), the Noto Sans Regular glyph ranges the labels need with
+their `OFL.txt`, and `basemap.manifest.json`.
+
+- **Pinned.** Every input is a raw file at a commit SHA on
+  raw.githubusercontent.com (`PINNED_COMMITS` in `src/basemap.ts`); the
+  manifest records each URL, size and SHA-256, and a rerun refuses an input
+  whose hash differs from the manifest's. `--latest` resolves HEAD first and
+  says when it is newer than the pin.
+- **Deterministic.** Source order, coordinates rounded to 5 decimals, a
+  fixed JSON layout, no timestamps: two runs give identical bytes.
+  `src/basemap-fixture.test.ts` checks the committed files against the
+  manifest and that SFO, OAK, SJC and San Carlos have their runways.
+- **Sources and licences.** Natural Earth (public domain), OurAirports
+  (public domain), Noto Sans glyphs from protomaps/basemaps-assets (SIL OFL
+  1.1). See [docs/live-flights-l3-map.md](../../docs/live-flights-l3-map.md)
+  for the style, the credits, and replacing it with an OpenStreetMap
+  PMTiles extract.
+
 ## Layout
 
 ```
-src/taxi.ts          NYC TLC pipeline (download → cache → DuckDB sort → CSV + manifest)
-src/synthetic.ts     seeded generator (DuckDB SQL)
-src/samples.ts       the web demo's sample Parquet files and .glassgrid workspaces
-src/verify.ts        manifest + pins check
-src/lib/common.ts    CSV dialect, arg helpers, paths
-src/lib/duck.ts      DuckDB connection, DESCRIBE, COPY (single and chunked)
-src/lib/download.ts  URL-keyed download cache
-src/lib/manifest.ts  manifest types, streaming SHA-256 + quote-aware row count, pins
-pins.json            reference hashes
-out/                 outputs and cache (gitignored)
+src/taxi.ts            NYC TLC pipeline (download → cache → DuckDB sort → CSV + manifest)
+src/synthetic.ts       seeded generator (DuckDB SQL)
+src/samples.ts         the web demo's sample Parquet files and .glassgrid workspaces
+src/globe-history.ts   one day of Bay Area flights from adsb.lol's archive (ODbL data)
+src/record-flights.ts  live Bay Area flights from adsb.lol's API (ODbL data)
+src/verify.ts          manifest + pins check
+src/lib/common.ts      CSV dialect, arg helpers, paths
+src/lib/duck.ts        DuckDB connection, DESCRIBE, COPY (single and chunked)
+src/lib/download.ts    URL-keyed download cache
+src/lib/manifest.ts    manifest types, streaming SHA-256 + quote-aware row count, pins
+src/lib/tar.ts         streaming tar reader (ustar, GNU, pax)
+src/lib/globe-history.ts  release discovery, resumable part streaming, trace extraction
+src/lib/adsblol.ts     the live endpoint (unverified) and the polling loop
+src/lib/flights.ts     flight-point Parquet layout, in-view snapshots, busiest window
+src/basemap.ts         the live-flights map's basemap (Natural Earth, OurAirports, glyphs)
+src/lib/basemap.ts     box clipping, simplification, runway rectangles, CSV, glyph ranges
+pins.json              reference hashes
+out/                   outputs and cache (gitignored)
 ```

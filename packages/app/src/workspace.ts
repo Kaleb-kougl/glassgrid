@@ -9,6 +9,8 @@ import { createWorkspace, type CommandPolicy, type CommandRegistry, type Workspa
 export interface AppWorkspace {
   readonly store: WorkspaceStore;
   readonly registry: CommandRegistry;
+  /** The store's clock (epoch ms): the time cursor counts playback from it (L4). Default `Date.now`. */
+  readonly clock?: () => number;
 }
 
 /**
@@ -23,9 +25,13 @@ export const appPolicy: CommandPolicy = {
 };
 
 export function createAppWorkspace(options: { clock?: () => number; newId?: (prefix: string) => string } = {}): AppWorkspace {
-  return createWorkspace({
-    clock: options.clock ?? (() => Date.now()),
-    newId: options.newId ?? ((prefix) => `${prefix}_${crypto.randomUUID()}`),
-    policy: appPolicy,
-  });
+  const clock = options.clock ?? (() => Date.now());
+  return {
+    ...createWorkspace({
+      clock,
+      newId: options.newId ?? ((prefix) => `${prefix}_${crypto.randomUUID()}`),
+      policy: appPolicy,
+    }),
+    clock,
+  };
 }

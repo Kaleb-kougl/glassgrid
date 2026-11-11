@@ -1,6 +1,6 @@
 import { toFileHandle, type FileHandle } from '@glassgrid/core';
 import { EngineRequestError, PortEngineClient } from '../client/port-client';
-import type { EngineClientApi } from '../client/types';
+import type { EngineClientApi, LiveEngineApi } from '../client/types';
 import type { Source, WorkerCapabilities, WorkerInit, WorkerReply } from '../worker/protocol';
 import { DEFAULT_DUCKDB_BUNDLES } from './bundles';
 
@@ -66,6 +66,8 @@ export interface WorkerEngine extends EngineClientApi {
   cacheSelfTest(mode: 'write' | 'read' | 'clean'): Promise<{ ok: boolean; detail: Record<string, unknown> }>;
   /** Stop the worker for good. */
   terminate(): void;
+  /** The live-flights feed: always present (it answers `not_implemented` for a source the `live` option did not configure). */
+  readonly live: LiveEngineApi;
 }
 
 function defaultWorker(): Worker {

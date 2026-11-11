@@ -14,3 +14,4 @@ export * from './state/index.js';
 export * from './crossfilter/index.js';
 export * from './commands/index.js';
 export * from './workspace-file/index.js';
+export * from './flights/index.js';

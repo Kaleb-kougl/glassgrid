@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { liveFlightsUrl } from '@glassgrid/core';
 import { absoluteUrl, appPath, BASE_PATH, withBase } from './base';
 import { isGalleryRoute } from './routes';
-import { extensionRepository } from './web-engine';
+import { extensionRepository, liveFixtureUrls } from './web-engine';
 
 /*
  * The base-path helpers: a default build is served at `/`, a portfolio
@@ -47,5 +48,14 @@ describe('base path', () => {
   it('serves the Parquet extension from under the base', () => {
     expect(extensionRepository('https://example.test')).toBe('https://example.test/duckdb-extensions');
     expect(extensionRepository('https://example.test', '/glassgrid/')).toBe('https://example.test/glassgrid/duckdb-extensions');
+  });
+
+  it('replays the flight fixtures from under the base, and polls live flights at the site root', () => {
+    expect(liveFixtureUrls('https://example.test', '/glassgrid/')).toEqual({
+      'flights-bay-30min': 'https://example.test/glassgrid/samples/flights/flights-bay-30min.parquet',
+      'flights-bay-day': 'https://example.test/glassgrid/samples/flights/flights-bay-day.parquet',
+    });
+    // The endpoint belongs to the portfolio site, not to the demo's folder.
+    expect(liveFlightsUrl('https://example.test')).toBe('https://example.test/api/flights');
   });
 });

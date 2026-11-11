@@ -37,8 +37,15 @@ export interface GridRange {
 export type GridSourceChange =
   /** Rows `firstRow..lastRow` (inclusive) arrived. */
   | { readonly kind: 'rows'; readonly firstRow: number; readonly lastRow: number }
-  /** Everything was dropped: a new view (sort or filters), possibly with a new row count or columns. */
-  | { readonly kind: 'reset' }
+  /**
+   * Everything was dropped: a new view (sort or filters), possibly with a new
+   * row count or columns. The grid goes back to the top with nothing
+   * selected, unless `keepPosition`: the same view of changed data (new
+   * rows arrived, or a context such as a map's viewport moved), where it
+   * stays where it was (clamped to the rows there are) and keeps a
+   * selection that is still in range.
+   */
+  | { readonly kind: 'reset'; readonly keepPosition?: boolean }
   /** The row count changed (e.g. the count arrived after the first page); loaded rows stay. */
   | { readonly kind: 'resize' }
   /** A page failed to load; it is retried on a later `ensureRange`. */

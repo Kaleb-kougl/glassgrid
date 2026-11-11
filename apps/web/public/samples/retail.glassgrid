@@ -1,5 +1,5 @@
 {
-  "formatVersion": 1,
+  "formatVersion": 2,
   "app": {
     "name": "Glassgrid",
     "version": "0.0.0"
@@ -130,6 +130,7 @@
         "title": "Order value"
       }
     ],
+    "maps": [],
     "selections": {},
     "userFilters": [],
     "grid": {

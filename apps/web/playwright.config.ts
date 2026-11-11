@@ -15,7 +15,8 @@ import { parseBase } from './hosting.ts';
  * (e2e/serve.ts). The tests navigate relative to the base.
  */
 
-const PORT = 4173;
+// GLASSGRID_E2E_PORT: another port when 4173 is taken (two checkouts running their E2E at once).
+const PORT = Number(process.env['GLASSGRID_E2E_PORT'] ?? 4173) || 4173;
 const BASE = parseBase(process.env['GLASSGRID_BASE']);
 const isRoot = process.platform === 'linux' && process.getuid?.() === 0;
 

@@ -66,7 +66,9 @@ export async function fetchCached(url: string, cacheDir: string): Promise<Cached
   if (!res.ok || !res.body) {
     throw new Error(`GET ${url} failed: HTTP ${res.status} ${res.statusText}`);
   }
-  const total = Number(res.headers.get('content-length') ?? 0);
+  // fetch decodes a compressed body, so Content-Length (the encoded size) only checks an uncompressed one.
+  const encoding = (res.headers.get('content-encoding') ?? 'identity').toLowerCase();
+  const total = encoding === 'identity' ? Number(res.headers.get('content-length') ?? 0) : 0;
   const partial = `${file}.partial`;
   const hash = createHash('sha256');
   let received = 0;

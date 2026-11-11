@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { FingerprintSchema } from '../protocol/engine.js';
 import type { WorkspaceState } from '../state/workspace.js';
 import { fileIssues, WorkspaceFileError } from './errors.js';
+import { AppInfoSchema, DataReferenceSchema, RecoveryOfSchema, type AppInfo, type DataReference, type RecoveryOf } from './file-parts.js';
 import { CURRENT_FORMAT_VERSION, migrateWorkspaceFile } from './migrations.js';
 import {
   PersistedWorkspaceSchema,
@@ -17,42 +17,14 @@ export const WORKSPACE_FILE_EXTENSION = 'glassgrid';
 /** Largest workspace file the app reads. Real ones are kilobytes; this only stops a runaway read. */
 export const MAX_WORKSPACE_FILE_BYTES = 32 * 1024 * 1024;
 
-/**
- * How a workspace finds its data again: the absolute path when saved, the
- * path relative to the workspace file (forward slashes; null when there is
- * no relative path, e.g. another drive on Windows or an untitled recovery
- * snapshot) and the engine fingerprint (size, mtime, SHA-256 of the first
- * and last 1 MB). Opening tries the relative path, then the absolute one,
- * then asks the person, and warns when the fingerprint differs.
- */
-export const DataReferenceSchema = z.strictObject({
-  /** Display name of the data file, e.g. `sales.csv`. A relinked file must have this name. */
-  fileName: z.string().min(1).max(1024),
-  absolutePath: z.string().min(1).max(32_768),
-  relativePath: z.string().min(1).max(32_768).nullable(),
-  fingerprint: FingerprintSchema,
-});
-export type DataReference = z.infer<typeof DataReferenceSchema>;
-
-export const AppInfoSchema = z.strictObject({
-  name: z.string().min(1).max(128),
-  version: z.string().min(1).max(64),
-});
-export type AppInfo = z.infer<typeof AppInfoSchema>;
+export { AppInfoSchema, DataReferenceSchema, RecoveryOfSchema, type AppInfo, type DataReference, type RecoveryOf } from './file-parts.js';
 
 /**
- * Present only in crash-recovery snapshots (`<userData>/recovery/`): which
- * workspace file the snapshot is unsaved work for. Never in a file the person saves.
+ * A `.glassgrid` file, format version 2: version 1 plus map views
+ * (`workspace.maps`, whose ids layout cards may name). See migrations.ts.
  */
-export const RecoveryOfSchema = z.strictObject({
-  /** The workspace file the window had open, or null for an untitled workspace. */
-  workspacePath: z.string().min(1).max(32_768).nullable(),
-});
-export type RecoveryOf = z.infer<typeof RecoveryOfSchema>;
-
-/** A `.glassgrid` file, format version 1. */
-export const WorkspaceFileV1Schema = z.strictObject({
-  formatVersion: z.literal(1),
+export const WorkspaceFileV2Schema = z.strictObject({
+  formatVersion: z.literal(2),
   /** The app that wrote the file (informational). */
   app: AppInfoSchema,
   /** When it was written, ISO 8601 with offset. */
@@ -61,11 +33,11 @@ export const WorkspaceFileV1Schema = z.strictObject({
   workspace: PersistedWorkspaceSchema,
   recoveryOf: RecoveryOfSchema.optional(),
 });
-export type WorkspaceFileV1 = z.infer<typeof WorkspaceFileV1Schema>;
+export type WorkspaceFileV2 = z.infer<typeof WorkspaceFileV2Schema>;
 
 /** The current file format. */
-export const WorkspaceFileSchema = WorkspaceFileV1Schema;
-export type WorkspaceFile = WorkspaceFileV1;
+export const WorkspaceFileSchema = WorkspaceFileV2Schema;
+export type WorkspaceFile = WorkspaceFileV2;
 
 export interface SerializeMeta {
   readonly app: AppInfo;

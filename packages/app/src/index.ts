@@ -14,6 +14,7 @@ export {
   type PlatformCapabilities,
   type PlatformClipboard,
   type PlatformFiles,
+  type PlatformMap,
   type PlatformName,
   type PlatformWindow,
   type SampleDataset,
@@ -21,6 +22,18 @@ export {
 } from './platform';
 export { describeMismatch, documentTitle, isWorkspaceFileName } from './workspace-files';
 export { createAppWorkspace, appPolicy, type AppWorkspace } from './workspace';
+export { provideLiveFlights, type LiveWiring } from './live';
+export {
+  ARCHIVE_PLAY_SPEED,
+  dataTimeRange,
+  FLIGHTS_DAY_ARCHIVE,
+  FLIGHTS_SAMPLE_ARCHIVE,
+  FLIGHTS_SAMPLE_REPLAY,
+  liveFlightsWorkspace,
+  openLiveFlightsWorkspace,
+  VERTICAL_RATE_CHART,
+  type LiveFlightsOpenDeps,
+} from './flights';
 export { applyInitialTheme, readThemePreference, resolveTheme, THEME_STORAGE_KEY } from './theme';
 export { installRenderPerf, perfRegion } from './render-perf';
 export {
@@ -35,6 +48,7 @@ export {
   type EngineClientLike,
   type FetchPage,
   type FilteredQueryOptions,
+  type LiveEngineApi,
   type OpenResult,
   type PageOptions,
   type ParquetCacheResult,

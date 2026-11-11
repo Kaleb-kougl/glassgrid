@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "kind": "geojson",
+  "data": "basemap.geojson",
+  "bounds": [
+    -123.25,
+    36.75,
+    -121.25,
+    38.75
+  ],
+  "glyphs": "fonts/{fontstack}/{range}.pbf",
+  "font": "Noto Sans Regular",
+  "credits": [
+    {
+      "text": "Natural Earth",
+      "url": "https://www.naturalearthdata.com/"
+    },
+    {
+      "text": "OurAirports",
+      "url": "https://ourairports.com/data/"
+    }
+  ]
+}

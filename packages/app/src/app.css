@@ -168,9 +168,14 @@ body {
   flex: 1;
 }
 
+/*
+ * Side by side, the grid keeps at least 280px: below about 1,100px the column list and the charts give way (each
+ * to a minimum) rather than squeezing the grid to a sliver. Narrower still (760px), the panels stack.
+ */
 .columns {
   width: var(--gg-column-list-w);
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 180px;
   background: var(--gg-panel-bg);
 }
 
@@ -181,33 +186,52 @@ body {
 
 .grid-panel {
   flex: 1;
-  min-width: 0;
+  min-width: 280px;
   position: relative;
   background: var(--gg-grid-bg);
 }
 
 .grid-panel__bar {
-  height: 44px;
+  min-height: 44px;
   flex: none;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 0 8px;
   padding: 0 12px;
   border-bottom: var(--gg-border-width) solid var(--gg-grid-line-strong);
 }
 
-.grid-panel__filters,
-.grid-panel__chips {
+/* The chips and "+ Filter" fill the bar; in a narrow grid the row count wraps below them. */
+.grid-panel__filters {
+  flex: 100 1 16em;
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
-  overflow: hidden;
+}
+
+.grid-panel__filters > :not(.grid-panel__chips) {
+  flex-shrink: 0;
+}
+
+/*
+ * The chips wrap onto more lines rather than overlap or hide: each is at most 22em (or the row) wide, its
+ * condition cut with an ellipsis (the tooltip has it whole) and its × always visible.
+ */
+.grid-panel__chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+  padding: 6px 0;
 }
 
 .grid-panel__chips > [role='listitem'] {
   display: flex;
-  min-width: 0;
+  flex: 0 0 auto;
+  max-width: min(22em, 100%);
 }
 
 .grid-panel__note {
@@ -244,7 +268,8 @@ body {
 
 .charts {
   width: var(--gg-chart-canvas-w);
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 300px;
   background: var(--gg-canvas-bg);
 }
 
@@ -269,6 +294,297 @@ body {
   flex-direction: column;
   gap: 8px;
   padding: 0 12px 12px;
+}
+
+.map-card {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  background: var(--gg-card-bg);
+  border: var(--gg-border-width) solid var(--gg-border-subtle);
+  border-radius: var(--gg-radius-card);
+}
+
+.map-card__header {
+  height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 6px 0 12px;
+}
+
+.map-card__title {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--gg-type-heading-sm);
+  margin: 0;
+}
+
+/* The status gives way first (an error can be long): the title, the filter switch and Remove always stay visible. */
+.map-card__status {
+  flex: 0 100 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--gg-text-secondary);
+  font: var(--gg-type-ui-xs);
+  white-space: nowrap;
+}
+
+.map-card__filter,
+.map-card__header > .gg-button {
+  flex-shrink: 0;
+}
+
+/* The map component fills this box (it sizes itself to its container). */
+.map-card__view {
+  position: relative;
+  height: 360px;
+  min-height: 0;
+  overflow: hidden;
+  border-top: var(--gg-border-width) solid var(--gg-border-subtle);
+  border-radius: 0 0 var(--gg-radius-card) var(--gg-radius-card);
+}
+
+.map-card__note {
+  margin: 0;
+  padding: 16px 12px;
+  color: var(--gg-text-secondary);
+  font: var(--gg-type-ui-md);
+}
+
+.map-card__failed {
+  margin: 0 0 8px;
+}
+
+/* The altitude key (AltitudeLegend) over the map's top-left corner, clear of the attribution (bottom-right). */
+.map-card__legend {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 1;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 1px;
+  padding: 5px 8px;
+  border: var(--gg-border-width) solid var(--gg-border-subtle);
+  border-radius: var(--gg-radius-control);
+  background: var(--gg-raised-bg);
+  box-shadow: var(--gg-elev-1);
+  color: var(--gg-text-primary);
+  pointer-events: none;
+}
+
+/* "Filter to map view" (L4): a labelled checkbox in the card's header. */
+.map-card__filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--gg-text-secondary);
+  font: var(--gg-type-ui-xs);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.map-card__filter input {
+  margin: 0;
+  accent-color: var(--gg-accent);
+}
+
+/* The selected aircraft (L4): a strip under the map, so it never hides the map or the aircraft itself. */
+.map-card__details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 6px 8px 12px;
+  border-top: var(--gg-border-width) solid var(--gg-border-subtle);
+  color: var(--gg-text-primary);
+}
+
+.map-card__details-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.map-card__details-title {
+  margin: 0;
+  font: var(--gg-type-heading-sm);
+}
+
+.map-card__details-hex {
+  color: var(--gg-text-secondary);
+  font: var(--gg-type-ui-xs);
+}
+
+.map-card__details-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+  margin: 0;
+  font: var(--gg-type-ui-xs);
+}
+
+.map-card__details-row {
+  display: flex;
+  gap: 4px;
+}
+
+.map-card__details-row dt {
+  color: var(--gg-text-secondary);
+}
+
+.map-card__details-row dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The time scrubber (L4), between the map card's header and the map. */
+.time-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 12px 8px;
+  border-top: var(--gg-border-width) solid var(--gg-border-subtle);
+}
+
+.time-bar__controls,
+.time-bar__info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.time-bar__track {
+  position: relative;
+  flex: 1 1 160px;
+  height: 20px;
+  min-width: 120px;
+  border-radius: 10px;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.time-bar__track::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 8px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--gg-border-strong);
+}
+
+.time-bar__fill {
+  position: absolute;
+  left: 0;
+  top: 8px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--gg-accent);
+}
+
+.time-bar__thumb {
+  position: absolute;
+  top: 3px;
+  width: 14px;
+  height: 14px;
+  margin-left: -7px;
+  border: 2px solid var(--gg-accent);
+  border-radius: 50%;
+  background: var(--gg-card-bg);
+}
+
+.time-bar__track:focus-visible {
+  outline: var(--gg-focus-width) solid var(--gg-focus);
+  outline-offset: 2px;
+}
+
+.time-bar__track[aria-disabled='true'] {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.time-bar__speed select {
+  font: var(--gg-type-ui-sm);
+  color: var(--gg-text-primary);
+  background: var(--gg-panel-bg);
+  border: var(--gg-border-width) solid var(--gg-border);
+  border-radius: var(--gg-radius-control);
+  padding: 2px 4px;
+}
+
+.time-bar__now {
+  display: inline-flex;
+  gap: 8px;
+  align-items: baseline;
+  font: var(--gg-type-ui-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.time-bar__local,
+.time-bar__range {
+  color: var(--gg-text-secondary);
+  font: var(--gg-type-ui-xs);
+}
+
+.time-bar__follow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--gg-text-secondary);
+  font: var(--gg-type-ui-xs);
+  cursor: pointer;
+}
+
+.time-bar__follow input {
+  margin: 0;
+  accent-color: var(--gg-accent);
+}
+
+.time-bar__expired {
+  color: var(--gg-text-primary);
+  font: var(--gg-type-ui-xs);
+  font-weight: 600;
+}
+
+/* "Load full day" and what replaces it (loading, loaded, failed) keep one width, so the line never moves. */
+.time-bar__day {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  min-width: 13.5em;
+  min-height: 28px;
+  max-width: 100%;
+  font: var(--gg-type-ui-xs);
+}
+
+.time-bar__day-note {
+  color: var(--gg-text-secondary);
+  padding: 0 8px;
+}
+
+.time-bar__day-error {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--gg-danger);
+}
+
+.time-bar__day[data-state='failed'] {
+  flex: 1 1 100%;
+}
+
+/* The map's own message (no WebGL, no basemap) takes the corner. */
+.map-card__view:has(.gg-map[data-state='error']) .map-card__legend {
+  display: none;
 }
 
 .charts__drop {
@@ -702,6 +1018,7 @@ body {
 
   .workspace > .panel {
     width: auto;
+    min-width: 0;
     flex: none;
   }
 

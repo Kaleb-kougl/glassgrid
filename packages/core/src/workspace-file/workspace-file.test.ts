@@ -45,7 +45,7 @@ describe('persisted subset', () => {
   it('keeps the work and drops profiles, the grid selection, the handle and the document', () => {
     const state = { ...taxiWorkspace(), document: { ...DOC, savedDigest: '0123456789abcdef' } };
     const persisted = persistedWorkspace(state);
-    expect(Object.keys(persisted)).toEqual(['columns', 'charts', 'selections', 'userFilters', 'grid', 'layout']);
+    expect(Object.keys(persisted)).toEqual(['columns', 'charts', 'maps', 'selections', 'userFilters', 'grid', 'layout']);
     expect(persisted.columns.every((column) => !('profile' in column))).toBe(true);
     expect(persisted.columns.find((column) => column.name === 'vendor_id')).toEqual({ name: 'vendor_id', inferredType: 'integer', typeOverride: 'text' });
     expect(persisted.grid).toEqual({ sort: state.grid.sort, columnOrder: state.grid.columnOrder, columnWidths: state.grid.columnWidths });
@@ -104,7 +104,7 @@ describe('serializeWorkspace / parseWorkspace', () => {
       relativePath: SAVE_META.relativePath,
       fingerprint: must(state.dataSource).fingerprint,
     });
-    expect(parsed.file).toMatchObject({ formatVersion: 1, app: SAVE_META.app, savedAt: SAVE_META.savedAt });
+    expect(parsed.file).toMatchObject({ formatVersion: 2, app: SAVE_META.app, savedAt: SAVE_META.savedAt });
     expect(parsed.file.recoveryOf).toBeUndefined();
   });
 
@@ -144,8 +144,8 @@ describe('serializeWorkspace / parseWorkspace', () => {
     expectFileError(() => parseWorkspace('{"workspace": {}}'), 'not_a_workspace');
     expectFileError(() => parseWorkspace('{"formatVersion": "1"}'), 'not_a_workspace');
     expectFileError(() => parseWorkspace('{"formatVersion": 1.5}'), 'not_a_workspace');
-    const newer = expectFileError(() => parseWorkspace('{"formatVersion": 2, "anything": true}'), 'newer_version');
-    expect(newer.message).toMatch(/newer version of Glassgrid \(format 2; this version reads up to 1\)/);
+    const newer = expectFileError(() => parseWorkspace('{"formatVersion": 3, "anything": true}'), 'newer_version');
+    expect(newer.message).toMatch(/newer version of Glassgrid \(format 3; this version reads up to 2\)/);
     const invalid = expectFileError(() => parseWorkspace('{"formatVersion": 1}'), 'invalid_file');
     expect(invalid.issues.map((issue) => issue.path)).toContain('app');
   });
@@ -171,9 +171,9 @@ describe('serializeWorkspace / parseWorkspace', () => {
     expect(parseWorkspace(String.fromCharCode(0xfeff) + serializeWorkspace(taxiWorkspace(), SAVE_META)).workspace.charts).toHaveLength(4);
   });
 
-  it('the current schema is v1', () => {
-    expect(CURRENT_FORMAT_VERSION).toBe(1);
-    expect(WorkspaceFileSchema.shape.formatVersion.value).toBe(1);
+  it('the current schema is v2', () => {
+    expect(CURRENT_FORMAT_VERSION).toBe(2);
+    expect(WorkspaceFileSchema.shape.formatVersion.value).toBe(2);
   });
 });
 

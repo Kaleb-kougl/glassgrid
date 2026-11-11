@@ -60,6 +60,8 @@ const TYPES: Record<string, string> = {
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.md': 'text/markdown; charset=utf-8',
+  '.geojson': 'application/geo+json',
+  '.pbf': 'application/octet-stream',
 };
 
 function matcher(source: string): RegExp {

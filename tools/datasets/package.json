@@ -23,7 +23,11 @@
     "synthetic": "tsx src/synthetic.ts",
     "verify": "tsx src/verify.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "samples": "tsx src/samples.ts"
+    "samples": "tsx src/samples.ts",
+    "globe-history": "tsx src/globe-history.ts",
+    "record-flights": "tsx src/record-flights.ts",
+    "test": "vitest run",
+    "basemap": "tsx src/basemap.ts"
   },
   "dependencies": {
     "@duckdb/node-api": "1.5.6-r.1",
@@ -31,7 +35,9 @@
   },
   "devDependencies": {
     "@types/node": "24.19.2",
+    "fast-check": "4.10.2",
     "tsx": "4.23.15",
-    "typescript": "6.0.3"
+    "typescript": "6.0.3",
+    "vitest": "5.0.5"
   }
 }

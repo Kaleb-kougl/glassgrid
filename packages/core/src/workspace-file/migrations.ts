@@ -4,8 +4,18 @@ import { ChartSpecSchema } from '../spec/chart.js';
 import { ColumnTypeSchema } from '../spec/column.js';
 import { FilterSchema, type Filter } from '../spec/filter.js';
 import { SortKeySchema } from '../spec/rows.js';
-import { ChartIdSchema, ColumnNameSchema, LayoutStateSchema, ViewIdSchema } from '../state/workspace.js';
+import {
+  ChartIdSchema,
+  ChartStateSchema,
+  ColumnNameSchema,
+  LayoutStateSchema,
+  SelectionSchema,
+  UserFilterSchema,
+  ViewIdSchema,
+} from '../state/workspace.js';
 import { fileIssues, WorkspaceFileError } from './errors.js';
+import { AppInfoSchema, DataReferenceSchema, RecoveryOfSchema } from './file-parts.js';
+import { PersistedColumnSchema, PersistedGridSchema } from './persisted.js';
 
 /*
  * Format versions and migrations.
@@ -21,7 +31,7 @@ import { fileIssues, WorkspaceFileError } from './errors.js';
  * with `newer_version`, never guessed at.
  */
 
-export const CURRENT_FORMAT_VERSION = 1;
+export const CURRENT_FORMAT_VERSION = 2;
 /** The oldest version this build can read. */
 export const OLDEST_FORMAT_VERSION = 0;
 
@@ -102,9 +112,37 @@ function migrateV0ToV1(document: unknown): unknown {
   };
 }
 
+// --- Version 1 ----------------------------------------------------------------
+// M4's format: the data by absolute and relative path, selections, user
+// filters, grid sort, order and widths, chart cards. No map views.
+
+export const WorkspaceFileV1Schema = z.strictObject({
+  formatVersion: z.literal(1),
+  app: AppInfoSchema,
+  savedAt: z.iso.datetime({ offset: true }),
+  data: DataReferenceSchema,
+  workspace: z.strictObject({
+    columns: z.array(PersistedColumnSchema),
+    charts: z.array(ChartStateSchema),
+    selections: z.record(ViewIdSchema, SelectionSchema),
+    userFilters: z.array(UserFilterSchema),
+    grid: PersistedGridSchema,
+    layout: LayoutStateSchema,
+  }),
+  recoveryOf: RecoveryOfSchema.optional(),
+});
+export type WorkspaceFileV1 = z.infer<typeof WorkspaceFileV1Schema>;
+
+/** v1 → v2 (L3): a workspace gains map views; a v1 workspace has none. Nothing else changes. */
+function migrateV1ToV2(document: unknown): unknown {
+  const v1 = parseVersion(WorkspaceFileV1Schema, document, 1);
+  return { ...v1, formatVersion: 2, workspace: { ...v1.workspace, maps: [] } };
+}
+
 /** `MIGRATIONS[n]` migrates a version-n document to version n + 1. */
 export const MIGRATIONS: Readonly<Record<number, Migration>> = Object.freeze({
   0: migrateV0ToV1,
+  1: migrateV1ToV2,
 });
 
 /**

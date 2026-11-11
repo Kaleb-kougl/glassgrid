@@ -1,4 +1,8 @@
 import {
+  LIVE_FLIGHTS_FINGERPRINT,
+  LIVE_FLIGHTS_HANDLE,
+  LIVE_FLIGHTS_TABLE_ID,
+  LIVE_FLIGHTS_TABLE_NAME,
   tableIdForFile,
   type CacheScope,
   type ColumnInfo,
@@ -8,6 +12,7 @@ import {
   type EngineEvent,
   type FileHandle,
   type Fingerprint,
+  type LiveMemoryStats,
   type ParquetCacheStats,
   type ParquetMode,
   type ResultCacheStats,
@@ -32,6 +37,8 @@ import {
 import type { DriverParam, DriverResult, DriverValue, DuckConnection, DuckDatabase, DuckDriver } from './driver';
 import { Emitter } from './emitter';
 import { fingerprintFile } from './fingerprint';
+import { FLIGHT_STATES_TABLE, type FlightStore } from './live/flight-store';
+import { LiveFeed, type LiveFeedHostOptions } from './live/live-feed';
 import { sha256Hex } from './hash';
 import { DEFAULT_PARQUET_CACHE_BYTES, ParquetCache, type CacheEntry } from './parquet-cache';
 import { DEFAULT_RESULT_CACHE_BYTES, ResultCache } from './result-cache';
@@ -103,6 +110,12 @@ export interface QueryServiceOptions {
   exactCategoryDistinctMaxRows?: number;
   /** How often a Parquet conversion reports progress (default PROGRESS_INTERVAL_MS; tests lower it). */
   progressIntervalMs?: number;
+  /**
+   * The live-flights feed's configuration (docs/live-flights-l2.md): the
+   * endpoint and where replay fixtures are. Without it (or without a part
+   * of it) the `live*` requests for that source answer `not_implemented`.
+   */
+  live?: LiveFeedHostOptions;
 }
 
 /** Per-request context: cancellation and the view the request belongs to. */
@@ -137,10 +150,23 @@ export interface ColumnTypesOutcome {
   columns: ColumnTypeResult[];
 }
 
-type Source = { kind: 'csv' } | { kind: 'parquet'; path: string; key: string };
+type Source = { kind: 'csv' } | { kind: 'parquet'; path: string; key: string } | { kind: 'live' };
 
-/** What the user opened: a CSV (read in place, optionally copied to Parquet) or a Parquet file (read in place). */
-export type InputFormat = 'csv' | 'parquet';
+/**
+ * What the user opened: a CSV (read in place, optionally copied to Parquet), a Parquet file (read in
+ * place), or the live feed's `flight_states` table (`LIVE_FLIGHTS_HANDLE`, see "The live table" below).
+ */
+export type InputFormat = 'csv' | 'parquet' | 'live';
+
+/** The live table's link to the feed's store (null for file tables). */
+interface LiveLink {
+  /** The `flight_states` store this state reads; a new source means a new store, and a new state. */
+  readonly store: FlightStore;
+  /** Distinct per state ever built in this engine, so versions never repeat across stores. */
+  readonly generation: number;
+  /** Batches ingested into the store since this state was built. */
+  batch: number;
+}
 
 type ColumnStats = Pick<TableColumnProfile, 'nullFraction' | 'distinctCount' | 'min' | 'max'> & { distinctApproximate: boolean };
 
@@ -176,6 +202,12 @@ function overridesVersion(state: Pick<TableState, 'overrides' | 'typeGeneration'
   const entries = [...state.overrides.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
   if (entries.length === 0 && state.typeGeneration === 0) return '';
   return sha256Hex(JSON.stringify([entries, state.typeGeneration])).slice(0, 16);
+}
+
+/** The table's version: its overrides, and for the live table also which store and which batch it reads. */
+function versionOf(state: Pick<TableState, 'overrides' | 'typeGeneration' | 'live'>): string {
+  const overrides = overridesVersion(state);
+  return state.live === null ? overrides : `${overrides}~live${state.live.generation}.${state.live.batch}`;
 }
 
 interface TableState {
@@ -229,6 +261,8 @@ interface TableState {
   view: string;
   /** Same rows plus `__gg_ord`, the 0-based position in the file. */
   ordView: string;
+  /** Set for the live table: which feed store it reads and how many batches it has seen. */
+  live: LiveLink | null;
 }
 
 type CachedValue =
@@ -285,6 +319,10 @@ export class QueryService extends Emitter<QueryServiceEvents> {
   private readonly exactCategoryDistinctMaxRows: number;
   /** Pending delays of filtered index builds, by index name; calling one starts the build now. */
   private readonly indexDelays = new Map<string, () => void>();
+  /** The live-flights feed and its `flight_states` table, shared by every session. */
+  readonly live: LiveFeed;
+  /** Live table states built so far (see LiveLink.generation). */
+  private liveGenerations = 0;
   private closed = false;
 
   private constructor(
@@ -307,6 +345,15 @@ export class QueryService extends Emitter<QueryServiceEvents> {
     this.exactDistinctMaxRows = options.exactDistinctMaxRows ?? EXACT_DISTINCT_MAX_ROWS;
     this.exactCategoryDistinctMaxRows = options.exactCategoryDistinctMaxRows ?? EXACT_CATEGORY_DISTINCT_MAX_ROWS;
     this.progressIntervalMs = options.progressIntervalMs ?? PROGRESS_INTERVAL_MS;
+    this.live = new LiveFeed({
+      ...options.live,
+      driver,
+      tempDirectory: files.join(this.tempRoot, 'live'),
+      memoryLimitBytes: this.memoryLimitBytes,
+      onState: (state) => this.emit('event', { type: 'liveState', state }),
+      onIngested: (store) => this.liveIngested(store),
+      onStoreClosing: (store) => this.forgetLive(store),
+    });
   }
 
   static async create(driver: DuckDriver, options: QueryServiceOptions): Promise<QueryService> {
@@ -346,6 +393,7 @@ export class QueryService extends Emitter<QueryServiceEvents> {
    * cached results.
    */
   async open(file: FileHandle, options: { parquet?: ParquetMode } = {}, ctx: RequestContext = {}): Promise<TableHandle> {
+    if (file === LIVE_FLIGHTS_HANDLE) return this.handleFor(await this.liveTable(ctx));
     const csvPath = this.files.get(file);
     if (!csvPath) throw new EngineFailure('unknown_handle', 'This file is no longer open');
     const id = tableIdForFile(file);
@@ -438,6 +486,7 @@ export class QueryService extends Emitter<QueryServiceEvents> {
       rawView: quoteIdent(`gg_${id}_raw`),
       view: quoteIdent(QueryService.viewName(id)),
       ordView: quoteIdent(`gg_${id}_ord`),
+      live: null,
     };
 
     try {
@@ -490,7 +539,7 @@ export class QueryService extends Emitter<QueryServiceEvents> {
       const type = state.overrides.get(column.name);
       return type === undefined ? column : { name: column.name, type, duckdbType: overrideDuckdbType(type, column.duckdbType) };
     });
-    if (options.keepVersion !== true) state.version = overridesVersion(state);
+    if (options.keepVersion !== true) state.version = versionOf(state);
   }
 
   /** The SELECT list of `view`: every column, cast where overridden. */
@@ -507,6 +556,7 @@ export class QueryService extends Emitter<QueryServiceEvents> {
   }
 
   private sourceRelation(connection: DuckConnection, state: TableState): Promise<string> | string {
+    if (state.source.kind === 'live') return quoteIdent(FLIGHT_STATES_TABLE);
     if (state.source.kind === 'parquet') {
       return `read_parquet(${quoteLiteral(state.source.path)}, file_row_number = true)`;
     }
@@ -536,6 +586,7 @@ export class QueryService extends Emitter<QueryServiceEvents> {
 
   /** Find an open table, reopening it on demand after an engine restart. */
   private async table(id: TableId, ctx: RequestContext): Promise<TableState> {
+    if (id === LIVE_FLIGHTS_TABLE_ID) return this.liveTable(ctx);
     const state = this.tables.get(id);
     if (state) return state;
     const pending = this.opening.get(id);
@@ -551,11 +602,131 @@ export class QueryService extends Emitter<QueryServiceEvents> {
     return (await this.table(id, ctx)).columns;
   }
 
+  // -------------------------------------------------------------------------
+  // The live table
+  //
+  // The feed's `flight_states` (docs/live-flights-l2.md) is a table like any opened file, under the
+  // reserved LIVE_FLIGHTS_HANDLE / LIVE_FLIGHTS_TABLE_ID (docs/live-flights-l3-data.md): views over it
+  // in the store's own database, the same profile, pages, counts, aggregates, cubes and sort indexes.
+  //
+  // - Identity: one table id and a constant fingerprint for whatever source feeds it. A new source
+  //   (the feed empties the table by making a new store) gets a new TableState, built on first use.
+  // - Freshness: every ingested batch moves the state's version on (`versionOf`: store generation and
+  //   batch count), which is part of every result-cache key, coalescing key, cube key and sort index
+  //   name, and drops the table's cached results, cubes, sort indexes and profile statistics before
+  //   the feed reports the batch. A result keyed with an older version is never served again, and one
+  //   that finishes after the batch is not stored (`remember`). The version moves on only after the
+  //   batch committed, so whatever is cached under a version read at least that batch's data.
+  // - No Parquet copy: the table is in memory and changes every batch; `ensureParquetCache` refuses.
+
+  /** The live table's state, built over the feed's current store on first use. */
+  private async liveTable(ctx: RequestContext): Promise<TableState> {
+    const id = LIVE_FLIGHTS_TABLE_ID;
+    let store = this.live.flightStore;
+    // A start may be under way (the app restarts the feed after an engine restart, then re-queries).
+    if (!store) {
+      await raceAbort(this.live.idle(), ctx.signal);
+      store = this.live.flightStore;
+    }
+    if (!store) throw new EngineFailure('unknown_table', 'There is no live flight data yet: start the live feed first');
+    const existing = this.tables.get(id);
+    if (existing?.live?.store === store) return existing;
+    const pending = this.opening.get(id);
+    if (pending) return pending;
+    if (existing) await this.forgetLive(existing.live?.store ?? null);
+    const promise = this.buildLiveTable(store, ctx).finally(() => this.opening.delete(id));
+    this.opening.set(id, promise);
+    return promise;
+  }
+
+  private async buildLiveTable(store: FlightStore, ctx: RequestContext): Promise<TableState> {
+    const id = LIVE_FLIGHTS_TABLE_ID;
+    this.liveGenerations += 1;
+    const live: LiveLink = { store, generation: this.liveGenerations, batch: 0 };
+    const state: TableState = {
+      id,
+      file: LIVE_FLIGHTS_HANDLE,
+      csvPath: LIVE_FLIGHTS_TABLE_NAME,
+      input: 'live',
+      db: store.db,
+      tempDir: this.driver.files.join(this.tempRoot, id),
+      csvReader: null,
+      fingerprint: { ...LIVE_FLIGHTS_FINGERPRINT },
+      source: { kind: 'live' },
+      parquetMode: 'never',
+      inferred: [],
+      overrides: new Map(),
+      columns: [],
+      version: '',
+      typeGeneration: 0,
+      rowCount: undefined,
+      stats: new Map(),
+      failedCasts: new Map(),
+      typeChange: Promise.resolve(),
+      viewLock: Promise.resolve(),
+      active: new Set(),
+      closed: false,
+      rawView: quoteIdent(`gg_${id}_raw`),
+      view: quoteIdent(QueryService.viewName(id)),
+      ordView: quoteIdent(`gg_${id}_ord`),
+      live,
+    };
+    state.version = versionOf(state);
+    await this.withConnection(state, ctx.signal, async (connection) => {
+      await this.createRawView(connection, state);
+      const described = await connection.query(`DESCRIBE SELECT * FROM ${state.rawView}`);
+      state.inferred = rowObjects(described).map((row) => {
+        const name = textValue(row['column_name']);
+        const duckdbType = textValue(row['column_type']);
+        return { name, duckdbType, type: simpleColumnType(duckdbType) };
+      });
+      this.applyOverrides(state);
+      await this.createViews(connection, state);
+    });
+    state.rowCount = store.rowCount;
+    // The store was replaced while the views were made: this state describes nothing any more.
+    if (this.live.flightStore !== store) throw new EngineFailure('unknown_table', 'The live feed switched source; please retry');
+    this.tables.set(id, state);
+    return state;
+  }
+
+  /** A batch was ingested into `store`: the live table's data changed (see above). Resolves once every cache of it is dropped. */
+  private async liveIngested(store: FlightStore): Promise<void> {
+    const state = this.tables.get(LIVE_FLIGHTS_TABLE_ID);
+    if (!state?.live || state.live.store !== store) return;
+    state.live.batch += 1;
+    state.version = versionOf(state);
+    state.rowCount = store.rowCount;
+    state.stats.clear();
+    state.failedCasts.clear();
+    this.results.invalidateTable(state.id);
+    this.dropCubes(state, this.cubes.remove(state.id));
+    await this.sortIndexes.drop(state.id);
+    this.emit('event', { type: 'tableUpdated', table: this.handleFor(state) });
+  }
+
+  /**
+   * The feed is closing `store` (another source, or shutdown), or the live table is being rebuilt:
+   * forget the state that reads it, its caches and indexes, and stop its queries, before the store's
+   * database goes away. The database itself belongs to the feed and is never closed here.
+   */
+  private async forgetLive(store: FlightStore | null): Promise<void> {
+    const state = this.tables.get(LIVE_FLIGHTS_TABLE_ID);
+    if (!state?.live || (store !== null && state.live.store !== store)) return;
+    this.tables.delete(state.id);
+    this.results.invalidateTable(state.id);
+    this.dropCubes(state, this.cubes.remove(state.id));
+    await this.sortIndexes.drop(state.id);
+    state.closed = true;
+    for (const connection of state.active) connection.interrupt();
+    for (let waited = 0; state.active.size > 0 && waited < 5_000; waited += 5) await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+
   private handleFor(state: TableState): TableHandle {
     return {
       id: state.id,
       file: state.file,
-      fileName: this.driver.files.basename(state.csvPath),
+      fileName: state.live === null ? this.driver.files.basename(state.csvPath) : LIVE_FLIGHTS_TABLE_NAME,
       ...(state.rowCount === undefined ? {} : { rowCount: state.rowCount }),
       fingerprint: state.fingerprint,
       usingParquetCache: state.source.kind === 'parquet',
@@ -654,7 +825,7 @@ export class QueryService extends Emitter<QueryServiceEvents> {
         this.applyOverrides(state, { keepVersion: true });
         throw error;
       }
-      state.version = overridesVersion(state);
+      state.version = versionOf(state);
       this.results.invalidateTable(state.id);
       await this.sortIndexes.drop(state.id);
       this.dropCubes(state, this.cubes.remove(state.id));
@@ -687,8 +858,8 @@ export class QueryService extends Emitter<QueryServiceEvents> {
     const assembled = assembleProfile(state);
     if (assembled) return { value: assembled, cached: true };
 
-    // Statistics can be cleared (clearCache) while a scan runs; one retry covers that.
-    for (let attempt = 0; attempt < 2; attempt += 1) {
+    // Statistics can be cleared (clearCache, a live batch) while a scan runs; retries cover that.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
       await this.scanProfile(state, ctx);
       const profile = assembleProfile(state);
       if (profile) return { value: profile, cached: false };
@@ -710,6 +881,7 @@ export class QueryService extends Emitter<QueryServiceEvents> {
 
   private async scanProfile(state: TableState, ctx: RequestContext): Promise<void> {
     const key = this.key(state, ['profile']);
+    const version = state.version;
     await this.inflight.run(key, ctx.signal, async (signal) => {
       await this.awaitConversion(state, signal);
       const missing = state.columns.filter((column) => !state.stats.has(statKey(column.name, column.duckdbType)));
@@ -721,6 +893,8 @@ export class QueryService extends Emitter<QueryServiceEvents> {
         return result.rows[0] ?? [];
       });
       const rowCount = toCount(row[0] ?? null);
+      // A live batch arrived meanwhile: these statistics describe data the table no longer serves.
+      if (state.version !== version) return { kind: 'count', rowCount };
       state.rowCount = rowCount;
       missing.forEach((column, index) => {
         state.stats.set(statKey(column.name, column.duckdbType), readStats(row, 1 + index * 4, rowCount, column.duckdbType, exact(column.duckdbType)));
@@ -736,15 +910,16 @@ export class QueryService extends Emitter<QueryServiceEvents> {
     const key = this.key(state, ['count', fragmentKey(where)]);
     const hit = this.results.get(key);
     if (hit?.kind === 'count') return { value: hit.rowCount, cached: true };
+    const version = state.version;
 
     const value = await this.inflight.run(key, ctx.signal, async (signal): Promise<CachedValue> => {
       // An unfiltered count parses little of each line, so it is cheaper than waiting for the
       // conversion; it is the row count the grid shows right after open.
       if (where) await this.awaitConversion(state, signal);
       const rowCount = await this.withConnection(state, signal, (connection) => countRows(connection, sql, where?.params));
-      if (!where) state.rowCount = rowCount;
+      if (!where && state.version === version) state.rowCount = rowCount;
       const result: CachedValue = { kind: 'count', rowCount };
-      this.results.set(key, result, 64);
+      this.remember(state, key, result, 64);
       return result;
     });
     return { value: expectCount(value), cached: false };
@@ -778,7 +953,7 @@ export class QueryService extends Emitter<QueryServiceEvents> {
     if (ctx.viewId !== undefined) this.sortIndexes.want(ctx.viewId, name);
 
     const key = this.key(state, ['rows', query.offset, query.limit, sort, fragmentKey(where)]);
-    return this.cachedArrow(key, ctx, (signal) => {
+    return this.cachedArrow(state, key, ctx, (signal) => {
       const inner = { ...ctx, signal };
       return name === null ? this.plainPage(state, query, inner) : this.indexedPage(state, query, orderBy, name, inner);
     });
@@ -815,7 +990,12 @@ export class QueryService extends Emitter<QueryServiceEvents> {
         : `SELECT * FROM ${state.view}${filter} ${limits}`;
     };
 
-    if (this.pagingStrategy === 'topK') {
+    // The live table's filtered, unsorted views page with LIMIT / OFFSET instead of a row-number index (L4
+    // review). Their filters change with every pan of a map, every live batch and every tick of a cursor the
+    // charts follow, and an index is a copy of every matching row: 250 MB a time on the day fixture, up to four
+    // kept. Closing the live table while one built left its memory with DuckDB-WASM (the second "Load full
+    // day" then ran out of memory). A user's sort still builds one.
+    if (this.pagingStrategy === 'topK' || (state.live !== null && !sorted)) {
       if (sorted) await this.awaitConversion(state, ctx.signal);
       return this.runArrow(state, topK(query.offset, query.limit), where?.params, ctx.signal);
     }
@@ -858,7 +1038,7 @@ export class QueryService extends Emitter<QueryServiceEvents> {
             const ipc = await this.runArrow(state, topK(0, this.topKRows), where?.params, signal);
             const table = tableFromIPC(ipc);
             const result: CachedValue = { kind: 'block', table, complete: table.numRows < this.topKRows };
-            this.results.set(blockKey, result, ipc.byteLength);
+            this.remember(state, blockKey, result, ipc.byteLength);
             return result;
           });
           if (value.kind !== 'block') throw new EngineFailure('query_failed', 'Unexpected cached value');
@@ -928,7 +1108,7 @@ export class QueryService extends Emitter<QueryServiceEvents> {
   ): Promise<Cached<Uint8Array>> {
     const state = await this.table(id, ctx); // opens (or reopens) the view the SQL reads from
     const key = this.key(state, ['sql', fragmentKey(compiled), options.pixelWidth ?? null]);
-    return this.cachedArrow(key, ctx, async (signal) => {
+    return this.cachedArrow(state, key, ctx, async (signal) => {
       await this.awaitConversion(state, signal);
       return this.runArrow(state, compiled.sql, compiled.params, signal);
     });
@@ -947,7 +1127,7 @@ export class QueryService extends Emitter<QueryServiceEvents> {
       await this.awaitConversion(state, signal);
       const rowCount = await this.withConnection(state, signal, (connection) => countRows(connection, compiled.sql, compiled.params));
       const result: CachedValue = { kind: 'count', rowCount };
-      this.results.set(key, result, 64);
+      this.remember(state, key, result, 64);
       return result;
     });
     return { value: expectCount(value), cached: false };
@@ -1009,7 +1189,7 @@ export class QueryService extends Emitter<QueryServiceEvents> {
   ): Promise<Cached<Uint8Array>> {
     const state = await this.table(id, ctx);
     const key = this.key(state, ['cubeAnswer', cube.name, fragmentKey(answer), options.pixelWidth ?? null]);
-    return this.cachedArrow(key, ctx, (signal) => this.runArrow(state, answer.sql, answer.params, signal));
+    return this.cachedArrow(state, key, ctx, (signal) => this.runArrow(state, answer.sql, answer.params, signal));
   }
 
   /** A row count from a count cube (`compileCountCubeAnswer`), cached like counts. */
@@ -1021,7 +1201,7 @@ export class QueryService extends Emitter<QueryServiceEvents> {
     const value = await this.inflight.run(key, ctx.signal, async (signal): Promise<CachedValue> => {
       const rowCount = await this.withConnection(state, signal, (connection) => countRows(connection, answer.sql, answer.params));
       const result: CachedValue = { kind: 'count', rowCount };
-      this.results.set(key, result, 64);
+      this.remember(state, key, result, 64);
       return result;
     });
     return { value: expectCount(value), cached: false };
@@ -1062,12 +1242,23 @@ export class QueryService extends Emitter<QueryServiceEvents> {
     return keys.join(', ');
   }
 
-  /** Result-cache key: table, file content, type overrides and the request's logical inputs. */
+  /** Result-cache key: table, file content, type overrides (live: store and batch) and the request's logical inputs. */
   private key(state: TableState, parts: unknown[]): string {
     return ResultCache.key(state.id, `${state.fingerprint.key}:${state.version}`, JSON.stringify(parts));
   }
 
+  /**
+   * Store a result computed for `key`, unless the table moved on meanwhile (a live batch, a type
+   * change, closed): a key of an older version is never asked for again, so storing it would only
+   * take room from current results.
+   */
+  private remember(state: TableState, key: string, value: CachedValue, bytes: number): void {
+    if (this.tables.get(state.id) !== state || !key.startsWith(ResultCache.key(state.id, `${state.fingerprint.key}:${state.version}`, ''))) return;
+    this.results.set(key, value, bytes);
+  }
+
   private async cachedArrow(
+    state: TableState,
     key: string,
     ctx: RequestContext,
     compute: (signal: AbortSignal) => Promise<Uint8Array>,
@@ -1077,7 +1268,7 @@ export class QueryService extends Emitter<QueryServiceEvents> {
     const value = await this.inflight.run(key, ctx.signal, async (signal): Promise<CachedValue> => {
       const ipc = await compute(signal);
       const result: CachedValue = { kind: 'ipc', ipc };
-      this.results.set(key, result, ipc.byteLength);
+      this.remember(state, key, result, ipc.byteLength);
       return result;
     });
     if (value.kind !== 'ipc') throw new EngineFailure('query_failed', 'Unexpected cached value');
@@ -1104,12 +1295,14 @@ export class QueryService extends Emitter<QueryServiceEvents> {
    */
   async ensureParquetCache(id: TableId): Promise<ParquetCacheOutcome> {
     const state = await this.table(id, {});
+    if (state.source.kind === 'live') throw new EngineFailure('not_implemented', 'The live table has no Parquet copy: it is in memory and changes with every batch');
     const { entry, alreadyCached } = await this.parquetJob(state).promise;
     return { table: this.handleFor(state), alreadyCached, sizeBytes: entry.sizeBytes };
   }
 
   /** The table's Parquet job (shared by every table with the same content), started on demand. */
   private parquetJob(state: TableState): ParquetJob {
+    if (state.source.kind === 'live') return { promise: Promise.reject(new EngineFailure('not_implemented', 'The live table has no Parquet copy')) };
     const key = state.fingerprint.key;
     const running = this.parquetJobs.get(key);
     if (running) return running;
@@ -1301,6 +1494,23 @@ export class QueryService extends Emitter<QueryServiceEvents> {
     return this.parquetCache.stats();
   }
 
+  /** DuckDB's memory and attached databases on the live feed's instance (null before a store exists). */
+  async liveMemoryStats(): Promise<LiveMemoryStats | null> {
+    const store = this.live.flightStore;
+    if (!store) return null;
+    const connection = await store.connect().catch(() => null);
+    if (!connection) return null;
+    try {
+      const memory = (await connection.query('SELECT coalesce(sum(memory_usage_bytes), 0) FROM duckdb_memory()')).rows[0]?.[0];
+      const databases = (await connection.query("SELECT count(*) FROM duckdb_databases() WHERE NOT internal")).rows[0]?.[0];
+      return { memoryBytes: Number(memory ?? 0), databases: Number(databases ?? 0) };
+    } catch {
+      return null;
+    } finally {
+      connection.close();
+    }
+  }
+
   /** A renderer connection closed: its views no longer need their sort indexes. */
   releaseViews(prefix: string): void {
     this.sortIndexes.detachViews(prefix);
@@ -1324,6 +1534,8 @@ export class QueryService extends Emitter<QueryServiceEvents> {
   async closeTable(id: TableId): Promise<void> {
     const state = this.tables.get(id);
     if (!state) return;
+    // The live table's database is the feed's: forget the views' state, keep the rows.
+    if (state.live) return this.forgetLive(state.live.store);
     await state.typeChange;
     if (this.tables.get(id) !== state) return;
     this.tables.delete(id);
@@ -1378,8 +1590,9 @@ export class QueryService extends Emitter<QueryServiceEvents> {
     if (this.closed) return;
     this.closed = true;
     for (const conversion of this.conversions.values()) conversion.interrupt();
-    for (const state of this.tables.values()) void state.db.close().catch(() => undefined);
+    for (const state of this.tables.values()) if (state.live === null) void state.db.close().catch(() => undefined);
     this.tables.clear();
+    void this.live.close();
   }
 
   // -------------------------------------------------------------------------

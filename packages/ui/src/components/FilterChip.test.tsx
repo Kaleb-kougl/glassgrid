@@ -26,4 +26,12 @@ describe('FilterChip', () => {
     await userEvent.keyboard('{Delete}');
     expect(onRemove).toHaveBeenCalledTimes(2);
   });
+
+  it('a short label (a map viewport: "Map view") keeps the column and the condition in its name and tooltip', () => {
+    render(<FilterChip column="Bay Area traffic view" condition="37.359–38.139°N, 122.87–121.63°W" shortLabel="Map view" onRemove={vi.fn()} />);
+    const chip = screen.getByRole('group', { name: 'Filter Bay Area traffic view 37.359–38.139°N, 122.87–121.63°W' });
+    expect(chip.textContent).toBe('Map view×');
+    expect(chip.getAttribute('title')).toBe('Bay Area traffic view 37.359–38.139°N, 122.87–121.63°W');
+    expect(screen.getByRole('button', { name: 'Remove filter on Bay Area traffic view' })).toBeTruthy();
+  });
 });

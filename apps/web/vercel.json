@@ -96,6 +96,24 @@
           "value": "application/wasm"
         }
       ]
+    },
+    {
+      "source": "/map/(.*)\\.geojson",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/geo+json"
+        }
+      ]
+    },
+    {
+      "source": "/map/(.*)\\.pbf",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/x-protobuf"
+        }
+      ]
     }
   ]
 }

@@ -453,13 +453,17 @@ export class GridController {
         }
         break;
       case 'reset':
-        // A new view: back to the top, nothing selected, nothing requested.
+        // A new view: back to the top, nothing selected, nothing requested. The same view of changed data
+        // (keepPosition) stays put instead: layout() clamps the scroll to the rows there are.
         this.requestedFirst = -1;
         this.requestedLast = -1;
         this.syncColumns();
         this.layout();
-        this.scrollToTop();
-        if (this.lastSelection) this.callbacks.onSelectionChange?.(null);
+        if (change.keepPosition === true) this.dropSelectionOutOfRange();
+        else {
+          this.scrollToTop();
+          if (this.lastSelection) this.callbacks.onSelectionChange?.(null);
+        }
         this.dataDirty = true;
         this.invalidate();
         break;
@@ -467,6 +471,7 @@ export class GridController {
         this.requestedFirst = -1;
         this.requestedLast = -1;
         this.layout();
+        this.dropSelectionOutOfRange();
         this.dataDirty = true;
         this.invalidate();
         break;
@@ -474,6 +479,12 @@ export class GridController {
         break;
     }
   };
+
+  /** A selection that reaches past the last row (the view shrank) is cleared. */
+  private dropSelectionOutOfRange(): void {
+    const range = normalizeSelection(this.lastSelection);
+    if (range !== null && range.bottom >= this.frame.rowCount) this.callbacks.onSelectionChange?.(null);
+  }
 
   // ---------------------------------------------------------------------------
   // Fonts

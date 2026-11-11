@@ -69,6 +69,9 @@ export const HEADER_RULES: readonly HostingRule[] = [
     headers: [{ key: 'Content-Type', value: 'application/vnd.glassgrid.workspace+json; charset=utf-8' }],
   },
   { match: { kind: 'extension', extension: 'wasm' }, headers: [{ key: 'Content-Type', value: 'application/wasm' }] },
+  // The live-flights map's basemap (public/map/, written by tools/datasets `basemap`): GeoJSON and SDF glyph ranges.
+  { match: { kind: 'extension', folder: 'map', extension: 'geojson' }, headers: [{ key: 'Content-Type', value: 'application/geo+json' }] },
+  { match: { kind: 'extension', folder: 'map', extension: 'pbf' }, headers: [{ key: 'Content-Type', value: 'application/x-protobuf' }] },
 ];
 
 /** App routes other than the base itself that must serve index.html (main.tsx reads the path). */

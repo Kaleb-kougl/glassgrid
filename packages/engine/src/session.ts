@@ -5,6 +5,9 @@ import {
   compileChartQuery,
   compileCountCubeAnswer,
   compileCountCubeBuild,
+  compileMapLatestQuery,
+  compileMapTrackQuery,
+  compileMapTrailsQuery,
   compileScatterCountQuery,
   compileWhere,
   cubeSelection,
@@ -27,6 +30,7 @@ import {
   type EngineRequest,
   type EngineResponse,
   type Filter,
+  type MapRequest,
   type PreparedCube,
   type TableColumnProfile,
   type TableId,
@@ -211,6 +215,27 @@ export async function runAggregate(
   return { ...result, mark: chart.mark, fellBackToHeatmap, fromCube: false };
 }
 
+/**
+ * A map view's latest-fix, trails or (L4) selected-track query (docs/live-flights-l3-data.md, l4.md),
+ * compiled against the table's columns (no profile needed) and run and
+ * cached like a chart aggregate. On the live table the cache is versioned
+ * per batch, so a clock the map asked for before a batch is not reused after it.
+ */
+export async function runMapQuery(
+  service: QueryService,
+  request: Pick<MapRequest, 'table' | 'spec' | 'query' | 'dataClockMs' | 'aircraft'>,
+  ctx: RequestContext,
+): Promise<Cached<Uint8Array>> {
+  const columns = await service.columns(request.table, ctx);
+  const relation = quoteIdent(QueryService.viewName(request.table));
+  const clock = { dataClockMs: request.dataClockMs };
+  const compiled =
+    request.query === 'track'
+      ? compileMapTrackQuery(relation, request.spec, columns, { ...clock, aircraft: request.aircraft ?? '' })
+      : (request.query === 'latest' ? compileMapLatestQuery : compileMapTrailsQuery)(relation, request.spec, columns, clock);
+  return service.aggregate(request.table, toFragment(compiled), {}, ctx);
+}
+
 /** A filtered row count, from a cross-filter cube when the hint allows one. */
 export async function runCount(
   service: QueryService,
@@ -370,6 +395,7 @@ export class EngineSession {
       (ready) => {
         ready.off('event', this.onEvent);
         ready.releaseViews(`${this.id}:`);
+        ready.live.releaseHolder(this.id);
         void ready.releaseHolder(this.id).catch(() => undefined);
       },
       () => undefined,
@@ -435,6 +461,10 @@ export class EngineSession {
             engineMs: elapsed(),
           };
         }
+        case 'map': {
+          const { value, cached } = await runMapQuery(service, request, ctx);
+          return { kind: 'arrow', requestId, ipc: value, cached, engineMs: elapsed() };
+        }
         case 'prepareCrossfilter': {
           const cubes = await prepareCrossfilter(service, request.table, request.dimension, request.targets, ctx);
           return { kind: 'crossfilterPrepared', requestId, cubes, engineMs: elapsed() };
@@ -455,13 +485,28 @@ export class EngineSession {
           this.tables.delete(request.table);
           await service.releaseTable(request.table, this.id);
           return { kind: 'ack', requestId };
-        case 'cacheStats':
+        case 'cacheStats': {
+          const live = await service.liveMemoryStats();
           return {
             kind: 'cacheStats',
             requestId,
             results: service.resultCacheStats(),
             parquet: await service.parquetCacheStats(),
+            ...(live === null ? {} : { live }),
           };
+        }
+        case 'liveStart':
+          return { kind: 'liveState', requestId, state: await service.live.start(request.source) };
+        case 'liveSetSource':
+          return { kind: 'liveState', requestId, state: await service.live.setSource(request.source) };
+        case 'liveStop':
+          return { kind: 'liveState', requestId, state: await service.live.stop() };
+        case 'liveState':
+          return { kind: 'liveState', requestId, state: service.live.state() };
+        case 'liveVisibility':
+          // Scoped to this connection: the feed pauses only while every reporting connection is hidden.
+          service.live.setVisible(this.id, request.visible);
+          return { kind: 'ack', requestId };
       }
     } catch (error) {
       if (isCompileError(error) && !ctx.signal?.aborted) {

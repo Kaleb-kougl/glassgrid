@@ -1,0 +1,283 @@
+{
+  "manifestVersion": 1,
+  "dataset": "flights-bay",
+  "recipe": "flights-globe-history/1",
+  "generator": {
+    "package": "@glassgrid/datasets",
+    "packageVersion": "0.1.0",
+    "recipe": "flights-globe-history/1",
+    "duckdbVersion": "v1.5.6",
+    "nodeVersion": "v22.23.4"
+  },
+  "licence": {
+    "id": "ODbL-1.0",
+    "url": "https://opendatacommons.org/licenses/odbl/1.0/",
+    "attribution": "Data © adsb.lol contributors, licensed under the Open Database License (ODbL) 1.0",
+    "notice": "LICENSE-ODbL.md"
+  },
+  "source": {
+    "provider": "adsb.lol",
+    "page": "https://adsb.lol",
+    "repo": "https://github.com/adsblol/globe_history_2026",
+    "release": "v2026.11.09-planes-readsb-prod-0",
+    "releasePage": "https://github.com/adsblol/globe_history_2026/releases/tag/v2026.11.09-planes-readsb-prod-0",
+    "discoveredBy": "probe",
+    "assets": [
+      {
+        "name": "v2026.11.09-planes-readsb-prod-0.tar.aa",
+        "bytes": 2000000000,
+        "sha256": "76beafbe30e2e05766cb57b41b87d3b8eb59aca6ec0dd3a37a46f4dd787d987d",
+        "githubDigest": null
+      },
+      {
+        "name": "v2026.11.09-planes-readsb-prod-0.tar.ab",
+        "bytes": 1723313664,
+        "sha256": "68cf603c5c61407d119095793bc08bc0618c9a06043ec18d26d6e587a2be265e",
+        "githubDigest": null
+      }
+    ],
+    "format": "readsb trace_full JSON (gzip) in a split tar; https://github.com/wiedehopf/readsb/blob/dev/README-json.md"
+  },
+  "area": {
+    "name": "San Francisco Bay Area",
+    "bbox": {
+      "south": 37,
+      "north": 38.5,
+      "west": -123,
+      "east": -121.5
+    }
+  },
+  "day": {
+    "date": "2026-11-09",
+    "startUtc": "2026-11-09T00:00:00.000Z",
+    "endUtc": "2026-11-10T00:00:00.000Z"
+  },
+  "extraction": {
+    "tarEntries": 72086,
+    "traceFiles": 71773,
+    "unreadableTraceFiles": 0,
+    "aircraftInBox": 2379,
+    "fixesInBox": 1463749,
+    "fixesKept": 1463749,
+    "otherPaths": [
+      "acas/",
+      "acas/acas.json.gz",
+      "acas/acas.csv.gz",
+      "LICENSE-cc0.txt",
+      "README.txt",
+      "LICENSE-ODbL.txt"
+    ]
+  },
+  "precision": {
+    "latLonDecimals": 5,
+    "speedTrackDecimals": 1
+  },
+  "parquet": "FORMAT parquet, COMPRESSION zstd, COMPRESSION_LEVEL 19, ROW_GROUP_SIZE 122880, PARQUET_VERSION V2",
+  "snapshots": {
+    "tickSeconds": 10,
+    "holdSeconds": 60,
+    "rule": "at each tick, every aircraft whose latest in-box fix is less than holdSeconds old"
+  },
+  "measurements": {
+    "totalFixes": 1456777,
+    "duplicateFixesDropped": 6972,
+    "distinctAircraft": 2379,
+    "dayInView": {
+      "snapshots": 8640,
+      "peak": 183,
+      "peakAt": "2026-11-09T23:27:30.000Z",
+      "median": 79,
+      "mean": 82.77
+    },
+    "busiestWindow": {
+      "startUtc": "2026-11-09T23:28:00.000Z",
+      "endUtc": "2026-11-09T23:58:00.000Z",
+      "rule": "the 30-minute window starting on a whole minute with the most distinct aircraft in its snapshots; ties: most aircraft-snapshots, then earliest",
+      "distinctAircraft": 382,
+      "inView": {
+        "snapshots": 180,
+        "peak": 182,
+        "peakAt": "2026-11-09T23:28:20.000Z",
+        "median": 169,
+        "mean": 168.87
+      }
+    }
+  },
+  "files": [
+    {
+      "id": "day",
+      "file": "flights-bay-day.parquet",
+      "rows": 1456777,
+      "bytes": 14471875,
+      "sha256": "a7274a7b272160c271686d320c639d9c289b8d9de39bf954f4c129a9dd8b8b30",
+      "distinctAircraft": 2379,
+      "firstFix": "2026-11-09T00:00:00.020Z",
+      "lastFix": "2026-11-09T23:59:59.980Z",
+      "columns": [
+        {
+          "name": "ts",
+          "type": "TIMESTAMP"
+        },
+        {
+          "name": "hex",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "flight",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "registration",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "typeCode",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "lat",
+          "type": "DECIMAL(7,5)"
+        },
+        {
+          "name": "lon",
+          "type": "DECIMAL(8,5)"
+        },
+        {
+          "name": "altBaroFt",
+          "type": "INTEGER"
+        },
+        {
+          "name": "altGeomFt",
+          "type": "INTEGER"
+        },
+        {
+          "name": "onGround",
+          "type": "BOOLEAN"
+        },
+        {
+          "name": "gsKt",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "trackDeg",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "baroRateFpm",
+          "type": "INTEGER"
+        },
+        {
+          "name": "geomRateFpm",
+          "type": "INTEGER"
+        },
+        {
+          "name": "category",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "squawk",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "posType",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "source",
+          "type": "VARCHAR"
+        }
+      ]
+    },
+    {
+      "id": "30min",
+      "file": "flights-bay-30min.parquet",
+      "rows": 71595,
+      "bytes": 758942,
+      "sha256": "06aac9fd06a2ed9cd0da0f9da7fad1a224fa98eb21d180e60c149948f461f2ac",
+      "distinctAircraft": 382,
+      "firstFix": "2026-11-09T23:27:00.000Z",
+      "lastFix": "2026-11-09T23:57:59.990Z",
+      "columns": [
+        {
+          "name": "ts",
+          "type": "TIMESTAMP"
+        },
+        {
+          "name": "hex",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "flight",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "registration",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "typeCode",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "lat",
+          "type": "DECIMAL(7,5)"
+        },
+        {
+          "name": "lon",
+          "type": "DECIMAL(8,5)"
+        },
+        {
+          "name": "altBaroFt",
+          "type": "INTEGER"
+        },
+        {
+          "name": "altGeomFt",
+          "type": "INTEGER"
+        },
+        {
+          "name": "onGround",
+          "type": "BOOLEAN"
+        },
+        {
+          "name": "gsKt",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "trackDeg",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "baroRateFpm",
+          "type": "INTEGER"
+        },
+        {
+          "name": "geomRateFpm",
+          "type": "INTEGER"
+        },
+        {
+          "name": "category",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "squawk",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "posType",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "source",
+          "type": "VARCHAR"
+        }
+      ],
+      "includesLeadInSeconds": 60
+    }
+  ],
+  "query": {
+    "day": "SELECT CAST(epoch_ms(ts) AS TIMESTAMP_MS) AS ts, hex, flight, registration, \"typeCode\", CAST(lat AS DECIMAL(7, 5)) AS lat, CAST(lon AS DECIMAL(8, 5)) AS lon, CAST(round(\"altBaroFt\") AS INTEGER) AS \"altBaroFt\", CAST(round(\"altGeomFt\") AS INTEGER) AS \"altGeomFt\", \"onGround\", round(\"gsKt\", 1) AS \"gsKt\", round(\"trackDeg\", 1) % 360 AS \"trackDeg\", CAST(round(\"baroRateFpm\") AS INTEGER) AS \"baroRateFpm\", CAST(round(\"geomRateFpm\") AS INTEGER) AS \"geomRateFpm\", category, squawk, \"posType\", source\nFROM \"points\"\nWHERE true\nQUALIFY row_number() OVER (PARTITION BY hex, ts ORDER BY \"flight\" NULLS LAST, \"registration\" NULLS LAST, \"typeCode\" NULLS LAST, \"lat\" NULLS LAST, \"lon\" NULLS LAST, \"altBaroFt\" NULLS LAST, \"altGeomFt\" NULLS LAST, \"onGround\" NULLS LAST, \"gsKt\" NULLS LAST, \"trackDeg\" NULLS LAST, \"baroRateFpm\" NULLS LAST, \"geomRateFpm\" NULLS LAST, \"category\" NULLS LAST, \"squawk\" NULLS LAST, \"posType\" NULLS LAST, \"source\" NULLS LAST) = 1\nORDER BY hex, ts",
+    "window": "SELECT CAST(epoch_ms(ts) AS TIMESTAMP_MS) AS ts, hex, flight, registration, \"typeCode\", CAST(lat AS DECIMAL(7, 5)) AS lat, CAST(lon AS DECIMAL(8, 5)) AS lon, CAST(round(\"altBaroFt\") AS INTEGER) AS \"altBaroFt\", CAST(round(\"altGeomFt\") AS INTEGER) AS \"altGeomFt\", \"onGround\", round(\"gsKt\", 1) AS \"gsKt\", round(\"trackDeg\", 1) % 360 AS \"trackDeg\", CAST(round(\"baroRateFpm\") AS INTEGER) AS \"baroRateFpm\", CAST(round(\"geomRateFpm\") AS INTEGER) AS \"geomRateFpm\", category, squawk, \"posType\", source\nFROM \"points\"\nWHERE ts >= 1794266820000 AND ts < 1794268680000\nQUALIFY row_number() OVER (PARTITION BY hex, ts ORDER BY \"flight\" NULLS LAST, \"registration\" NULLS LAST, \"typeCode\" NULLS LAST, \"lat\" NULLS LAST, \"lon\" NULLS LAST, \"altBaroFt\" NULLS LAST, \"altGeomFt\" NULLS LAST, \"onGround\" NULLS LAST, \"gsKt\" NULLS LAST, \"trackDeg\" NULLS LAST, \"baroRateFpm\" NULLS LAST, \"geomRateFpm\" NULLS LAST, \"category\" NULLS LAST, \"squawk\" NULLS LAST, \"posType\" NULLS LAST, \"source\" NULLS LAST) = 1\nORDER BY hex, ts"
+  },
+  "generatedAt": "2026-11-10T18:08:32.637Z",
+  "elapsedSeconds": 8.46
+}

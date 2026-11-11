@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import '@glassgrid/app/app.css';
 import { App, applyInitialTheme, createAppWorkspace, installRenderPerf, perfRegion } from '@glassgrid/app';
+import { flightsSourceFromSearch, FLIGHTS_SAMPLE, openFlightsWorkspace } from './flights';
 import { sampleFromSearch } from './samples';
 import { createDuckdbWebEngine } from './web-engine';
 import { createWebPlatform } from './web-platform';
@@ -35,9 +36,17 @@ export function mountApp(root: HTMLElement): void {
   });
   const platform = createWebPlatform(web);
   const linked = sampleFromSearch(window.location.search);
+  // `?sample=flights` loads the recorded flights fixture into the live table, `?live=1` polls the live relay (flights.ts).
+  const flights = flightsSourceFromSearch(window.location.search);
   // A sample link opens data right away: start DuckDB-WASM now, before the app mounts. Otherwise it starts on intent.
-  if (linked) web.worker.start();
-  const initialOpen = linked ? () => platform.files.openSample?.(linked.id) ?? Promise.resolve({ status: 'cancelled' as const }) : undefined;
+  if (linked || flights) web.worker.start();
+  const initialOpen = linked
+    ? () => platform.files.openSample?.(linked.id) ?? Promise.resolve({ status: 'cancelled' as const })
+    : flights !== null && flights.source !== 'live'
+      ? () => platform.files.openSample?.(FLIGHTS_SAMPLE.id) ?? Promise.resolve({ status: 'cancelled' as const })
+      : flights
+        ? () => openFlightsWorkspace(flights, { engine: web.worker, registry: workspace.registry })
+        : undefined;
 
   createRoot(root).render(
     <StrictMode>{perfRegion('App', <App platform={platform} workspace={workspace} {...(initialOpen ? { initialOpen } : {})} />)}</StrictMode>,

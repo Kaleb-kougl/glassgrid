@@ -30,10 +30,13 @@ const BUDGETED_ROUTE = '/';
 
 interface ManifestChunk {
   file: string;
+  src?: string;
   isEntry?: boolean;
+  isDynamicEntry?: boolean;
   imports?: string[];
   dynamicImports?: string[];
   css?: string[];
+  assets?: string[];
 }
 
 const dist = resolve(import.meta.dirname, '..', 'dist');
@@ -91,10 +94,30 @@ for (const [route, { js, jsGzip, cssGzip }] of Object.entries(report)) {
   for (const chunk of js) console.info(`  ${chunk.file.padEnd(40)} ${kB(chunk.raw).padStart(10)}  ${kB(chunk.gzip).padStart(9)} gzip`);
 }
 
-// Loaded by the engine worker, not by the page (`new Worker(...)` and the worker's own imports).
+// The live-flights map: MapLibre and the map component load as one lazy chunk (`loadMapView()` in
+// @glassgrid/ui/map), plus its CSS and MapLibre's worker (a same-origin module script). Not first-load.
 const counted = new Set(Object.values(report).flatMap(({ js }) => js.map((chunk) => chunk.file)));
+const mapKey = Object.keys(manifest).find((key) => manifest[key]?.isDynamicEntry === true && /packages\/ui\/src\/map\/MapView\.tsx$/.test(key));
+const mapFiles = new Set<string>();
+if (mapKey !== undefined) {
+  // Its own chunk and the shared ones only it pulls in: not the entry, not another route (the test page
+  // that imports it shares a module with it), not what `/` loads anyway.
+  const keys = staticClosure([mapKey]).filter((key) => key === mapKey || (manifest[key]?.isEntry !== true && manifest[key]?.isDynamicEntry !== true));
+  const js = keys.map((key) => (manifest[key] as ManifestChunk).file).filter((file) => file.endsWith('.js') && !counted.has(file));
+  const css = [...new Set(keys.flatMap((key) => manifest[key]?.css ?? []))];
+  const assets = manifest[mapKey]?.assets ?? [];
+  const rows = [...js, ...css, ...assets].map((file) => ({ file, ...sizeOf(file) }));
+  rows.forEach((row) => mapFiles.add(row.file));
+  console.info("\nMap, lazy (loadMapView(): MapLibre and the map component, their CSS, MapLibre's worker; not first-load):");
+  for (const row of rows) console.info(`  ${row.file.padEnd(40)} ${kB(row.raw).padStart(10)}  ${kB(row.gzip).padStart(9)} gzip`);
+  const jsGzip = rows.filter((row) => js.includes(row.file)).reduce((sum, row) => sum + row.gzip, 0);
+  console.info(`  map chunk JS: ${kB(jsGzip)} gzip`);
+}
+
+// Loaded by the engine worker, not by the page (`new Worker(...)` and the worker's own imports).
 const workerSide = readdirSync(join(dist, 'assets'))
   .map((name) => `assets/${name}`)
+  .filter((file) => !mapFiles.has(file))
   .filter((file) => file.endsWith('.wasm') || (file.endsWith('.js') && !counted.has(file) && !Object.values(manifest).some((chunk) => chunk.file === file)))
   .map((file) => ({ file, ...sizeOf(file) }))
   .sort((a, b) => b.raw - a.raw);

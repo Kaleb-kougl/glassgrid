@@ -130,6 +130,14 @@ pnpm package      # electron-builder installer for the current OS (unsigned)
 pnpm showcase     # rebuild, then regenerate docs/images/showcase (2–5 min; about 2 more on first run)
 ```
 
+Live flights locally: `pnpm dev:web` proxies `/api/flights` (the live relay
+the demo polls, on the site's root) to the portfolio's Next.js dev server at
+`http://localhost:3000`. Run the portfolio with `GLASSGRID_SKIP=1 npm run dev`,
+then open `http://localhost:5173/?live=1`. `GLASSGRID_FLIGHTS_PROXY=http://host:port pnpm dev:web`
+points the proxy elsewhere. The proxy is the dev server's only: `vite preview`,
+the build and the production headers and CSP are unchanged
+([live flights L4](docs/live-flights-l4.md#live-data-locally)).
+
 The web demo is served from the portfolio's `/glassgrid/` subfolder:
 `GLASSGRID_BASE=/glassgrid/ pnpm e2e:web` runs its E2E on a build for that
 base, and `pnpm package:web 0.1.0` packs such a build as a release tarball

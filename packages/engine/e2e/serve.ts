@@ -10,6 +10,12 @@ import { extname, join, normalize, resolve, sep } from 'node:path';
  * fingerprint need. `GLASSGRID_COI=1` adds the cross-origin isolation
  * headers (COOP/COEP) to check what changes with them.
  *
+ * For the live-flights case it also serves the committed flight fixtures
+ * (/samples/flights/, from apps/web/public) and a stand-in for the
+ * portfolio's `GET /api/flights`: two aircraft around a fixed position, in
+ * the endpoint's contract (docs/live-flights-l2.md), with its
+ * Cache-Control header.
+ *
  *   node e2e/serve.ts [port]
  */
 const port = Number(process.argv[2] ?? process.env['PORT'] ?? 4179);
@@ -28,10 +34,31 @@ const types: Record<string, string> = {
 };
 const isolated = process.env['GLASSGRID_COI'] === '1';
 
+/** The endpoint's body: `now` in ms, `seen_pos` in s (a fix 0.8 s and 2.4 s old). */
+function flightsBody(): string {
+  const now = Date.now();
+  return JSON.stringify({
+    now,
+    fetchedAt: now,
+    stale: false,
+    source: 'adsb.lol',
+    attribution: 'Data © adsb.lol contributors, licensed under the Open Database License (ODbL) 1.0',
+    license: 'ODbL-1.0',
+    ac: [
+      { hex: 'a1b2c3', flight: 'UAL123  ', lat: 37.61892, lon: -122.37512, alt_baro: 2_975, gs: 151.2, track: 280.3, seen_pos: 0.8, category: 'A3', type: 'adsb_icao' },
+      { hex: 'abc123', flight: 'SWA2', lat: 37.7213, lon: -122.2208, alt_baro: 'ground', seen_pos: 2.4, type: 'adsb_icao' },
+    ],
+  });
+}
+
 createServer((request, response) => {
   const url = new URL(request.url ?? '/', 'http://localhost');
+  if (url.pathname === '/api/flights') {
+    response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=20' }).end(flightsBody());
+    return;
+  }
   const relative = normalize(decodeURIComponent(url.pathname === '/' ? '/index.html' : url.pathname)).replace(/^([/\\])+/, '');
-  const searched = relative.startsWith(`duckdb-extensions${sep}`) ? [webPublic] : roots;
+  const searched = relative.startsWith(`duckdb-extensions${sep}`) || relative.startsWith(`samples${sep}flights${sep}`) ? [webPublic] : roots;
   const file = searched.flatMap((root) => {
     const candidate = join(root, relative);
     return candidate.startsWith(root + sep) && existsSync(candidate) && statSync(candidate).isFile() ? [candidate] : [];

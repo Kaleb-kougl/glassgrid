@@ -316,6 +316,60 @@
       "pass": "pass"
     },
     {
+      "label": "Runway vs map land",
+      "fg": "map-runway",
+      "bg": "map-land",
+      "min": 3,
+      "light": 6.22,
+      "dark": 6.28,
+      "pass": "pass"
+    },
+    {
+      "label": "Runway vs urban area",
+      "fg": "map-runway",
+      "bg": "map-urban",
+      "min": 3,
+      "light": 5.74,
+      "dark": 5.44,
+      "pass": "pass"
+    },
+    {
+      "label": "Map label on land",
+      "fg": "map-label",
+      "bg": "map-land",
+      "min": 4.5,
+      "light": 8.35,
+      "dark": 7.27,
+      "pass": "pass"
+    },
+    {
+      "label": "Map label on its halo",
+      "fg": "map-label",
+      "bg": "map-label-halo",
+      "min": 4.5,
+      "light": 8.35,
+      "dark": 7.97,
+      "pass": "pass"
+    },
+    {
+      "label": "Aircraft outline vs map land",
+      "fg": "chart-aircraft-outline",
+      "bg": "map-land",
+      "min": 3,
+      "light": 15.97,
+      "dark": 11.66,
+      "pass": "pass"
+    },
+    {
+      "label": "Aircraft outline vs map water",
+      "fg": "chart-aircraft-outline",
+      "bg": "map-water",
+      "min": 3,
+      "light": 11.66,
+      "dark": 12.83,
+      "pass": "pass"
+    },
+    {
       "label": "Disabled text on panel (exempt)",
       "fg": "text-disabled",
       "bg": "panel-bg",
@@ -561,6 +615,100 @@
           "name": "other",
           "hex": "#5f6772",
           "ratio": 2.69
+        }
+      ]
+    }
+  },
+  "altitude": {
+    "light": {
+      "minAdjacentDeltaE": {
+        "normal": 11.4,
+        "protan": 5.3,
+        "deutan": 10,
+        "tritan": 9.4
+      },
+      "contrast": [
+        {
+          "name": "chart-alt-1",
+          "hex": "#fca636",
+          "land": 1.84,
+          "water": 1.34
+        },
+        {
+          "name": "chart-alt-2",
+          "hex": "#ed7a52",
+          "land": 2.61,
+          "water": 1.91
+        },
+        {
+          "name": "chart-alt-3",
+          "hex": "#d4536f",
+          "land": 3.72,
+          "water": 2.72
+        },
+        {
+          "name": "chart-alt-4",
+          "hex": "#b42d8e",
+          "land": 5.29,
+          "water": 3.86
+        },
+        {
+          "name": "chart-alt-5",
+          "hex": "#8409a5",
+          "land": 7.64,
+          "water": 5.58
+        },
+        {
+          "name": "chart-alt-6",
+          "hex": "#41049d",
+          "land": 11.33,
+          "water": 8.28
+        }
+      ]
+    },
+    "dark": {
+      "minAdjacentDeltaE": {
+        "normal": 14.5,
+        "protan": 11.1,
+        "deutan": 7.6,
+        "tritan": 9.3
+      },
+      "contrast": [
+        {
+          "name": "chart-alt-1",
+          "hex": "#f4ec22",
+          "land": 11.3,
+          "water": 12.44
+        },
+        {
+          "name": "chart-alt-2",
+          "hex": "#fcb62f",
+          "land": 7.96,
+          "water": 8.75
+        },
+        {
+          "name": "chart-alt-3",
+          "hex": "#f38749",
+          "land": 5.61,
+          "water": 6.17
+        },
+        {
+          "name": "chart-alt-4",
+          "hex": "#dd5e66",
+          "land": 3.93,
+          "water": 4.33
+        },
+        {
+          "name": "chart-alt-5",
+          "hex": "#be3884",
+          "land": 2.74,
+          "water": 3.01
+        },
+        {
+          "name": "chart-alt-6",
+          "hex": "#9613a0",
+          "land": 1.94,
+          "water": 2.14
         }
       ]
     }

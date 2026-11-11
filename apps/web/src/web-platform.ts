@@ -1,5 +1,6 @@
 import type { OpenCsvResult } from '@glassgrid/core';
-import type { EngineClientLike, Platform, SampleDataset } from '@glassgrid/app';
+import type { EngineClientLike, Platform, PlatformMap, SampleDataset } from '@glassgrid/app';
+import { withBase } from './base';
 
 /*
  * The web Platform: browser APIs for files, clipboard and theme, and an
@@ -74,11 +75,23 @@ export interface WebPlatformOptions {
   readonly pick?: () => Promise<File | null>;
   readonly target?: Pick<Window, 'addEventListener' | 'removeEventListener'>;
   readonly nav?: Navigator;
+  /** Where `visibilitychange` fires and `visibilityState` is read (tests). */
+  readonly doc?: Pick<Document, 'visibilityState' | 'addEventListener' | 'removeEventListener'>;
+  /** The basemap for map views; default: the assets under `<base>map/` and their credit. */
+  readonly map?: PlatformMap;
+}
+
+/** The map view's basemap on this site: style, tiles, glyphs and sprites under `<base>map/` (docs/live-flights-l3-data.md). */
+export function webMap(base?: string): PlatformMap {
+  // No extra credits: MapView adds the basemap's own (Natural Earth, OurAirports)
+  // from apps/web/public/map/basemap.json after the data's line.
+  return { assetsBase: base === undefined ? withBase('map/') : withBase('map/', base), attribution: [] };
 }
 
 export function createWebPlatform(web: WebEngine, options: WebPlatformOptions = {}): Platform {
   const nav = options.nav ?? navigator;
   const target = options.target ?? window;
+  const doc = options.doc ?? document;
   const pick = options.pick ?? (() => pickFile());
   return {
     name: 'web',
@@ -113,7 +126,15 @@ export function createWebPlatform(web: WebEngine, options: WebPlatformOptions = 
         target.addEventListener('pagehide', listener);
         return () => target.removeEventListener('pagehide', listener);
       },
+      // The engine worker cannot see document.visibilityState; the live-flights feed pauses on it.
+      onVisibilityChange: (listener) => {
+        const report = () => listener(doc.visibilityState !== 'hidden');
+        doc.addEventListener('visibilitychange', report);
+        report();
+        return () => doc.removeEventListener('visibilitychange', report);
+      },
     },
     capabilities: { canSaveWorkspace: false, canOpenFromPath: false, maxFileBytes: options.maxFileBytes === undefined ? WEB_MAX_FILE_BYTES : options.maxFileBytes },
+    map: options.map ?? webMap(),
   };
 }

@@ -13,9 +13,9 @@
  *   synchronous bindings do not support; see docs/m4-engine-portability.md.
  */
 import { config as zodConfig } from 'zod';
-import type { EngineResponse } from '@glassgrid/core';
+import type { EngineResponse, LiveFixtureId } from '@glassgrid/core';
 import { errorMessage } from '../errors';
-import { QueryService } from '../query-service';
+import { QueryService, type QueryServiceOptions } from '../query-service';
 import { EngineSession } from '../session';
 import type { WasmBindings } from '../wasm/bindings';
 import { WasmDriver } from '../wasm/driver';
@@ -106,6 +106,7 @@ async function start(init: WorkerInit): Promise<Started> {
     tempDir: TEMP_ROOT,
     autoConvertMinBytes: files.hasCache ? (init.autoConvertMinBytes ?? DEFAULT_WEB_AUTO_CONVERT_BYTES) : Number.MAX_SAFE_INTEGER,
     parquetCacheMaxBytes: init.parquetCacheMaxBytes ?? DEFAULT_WEB_CACHE_BYTES,
+    live: liveOptions(init, files),
   });
   const capabilities = driver.capabilities;
   post({
@@ -121,6 +122,40 @@ async function start(init: WorkerInit): Promise<Started> {
     extensionErrors: driver.extensionErrors,
   });
   return { service, files, driver, init };
+}
+
+/**
+ * The live feed's configuration: the endpoint and the fixture URLs, each
+ * only from an allowed origin (as for sample datasets; the CSP's
+ * `connect-src 'self'` would refuse others anyway). A fixture is registered
+ * as an HTTP source the first time a replay needs it.
+ */
+function liveOptions(init: WorkerInit, files: BrowserFiles): QueryServiceOptions['live'] {
+  const origins = init.allowedOrigins ?? [scope.location.origin];
+  const allowed = (url: string) => origins.includes(new URL(url).origin);
+  const url = init.live?.url;
+  if (url !== undefined && !allowed(url)) console.warn(`[engine-worker] live endpoint ${url} is not on an allowed origin; live data is off`);
+  const fixtures = init.live?.fixtures ?? {};
+  const registered = new Map<LiveFixtureId, Promise<string>>();
+  return {
+    ...(url !== undefined && allowed(url) ? { url } : {}),
+    fetch: (target, request) => fetch(target, request),
+    ...(Object.keys(fixtures).length === 0
+      ? {}
+      : {
+          fixturePath: (fixture: LiveFixtureId) => {
+            const fixtureUrl = fixtures[fixture];
+            if (fixtureUrl === undefined || !allowed(fixtureUrl)) return Promise.reject(new Error(`No URL for the ${fixture} fixture`));
+            let path = registered.get(fixture);
+            if (!path) {
+              path = files.registerSource(`live-${fixture}`, { kind: 'url', url: fixtureUrl }).then((source) => source.path);
+              path.catch(() => registered.delete(fixture));
+              registered.set(fixture, path);
+            }
+            return path;
+          },
+        }),
+  };
 }
 
 function hasSyncAccessHandles(): boolean {

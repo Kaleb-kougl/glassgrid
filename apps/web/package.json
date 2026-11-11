@@ -23,6 +23,7 @@
     "test": "vitest run",
     "size": "vite build && node scripts/size.ts",
     "e2e": "vite build && playwright test",
+    "e2e:map-perf": "vite build && GLASSGRID_E2E_MAP_PERF=1 playwright test e2e/map-perf.spec.ts",
     "hosting": "node scripts/write-vercel-json.ts"
   },
   "dependencies": {

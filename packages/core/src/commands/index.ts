@@ -12,3 +12,6 @@ export * from './builtins/grid.js';
 export * from './builtins/filters.js';
 export * from './builtins/charts.js';
 export * from './builtins/workspace.js';
+export * from './builtins/live.js';
+export * from './builtins/maps.js';
+export * from './builtins/time.js';

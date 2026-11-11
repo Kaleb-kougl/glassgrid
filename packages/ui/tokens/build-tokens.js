@@ -92,7 +92,24 @@ function buildTokens() {
     ['chart.diverging.7', 'chart-div-7', '#1c3f6b', '#a9c6ea'],
     ['tooltip.bg', 'tooltip-bg', '#22272e', '#343b44', ''],
     ['tooltip.text', 'tooltip-text', '#f6f7f9', '#eef0f3', ''],
-    ['tooltip.muted', 'tooltip-muted', '#c2c8d0', '#b4bbc5', '']
+    ['tooltip.muted', 'tooltip-muted', '#c2c8d0', '#b4bbc5', ''],
+    // Live-flights map (packages/ui/src/map). Altitude bands: plasma-like, lightness monotonic in altitude
+    // (light theme: dark = high; dark theme: bright = low), so the order survives every colour-vision type.
+    ['chart.altitude.1', 'chart-alt-1', '#fca636', '#f4ec22', 'Aircraft below 1,000 ft'],
+    ['chart.altitude.2', 'chart-alt-2', '#ed7a52', '#fcb62f', '1,000 to 4,999 ft'],
+    ['chart.altitude.3', 'chart-alt-3', '#d4536f', '#f38749', '5,000 to 9,999 ft'],
+    ['chart.altitude.4', 'chart-alt-4', '#b42d8e', '#dd5e66', '10,000 to 19,999 ft'],
+    ['chart.altitude.5', 'chart-alt-5', '#8409a5', '#be3884', '20,000 to 29,999 ft'],
+    ['chart.altitude.6', 'chart-alt-6', '#41049d', '#9613a0', '30,000 ft and above'],
+    ['chart.altitude-ground', 'chart-alt-ground', '#6b7480', '#8a939f', 'Aircraft on the ground (drawn as a ring, not a plane)'],
+    ['chart.altitude-unknown', 'chart-alt-unknown', '#9aa2ad', '#5f6772', 'Airborne without a reported altitude'],
+    ['chart.aircraft-outline', 'chart-aircraft-outline', '#181c21', '#e7eaee', 'Outline around aircraft glyphs on the map'],
+    ['map.land', 'map-land', '#f6f7f9', '#262c34', 'Basemap land'],
+    ['map.water', 'map-water', '#c3d7f1', '#1a2533', 'Basemap sea, bay and lakes'],
+    ['map.urban', 'map-urban', '#eceef2', '#2f3640', 'Basemap urban areas'],
+    ['map.runway', 'map-runway', '#555d68', '#a6aeb9', 'Runways'],
+    ['map.label', 'map-label', '#434a54', '#b4bbc5', 'Place and airport labels'],
+    ['map.label-halo', 'map-label-halo', '#f6f7f9', '#20252c', 'Halo behind map labels']
   ];
   const themedOther = [
     ['opacity.chart-unselected', 'chart-unselected-opacity', 'number', 0.32, 0.36, 'Marks outside the current selection'],
@@ -215,12 +232,14 @@ function buildTokens() {
   // Resolved per theme (flat, raw values for canvas renderers)
   const resolved = {};
   ['light', 'dark'].forEach((th, ti) => {
-    const o = { theme: th, color: {}, chart: { categorical: [], sequential: [], diverging: [] }, font: { ui: fonts.ui, mono: fonts.mono }, type: {}, grid: {}, space, radius, motion: {} };
+    const o = { theme: th, color: {}, chart: { categorical: [], sequential: [], diverging: [], altitude: [] }, map: {}, font: { ui: fonts.ui, mono: fonts.mono }, type: {}, grid: {}, space, radius, motion: {} };
     C.forEach(r => {
       const v = r[2 + ti];
       if (r[0].startsWith('chart.categorical.') && r[0] !== 'chart.categorical.other') o.chart.categorical.push(v);
       else if (r[0].startsWith('chart.sequential.')) o.chart.sequential.push(v);
       else if (r[0].startsWith('chart.diverging.')) o.chart.diverging.push(v);
+      else if (r[0].startsWith('chart.altitude.')) o.chart.altitude.push(v);
+      else if (r[0].startsWith('map.')) o.map[r[1].replace('map-', '').replace(/-(\w)/g, (_, c) => c.toUpperCase())] = v;
       else if (r[0].startsWith('chart.')) o.chart[r[1].replace('chart-', '').replace(/-(\w)/g, (_, c) => c.toUpperCase())] = v;
       else if (r[0].startsWith('grid.')) o.grid[r[1].replace('grid-', '').replace(/-(\w)/g, (_, c) => c.toUpperCase())] = v;
       else o.color[r[1].replace(/-(\w)/g, (_, c) => c.toUpperCase())] = v;
@@ -253,6 +272,9 @@ function buildTokens() {
     ['Control boundary (strong border) vs card', 'border-strong', 'card-bg', 3], ['Toggle track (off) vs card', 'toggle-off', 'card-bg', 3],
     ['Grid selection border vs grid', 'grid-sel-border', 'grid-bg', 3], ['Brush edge vs card', 'chart-brush-stroke', 'card-bg', 3],
     ['Selected-mark outline vs card', 'chart-selection-stroke', 'card-bg', 3], ['Single-series mark vs card', 'chart-mark', 'card-bg', 3],
+    ['Runway vs map land', 'map-runway', 'map-land', 3], ['Runway vs urban area', 'map-runway', 'map-urban', 3],
+    ['Map label on land', 'map-label', 'map-land', 4.5], ['Map label on its halo', 'map-label', 'map-label-halo', 4.5],
+    ['Aircraft outline vs map land', 'chart-aircraft-outline', 'map-land', 3], ['Aircraft outline vs map water', 'chart-aircraft-outline', 'map-water', 3],
     ['Disabled text on panel (exempt)', 'text-disabled', 'panel-bg', 0]
   ];
   const contrast = pairs.map(([label, fg, bg, min]) => {
@@ -272,6 +294,19 @@ function buildTokens() {
       cvd[th].minDeltaE[k] = +min.toFixed(1); cvd[th].worstPair[k] = wp;
     });
   });
-  return { css, dtcg, resolved, checks: { contrast, cvd } };
+  // Altitude bands on the map: neighbours must stay apart under every colour-vision type (the legend is ordered),
+  // and each band's contrast against land and water is recorded (glyphs also carry an outline).
+  const altitude = {};
+  ['light', 'dark'].forEach((th, ti) => {
+    const bands = C.filter(r => r[0].startsWith('chart.altitude.')).map(r => ({ name: r[1], hex: r[2 + ti] }));
+    const land = parse(val('map-land', ti), '#000'), water = parse(val('map-water', ti), '#000');
+    altitude[th] = { minAdjacentDeltaE: {}, contrast: bands.map(b => ({ name: b.name, hex: b.hex, land: +ratio(hex2rgb(b.hex), land).toFixed(2), water: +ratio(hex2rgb(b.hex), water).toFixed(2) })) };
+    ['normal', 'protan', 'deutan', 'tritan'].forEach(k => {
+      const s = bands.map(b => k === 'normal' ? hex2rgb(b.hex) : sim(hex2rgb(b.hex), k));
+      let min = 1e9; for (let i = 0; i + 1 < s.length; i++) min = Math.min(min, de2000(s[i], s[i + 1]));
+      altitude[th].minAdjacentDeltaE[k] = +min.toFixed(1);
+    });
+  });
+  return { css, dtcg, resolved, checks: { contrast, cvd, altitude } };
 }
 if (typeof module !== 'undefined') module.exports = { buildTokens };

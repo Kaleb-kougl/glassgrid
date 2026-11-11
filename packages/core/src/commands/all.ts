@@ -3,6 +3,9 @@ import { redo, undo } from './builtins/history.js';
 import { addChart, removeChart, renameChart, setMark, setShelf } from './builtins/charts.js';
 import { addFilter, brush, clearFilter, setFilter } from './builtins/filters.js';
 import { copySelection, reorderColumn, resizeColumn, setSelection, sortGrid } from './builtins/grid.js';
+import { setLiveSource, startLive, stopLive } from './builtins/live.js';
+import { addMapView, removeMapView, setMapViewFilter, setMapViewport, updateMapView } from './builtins/maps.js';
+import { setChartsFollowTime, setTime } from './builtins/time.js';
 import { openFile, setColumnProfiles } from './builtins/open-file.js';
 import { setColumnType } from './builtins/set-column-type.js';
 import {
@@ -39,12 +42,22 @@ export const ALL_COMMANDS: readonly AnyCommand[] = Object.freeze([
   renameChart,
   setShelf,
   setMark,
+  addMapView,
+  updateMapView,
+  removeMapView,
+  setMapViewport,
+  setMapViewFilter,
+  setTime,
+  setChartsFollowTime,
   saveWorkspace,
   saveWorkspaceAs,
   openWorkspace,
   listRecentWorkspaces,
   loadWorkspace,
   markWorkspaceSaved,
+  startLive,
+  stopLive,
+  setLiveSource,
   undo,
   redo,
 ]);

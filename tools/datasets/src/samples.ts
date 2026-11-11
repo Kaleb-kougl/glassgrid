@@ -6,7 +6,7 @@
  *
  * Three synthetic tables, made up from scratch by seeded DuckDB SQL (no
  * third-party data, so no licence questions), each written as a
- * zstd-compressed Parquet file, plus one `.glassgrid` (format v1) workspace
+ * zstd-compressed Parquet file, plus one `.glassgrid` workspace (the current format, v2)
  * per table with a few cross-filtered charts. The workspace files are
  * written with @glassgrid/core's serializer, so they validate by
  * construction; their column types are what the engine infers from the
@@ -454,6 +454,7 @@ async function writeSample(duck: Duck, sample: Sample, outDir: string): Promise<
     workspace: {
       columns: columns.map(({ name, type }) => ({ name, inferredType: type, typeOverride: null })),
       charts: charts as WorkspaceSnapshot['workspace']['charts'],
+      maps: [],
       selections: {},
       userFilters: [],
       grid: { sort: [], columnOrder: [], columnWidths: [] },

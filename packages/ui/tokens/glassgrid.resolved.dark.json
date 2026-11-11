@@ -74,6 +74,14 @@
       "#4f86cc",
       "#a9c6ea"
     ],
+    "altitude": [
+      "#f4ec22",
+      "#fcb62f",
+      "#f38749",
+      "#dd5e66",
+      "#be3884",
+      "#9613a0"
+    ],
     "mark": "#6b9ad6",
     "axis": "#4d5560",
     "gridline": "#2a3038",
@@ -83,10 +91,21 @@
     "selectionStroke": "#e7eaee",
     "skeleton": "#2a3038",
     "other": "#5f6772",
+    "altGround": "#8a939f",
+    "altUnknown": "#5f6772",
+    "aircraftOutline": "#e7eaee",
     "unselectedOpacity": 0.36,
     "lineW": 1.75,
     "brushHandleW": 4,
     "selectionW": 1.5
+  },
+  "map": {
+    "land": "#262c34",
+    "water": "#1a2533",
+    "urban": "#2f3640",
+    "runway": "#a6aeb9",
+    "label": "#b4bbc5",
+    "labelHalo": "#20252c"
   },
   "font": {
     "ui": "\"IBM Plex Sans\", system-ui, -apple-system, \"Segoe UI\", sans-serif",

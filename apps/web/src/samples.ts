@@ -10,7 +10,7 @@ import type { EngineClientLike, SampleDataset } from '@glassgrid/app';
 import { withBase } from './base';
 
 /*
- * The web demo's sample workspaces. Each sample is a `.glassgrid` (format v1)
+ * The web demo's sample workspaces. Each sample is a `.glassgrid` (format v2)
  * workspace with a few cross-filtered charts, over a synthetic Parquet file
  * served from this origin under <base>samples/ (generated and committed by
  * `pnpm --filter @glassgrid/datasets samples`; see tools/datasets/src/samples.ts).

@@ -33,6 +33,12 @@ export interface TopBarProps {
   workspaceFile?: WorkspaceFileControls | undefined;
   /** A modal dialog is open: the bar is out of reach (`inert`). */
   inert?: boolean;
+  /**
+   * The live flights table (`flight_states`): its row count (null until the
+   * feed reports one) and the feed's state, shown instead of a file size (it
+   * has none).
+   */
+  live?: { rowCount: number | null; label: string } | undefined;
 }
 
 const time = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' });
@@ -43,7 +49,7 @@ const time = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-di
  * platform has workspace files), Undo/Redo, History and the agent indicator
  * (a v1 placeholder).
  */
-export function TopBar({ shortcuts, titleBarInset, state, history, opening, optimizing, onOpen, onUndo, onRedo, onStepTo, workspaceFile, inert = false }: TopBarProps) {
+export function TopBar({ shortcuts, titleBarInset, state, history, opening, optimizing, onOpen, onUndo, onRedo, onStepTo, workspaceFile, inert = false, live }: TopBarProps) {
   const mac = shortcuts === 'mac';
   const mod = mac ? '⌘' : 'Ctrl+';
   const historyRef = useRef<HTMLButtonElement>(null);
@@ -72,7 +78,15 @@ export function TopBar({ shortcuts, titleBarInset, state, history, opening, opti
               {state.dataSource.fileName}
             </h1>
           )}
-          <span className="topbar__size">{formatBytes(state.dataSource.fingerprint.sizeBytes)}</span>
+          {live ? (
+            <span className="topbar__size" data-testid="file-size">
+              {live.rowCount === null ? live.label : `${live.rowCount.toLocaleString('en-US')} ${live.rowCount === 1 ? 'row' : 'rows'} · ${live.label}`}
+            </span>
+          ) : (
+            <span className="topbar__size" data-testid="file-size">
+              {formatBytes(state.dataSource.fingerprint.sizeBytes)}
+            </span>
+          )}
           {workspaceFile?.edited && (
             <span className="topbar__edited" title="Edited, not saved" data-testid="workspace-edited">
               <span className="gg-visually-hidden">Edited, not saved</span>
