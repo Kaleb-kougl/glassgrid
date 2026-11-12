@@ -192,8 +192,16 @@ localhost. The 100 ms and 16.7 ms targets were set for GPU machines and are
 - **`x-vercel-cache` and one upstream call per 10 s** on the deployed
   portfolio: to check after deploying ([deploy.md](deploy.md#live-flights)).
 - **GPU numbers**: the brush and frame-time targets on real hardware.
-- **Firefox and WebKit**: the specs are browser-agnostic and the CI job is
-  ready, but neither browser ran here.
+- **Firefox and WebKit**: the specs are browser-agnostic. The first CI run
+  (23 failures) found: in WebKit the engine worker was evaluated twice (its
+  DuckDB-WASM chunk imported the entry chunk back), so no request after
+  start-up was answered: fixed by a static import, checked in WebKitGTK
+  2.52. In Firefox, MapLibre could not start (WebGL on the runner's
+  software renderer: forced on in `playwright.config.ts`), the dark scheme
+  set by `page.emulateMedia` before the first navigation was lost (now the
+  context's `colorScheme`), and the fallback strip's focus hand-off assumed a
+  click focuses the button. The Firefox fixes are not yet confirmed by a
+  run; failures now keep a trace.
 - **A screen reader by hand** (NVDA, VoiceOver): the list's semantics are
   checked by axe and the tests, not by listening.
 - **A 429 from the relay itself**: the portfolio's route never sends one

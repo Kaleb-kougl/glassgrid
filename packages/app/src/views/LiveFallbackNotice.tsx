@@ -71,21 +71,23 @@ export function LiveFallbackNotice({ mode, feed, online, live, shell, onWatchRec
   // Focus after a button that removes itself: the strip if it is still there, else the map card.
   const anchor = useRef<HTMLSpanElement>(null);
   const strip = useRef<HTMLDivElement>(null);
-  /** The button pressed, until it is gone and focus has moved on. */
-  const pendingFocus = useRef<string | null>(null);
+  /** The button pressed (and what had focus when it was pressed), until it is gone and focus has moved on. */
+  const pendingFocus = useRef<{ id: string; focused: Element | null } | null>(null);
   useLayoutEffect(() => {
     const pressed = pendingFocus.current;
     if (pressed === null) return;
-    const button = anchor.current?.parentElement?.querySelector(`[data-testid="${pressed}"]`);
+    const button = anchor.current?.parentElement?.querySelector(`[data-testid="${pressed.id}"]`);
     if (button) return; // still there (the switch has not happened yet)
     pendingFocus.current = null;
-    // Only when focus was lost with the button (not if the person has moved on meanwhile).
-    if (document.activeElement !== null && document.activeElement !== document.body) return;
+    // Only when focus was lost with the button, or is still where it was when the button was pressed (Safari, and
+    // Firefox on macOS, do not focus a clicked button), not if the person has moved on meanwhile.
+    const active = document.activeElement;
+    if (active !== null && active !== document.body && active !== pressed.focused) return;
     const target = strip.current ?? anchor.current?.closest<HTMLElement>('.map-card') ?? null;
     target?.focus({ preventScroll: true });
   });
   const press = (id: string, action: () => void) => {
-    pendingFocus.current = id;
+    pendingFocus.current = { id, focused: document.activeElement };
     action();
   };
 

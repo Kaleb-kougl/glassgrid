@@ -725,6 +725,22 @@ describe('offline → replay (L5)', () => {
     await waitFor(() => expect(notice()).toBeNull());
   });
 
+  it('moves focus to the strip even when the click did not focus the button (Safari, Firefox on macOS)', async () => {
+    const { batch, setOnline, live: engineLive } = await liveSetup();
+    setOnline(false);
+    batch(failing(1, { error: 'Failed to fetch' }));
+    await waitFor(() => expect(notice()?.getAttribute('data-reason')).toBe('offline'));
+    const card = screen.getByTestId('map-map_1');
+    act(() => card.focus());
+    expect(document.activeElement).toBe(card);
+    // fireEvent.click does not focus the button, as those browsers do not: focus stays on the card.
+    fireEvent.click(screen.getByTestId('live-fallback-watch-recorded'));
+    await waitFor(() => expect(engineLive.start).toHaveBeenLastCalledWith({ kind: 'archive', fixture: 'flights-bay-30min' }));
+    batch(archive({ status: 'connecting' }));
+    await waitFor(() => expect(notice()?.getAttribute('data-recorded')).toBe('loading'));
+    expect(document.activeElement).toBe(notice());
+  });
+
   it('a recording that did not load says so (not "showing"), is not remembered, and is tried again once back online', async () => {
     const { batch, setOnline, choice, live: engineLive } = await liveSetup();
     setOnline(false);

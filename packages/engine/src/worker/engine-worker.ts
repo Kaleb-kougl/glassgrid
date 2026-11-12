@@ -12,6 +12,10 @@
  *   build needs cross-origin isolation and pthread workers, which the
  *   synchronous bindings do not support; see docs/m4-engine-portability.md.
  */
+// Static, not `await import(...)`: a dynamic import split DuckDB-WASM into its own chunk that imported Arrow back
+// from this (the entry) chunk, and WebKit evaluates a module worker's entry a second time when a chunk imports it.
+// The second copy replaced `onmessage` with one that had no session, so every request after `gg:init` waited forever.
+import * as duckdbBlocking from '@duckdb/duckdb-wasm/blocking';
 import { config as zodConfig } from 'zod';
 import type { EngineResponse, LiveFixtureId } from '@glassgrid/core';
 import { errorMessage } from '../errors';
@@ -78,7 +82,7 @@ let session: EngineSession | null = null;
 const early: unknown[] = [];
 
 async function start(init: WorkerInit): Promise<Started> {
-  const duckdb = (await import('@duckdb/duckdb-wasm/blocking')) as unknown as BlockingModule;
+  const duckdb = duckdbBlocking as unknown as BlockingModule;
   const bindings = await duckdb.createDuckDB(
     { mvp: { mainModule: init.bundles.mvp, mainWorker: '' }, eh: { mainModule: init.bundles.eh, mainWorker: '' } },
     new duckdb.VoidLogger(),

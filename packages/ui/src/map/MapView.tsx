@@ -84,7 +84,8 @@ export function MapView(props: MapViewProps): ReactElement {
     let onKeyDown: ((event: KeyboardEvent) => void) | null = null;
     const fail = (text: string, error: unknown) => {
       if (cancelled) return;
-      console.warn(`[glassgrid] map: ${text}`, error);
+      // The reason in the text too: a browser's console (and Playwright's) may print the Error argument as just "Error".
+      console.warn(`[glassgrid] map: ${text} ${error instanceof Error ? error.message : String(error)}`, error);
       setStatus('error');
       setMessage(text);
     };

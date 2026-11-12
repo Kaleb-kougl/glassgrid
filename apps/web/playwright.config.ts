@@ -35,10 +35,14 @@ const BASE = parseBase(process.env['GLASSGRID_BASE']);
 const isRoot = process.platform === 'linux' && process.getuid?.() === 0;
 // An empty or unknown value throws here (playwright-browsers.ts): never zero projects that "pass".
 const BROWSERS = parseBrowsers(process.env['GLASSGRID_E2E_BROWSERS']);
+// Firefox and WebKit keep a trace of each failure (CI uploads test-results/). Firefox: headless on a runner without
+// a GPU it blocks WebGL on the software renderer, and MapLibre cannot start; force WebGL on (Chromium has SwiftShader).
 const projects: Project[] = BROWSERS.map((browserName) =>
   browserName === 'chromium'
     ? { name: 'chromium', use: { browserName, launchOptions: { executablePath: findChromium(), args: isRoot ? ['--no-sandbox'] : [] } } }
-    : { name: browserName, use: { browserName } },
+    : browserName === 'firefox'
+      ? { name: 'firefox', use: { browserName, trace: 'retain-on-failure', launchOptions: { firefoxUserPrefs: { 'webgl.force-enabled': true, 'webgl.disabled': false } } } }
+      : { name: browserName, use: { browserName, trace: 'retain-on-failure' } },
 );
 
 export default defineConfig({
