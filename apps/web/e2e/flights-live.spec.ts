@@ -42,6 +42,11 @@ const LIVE_40 = /^Live · 40 (?:aircraft|tracked · \d+ in view)$/;
 const COUNT = '40 (?:aircraft|tracked · \\d+ in view)';
 
 const status = (page: Page) => page.getByTestId('map-map_1-status');
+/**
+ * The map has loaded its style and basemap (MapLibre's `load`: the GeoJSON fetched). The card's status follows the
+ * feed, not the map, so "Live · 40" can come first; going offline before this would fail the basemap's own request.
+ */
+const mapReady = (page: Page) => expect(page.getByTestId('map-view')).toHaveAttribute('data-state', 'ready', { timeout: 60_000 });
 const notice = (page: Page) => page.getByTestId('live-fallback');
 
 test.afterEach(async ({ request, baseURL }) => {
@@ -112,6 +117,7 @@ test('?live=1: live, three failures → the offer, Keep trying, recovery, a 429 
 
   // The relay is back. Offline, then online again: the page probes it at once and offers the way back.
   await relay(request, baseURL, { mode: 'ok' });
+  await mapReady(page);
   await context.setOffline(true);
   await expect(notice(page)).toContainText('You are offline.');
   await context.setOffline(false);
@@ -134,6 +140,7 @@ test('?live=1: offline is said at once and offers the recording; back online, th
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('./?live=1');
   await expect(status(page)).toHaveText(LIVE_40, { timeout: 60_000 });
+  await mapReady(page);
   await context.setOffline(true);
   await expect(status(page)).toHaveText(new RegExp(`^Offline · retrying in \\d+ s · ${COUNT}$`));
   await expect(page.getByTestId('file-size')).toHaveText(/ rows · Offline$/);
@@ -155,6 +162,7 @@ test('?live=1: offline before choosing, the recording still loads (it was fetche
   // The live start fetched the 30-minute fixture into memory.
   await expect.poll(async () => ((await (await request.get(new URL('/__e2e/relay', baseURL).href)).json()) as { fixtureRequests: number }).fixtureRequests, { timeout: 30_000 }).toBeGreaterThan(0);
   await page.waitForTimeout(1_000);
+  await mapReady(page);
   await context.setOffline(true);
   await expect(notice(page)).toHaveAttribute('data-reason', 'offline');
   await page.getByTestId('live-fallback-watch-recorded').click();
@@ -177,6 +185,7 @@ test('?live=1: when the recording could not be fetched ahead, offline it says it
   await expect(status(page)).toHaveText(LIVE_40, { timeout: 60_000 });
   await expect.poll(async () => ((await (await request.get(new URL('/__e2e/relay', baseURL).href)).json()) as { fixtureRequests: number }).fixtureRequests, { timeout: 30_000 }).toBeGreaterThan(0);
   await relay(request, baseURL, { fixtures: 'ok' });
+  await mapReady(page);
   await context.setOffline(true);
   await expect(notice(page)).toHaveAttribute('data-reason', 'offline');
   await page.getByTestId('live-fallback-watch-recorded').click();
