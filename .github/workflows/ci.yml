@@ -115,6 +115,10 @@ jobs:
       - name: Install Firefox's and WebKit's system dependencies
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: pnpm --filter @glassgrid/web exec playwright install-deps firefox webkit
+      # Firefox's own dependencies include no OpenGL driver: without Mesa (llvmpipe) headless Firefox has no WebGL
+      # ("Exhausted GL driver options") and MapLibre cannot start.
+      - name: Mesa for Firefox's WebGL
+        run: sudo apt-get install -y --no-install-recommends libgl1-mesa-dri libegl1 libegl-mesa0 libgbm1
       - run: pnpm --filter @glassgrid/web build
       - name: Web E2E in Firefox and WebKit
         run: pnpm --filter @glassgrid/web exec playwright test e2e/flights.spec.ts e2e/flights-a11y.spec.ts e2e/flights-live.spec.ts e2e/smoke.spec.ts

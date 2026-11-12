@@ -24,7 +24,7 @@ async function openStart(page: Page) {
 test.describe(() => {
   test.use({ colorScheme: 'dark' });
 
-  test('/ shows the start screen with the production headers and the three samples, without starting DuckDB-WASM until a sample is pointed at', async ({ page }) => {
+  test('/ shows the start screen with the production headers and the three samples, without starting DuckDB-WASM until a sample is pointed at', async ({ page, browserName }) => {
     const engineRequests: string[] = [];
     page.on('request', (request) => {
       if (/engine-worker|duckdb-|\.wasm$|duckdb-extensions/.test(request.url())) engineRequests.push(request.url());
@@ -44,6 +44,11 @@ test.describe(() => {
 
     const app = page.getByTestId('app');
     await expect(app).toHaveAttribute('data-platform', 'web');
+    // Firefox: the context's dark scheme did not reach the page (neither did page.emulateMedia before the first
+    // navigation), most likely lost when Cross-Origin-Opener-Policy moves the navigation into a new browsing context.
+    // Applied to the loaded page it does arrive (flights-a11y.spec.ts), and the app follows it.
+    if (browserName === 'firefox') await page.emulateMedia({ colorScheme: 'dark' });
+    expect(await page.evaluate(() => window.matchMedia('(prefers-color-scheme: dark)').matches), 'the page sees prefers-color-scheme: dark').toBe(true);
     await expect(page.locator('html')).toHaveAttribute('data-gg-theme', 'dark');
     await expect(page.getByTestId('empty-state')).toBeVisible();
     await expect(page.getByText('The file is read in this browser and never uploaded.')).toBeVisible();

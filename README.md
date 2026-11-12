@@ -84,6 +84,7 @@ More screenshots: [start screen](docs/images/showcase/web-start.png),
   commands with undo, so an MCP agent (M6) can drive the same registry.
 
 Full design, alternatives considered and budgets: [technical design](docs/technical-design.md).
+How each layer caches, from disk to CDN: [caching](docs/caching.md).
 The story behind it: **[case study](docs/case-study.md)**.
 
 ## Interesting problems

@@ -68,26 +68,39 @@ export function LiveFallbackNotice({ mode, feed, online, live, shell, onWatchRec
     if (cameOnline && failed) onRetryRecorded();
   }, [online, failed, onRetryRecorded]);
 
-  // Focus after a button that removes itself: the strip if it is still there, else the map card.
+  // Focus after a button that removes itself: the strip if it is still there, else the map card. "Watch the recorded
+  // traffic" switches sources: the live strip can go before the recording's appears (WebKit and Firefox render the
+  // stopped live feed in between), so focus waits on the map card and moves to the recording's strip when it shows.
   const anchor = useRef<HTMLSpanElement>(null);
   const strip = useRef<HTMLDivElement>(null);
-  /** The button pressed (and what had focus when it was pressed), until it is gone and focus has moved on. */
-  const pendingFocus = useRef<{ id: string; focused: Element | null } | null>(null);
+  /** The button pressed, what had focus then, and where focus waits for the switch, until focus has settled. */
+  const pendingFocus = useRef<{ id: string; focused: Element | null; awaitRecorded: boolean; parked: Element | null } | null>(null);
   useLayoutEffect(() => {
     const pressed = pendingFocus.current;
     if (pressed === null) return;
     const button = anchor.current?.parentElement?.querySelector(`[data-testid="${pressed.id}"]`);
     if (button) return; // still there (the switch has not happened yet)
-    pendingFocus.current = null;
-    // Only when focus was lost with the button, or is still where it was when the button was pressed (Safari, and
-    // Firefox on macOS, do not focus a clicked button), not if the person has moved on meanwhile.
+    // Only when focus was lost with the button, is still where it was when the button was pressed (Safari, and Firefox
+    // on macOS, do not focus a clicked button) or where it waits for the switch: not if the person has moved on.
     const active = document.activeElement;
-    if (active !== null && active !== document.body && active !== pressed.focused) return;
-    const target = strip.current ?? anchor.current?.closest<HTMLElement>('.map-card') ?? null;
-    target?.focus({ preventScroll: true });
+    const lost = active === null || active === document.body || active === pressed.focused || (pressed.parked !== null && active === pressed.parked);
+    if (!lost) {
+      pendingFocus.current = null;
+      return;
+    }
+    const switching = pressed.awaitRecorded && mode !== 'recorded';
+    if (strip.current && !switching) {
+      pendingFocus.current = null;
+      strip.current.focus({ preventScroll: true });
+      return;
+    }
+    const card = anchor.current?.closest<HTMLElement>('.map-card') ?? null;
+    if (active !== card) card?.focus({ preventScroll: true });
+    if (switching) pressed.parked = card;
+    else pendingFocus.current = null;
   });
   const press = (id: string, action: () => void) => {
-    pendingFocus.current = { id, focused: document.activeElement };
+    pendingFocus.current = { id, focused: document.activeElement, awaitRecorded: id === `${testId}-watch-recorded`, parked: null };
     action();
   };
 

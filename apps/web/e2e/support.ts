@@ -42,6 +42,9 @@ export async function watchProblems(page: Page, options: { alerts?: boolean; exp
   page.on('console', (message) => {
     const text = message.text();
     // A failed resource's message names no URL; its location does, so a test can expect the one it provokes.
+    // WebKit also logs each CSP violation as a console error naming no source: the page's `securitypolicyviolation` events
+    // below report the same violations with where they came from, so those count instead.
+    if (message.type() === 'error' && text.startsWith('Refused to apply a stylesheet because its hash')) return;
     if (message.type() === 'error') add(`console.error: ${text}${text.startsWith('Failed to load resource') ? ` (${message.location().url})` : ''}`);
     else if (message.type() === 'warning' && text.startsWith('[glassgrid]')) add(`console.warn: ${text}`);
     else if (message.type() === 'info' && text.startsWith('[glassgrid]')) problems.info.push(text);
@@ -66,7 +69,12 @@ export async function watchProblems(page: Page, options: { alerts?: boolean; exp
     const seen: string[] = [];
     window.__ggProblems = seen;
     document.addEventListener('securitypolicyviolation', (event) => {
-      seen.push(`CSP violation: ${event.violatedDirective} blocked ${event.blockedURI || '(inline)'} at ${event.sourceFile}:${event.lineNumber}`);
+      // Playwright's own screenshot preparation in WebKit adds a <style> from its script world, which has no source file
+      // (the page's own scripts all do: script-src 'self' allows no inline script). Not the page's doing.
+      if (event.violatedDirective.startsWith('style-src-elem') && event.sourceFile === '') return;
+      // The element (for an inline style or script) and the column: in a minified bundle the line alone says little.
+      const target = event.target instanceof Element ? ` on <${event.target.tagName.toLowerCase()}${event.target.className && typeof event.target.className === 'string' ? ` class="${event.target.className}"` : ''}>` : '';
+      seen.push(`CSP violation: ${event.violatedDirective} blocked ${event.blockedURI || '(inline)'} at ${event.sourceFile}:${event.lineNumber}:${event.columnNumber}${target}${event.sample ? ` (${event.sample})` : ''}`);
     });
     if (!alerts) return;
     new MutationObserver(() => {

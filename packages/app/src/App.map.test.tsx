@@ -741,6 +741,24 @@ describe('offline → replay (L5)', () => {
     expect(document.activeElement).toBe(notice());
   });
 
+  it('keeps focus for the recording’s strip when the live strip goes first (the stopped live feed renders in between)', async () => {
+    const { batch, setOnline, live: engineLive } = await liveSetup();
+    setOnline(false);
+    batch(failing(1, { error: 'Failed to fetch' }));
+    await waitFor(() => expect(notice()?.getAttribute('data-reason')).toBe('offline'));
+    const button = screen.getByTestId('live-fallback-watch-recorded');
+    act(() => button.focus());
+    fireEvent.click(button);
+    await waitFor(() => expect(engineLive.start).toHaveBeenLastCalledWith({ kind: 'archive', fixture: 'flights-bay-30min' }));
+    // The live feed stops before the recording starts: no strip for a moment, focus waits on the map card.
+    batch(liveState(CLOCK, { feed: { kind: 'live', status: 'stopped', failures: 0, error: null } }));
+    await waitFor(() => expect(notice()).toBeNull());
+    expect(document.activeElement).toBe(screen.getByTestId('map-map_1'));
+    batch(archive({ status: 'connecting' }));
+    await waitFor(() => expect(notice()?.getAttribute('data-recorded')).toBe('loading'));
+    expect(document.activeElement).toBe(notice());
+  });
+
   it('a recording that did not load says so (not "showing"), is not remembered, and is tried again once back online', async () => {
     const { batch, setOnline, choice, live: engineLive } = await liveSetup();
     setOnline(false);
