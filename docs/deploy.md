@@ -288,6 +288,190 @@ Then open these by hand:
 Put the URL in the repository's **About → Website** and drop the TODO note
 from the README.
 
+## Live flights
+
+Shipping the live-flights demo ([live-flights.md](live-flights.md)) takes
+both repositories: Glassgrid's `live-flights` branch (the map, the feed, the
+L5 states, fallback and list view) and the portfolio's `live-flights-proxy`
+branch (`GET /api/flights`, the relay of adsb.lol;
+`docs/flights-proxy.md` there). Neither branch is pushed yet, and nothing
+below has been done: it needs push and deploy credentials this environment
+does not have. In order:
+
+**1. Commit the L5 work** (it is in the working tree of `live-flights`, on
+top of `d591c0f`), then run the gates once more:
+
+```sh
+git switch live-flights && git status          # the L5 files, nothing else
+pnpm install --frozen-lockfile
+pnpm lint && pnpm typecheck && pnpm test
+pnpm e2e:web && GLASSGRID_BASE=/glassgrid/ pnpm e2e:web
+pnpm --filter @glassgrid/web size              # first-load JS within 400 kB (276.9 kB at L5)
+node scripts/third-party-notices.js --check
+git add -A && git commit -m "Live flights L5: feed states, offline → replay, list view, showcase, docs"
+```
+
+**2. Push and merge the portfolio relay first**, so `/api/flights` exists
+before a demo that polls it is deployed:
+
+```sh
+cd sswe-portfolio
+git switch live-flights-proxy
+git push -u origin live-flights-proxy
+gh pr create --base main --head live-flights-proxy --title "/api/flights: a cached, same-origin relay of adsb.lol"
+```
+
+Vercel builds a preview of the PR. Check its route (step 6's commands,
+against the preview URL; behind Deployment Protection add
+`-H "x-vercel-protection-bypass: <secret>"`), then merge when CI is green.
+The merge to `main` deploys production.
+
+**3. Push and merge Glassgrid's branch:**
+
+```sh
+cd glassgrid
+git push -u origin live-flights
+gh pr create --base main --head live-flights --title "Live flights (L0–L5)"
+```
+
+Wait for **Lint, typecheck, unit tests** and the three **Build + E2E** jobs.
+The new **Web E2E (Firefox, WebKit)** job is allowed to fail on its first
+runs (`continue-on-error`). Look at its result anyway: green there is the
+L5 gate "E2E green in Chromium, Firefox and WebKit on the replay source",
+which this environment could not run. If it is green, delete
+`continue-on-error: true` from the job in `.github/workflows/ci.yml`. Merge.
+
+**4. Tag a web release** on the merge commit. The last release is
+`web-v0.1.0`, which the portfolio pins now:
+
+```sh
+git switch main && git pull
+git tag -a web-v0.2.0 -m "Web demo 0.2.0: live flights"
+git push origin web-v0.2.0
+```
+
+`release-web.yml` builds for `/glassgrid/`, runs the gates and the E2E under
+`/glassgrid/` (the flights specs included), and publishes
+`glassgrid-web-0.2.0.tar.gz` and `.sha256` on the release (section 5 above).
+
+**5. Bump the portfolio's pin and deploy.** With `PORTFOLIO_DISPATCH_TOKEN`
+set, the release sends `glassgrid-release` and the portfolio's
+`.github/workflows/bump-glassgrid.yml` opens the PR `glassgrid/v0.2.0` by
+itself. Otherwise, either run Actions → Bump Glassgrid → Run workflow with
+version `0.2.0` and the sha256 from the release's `.sha256`, or by hand:
+
+```sh
+cd sswe-portfolio && git switch main && git pull && git switch -c glassgrid/v0.2.0
+# glassgrid.lock.json:
+#   "version": "0.2.0",
+#   "url": "https://github.com/Kaleb-kougl/glassgrid/releases/download/web-v0.2.0/glassgrid-web-0.2.0.tar.gz",
+#   "sha256": "<the 64 hex digits in glassgrid-web-0.2.0.tar.gz.sha256>"
+npm run glassgrid:fetch                       # scripts/fetch-glassgrid.mjs: downloads, checks the sha256, unpacks
+npm run build                                  # next.config.ts validates public/glassgrid/glassgrid-hosting.json
+git commit -am "Glassgrid 0.2.0" && git push -u origin glassgrid/v0.2.0 && gh pr create --base main
+```
+
+Merge the PR once its CI and Vercel preview pass; Vercel deploys production
+from `main`. In Vercel → Deployments the production deployment shows
+**Ready**. Then `scripts/check-deploy.sh
+https://kalebkougl-portfolio.vercel.app/glassgrid/` (section 7) should still
+pass, and print version 0.2.0.
+
+**6. Check `/api/flights` on the deployed site.**
+
+```sh
+SITE=https://kalebkougl-portfolio.vercel.app
+curl -sS -D /tmp/flights.headers -o /tmp/flights.json "$SITE/api/flights"
+grep -iE '^(HTTP|content-type|cache-control|x-vercel-cache|x-flights-stale|retry-after)' /tmp/flights.headers
+jq '{now, fetchedAt, stale, source, license, aircraft: (.ac | length), first: .ac[0]}' /tmp/flights.json
+```
+
+Expected: `HTTP/2 200`, `content-type: application/json`, a body with
+`now` and `fetchedAt` in epoch **milliseconds** within a few seconds of
+each other, `stale: false`, `source: "adsb.lol"`, the ODbL licence URL, and
+tens of aircraft (over 100 in the Bay Area's afternoon; the recorded day
+peaked at 183), each with `hex`, `lat`, `lon` and most of `flight`,
+`alt_baro`, `gs`, `track`, `t`, `r`. `cache-control` is the route's
+`public, s-maxage=10, stale-while-revalidate=20` or Vercel's rewrite of it
+for the browser; either is fine. A `503` with `{"reason": ...}` and
+`Retry-After` means the relay has no data: its `reason` says why
+(`docs/flights-proxy.md` in the portfolio; the first call after a cold start
+can take up to 45 s of TLS handshake to adsb.lol).
+
+The CDN in front of it, one request every 4 s for half a minute:
+
+```sh
+for i in $(seq 1 8); do curl -sS -o /dev/null -D - "$SITE/api/flights" | grep -iE '^(x-vercel-cache|age):' | tr '\r\n' '  '; echo; sleep 4; done
+```
+
+Expected: `MISS` first (the function ran), then `HIT` with a growing `age`
+while the copy is under 10 s old, then `STALE` (served from the CDN while
+one request refreshes it) or `MISS` again, then `HIT`s again. A `503` is
+`no-store` and is never a `HIT`.
+
+One upstream call per 10 s: `fetchedAt` is when the instance called
+adsb.lol, so poll past the CDN (a query string misses the CDN's cache, the
+route ignores it) once a second for a minute and count the distinct values:
+
+```sh
+for i in $(seq 1 60); do curl -sS "$SITE/api/flights?check=$i" | jq -r .fetchedAt; sleep 1; done | sort -u | wc -l
+```
+
+Expected: 6 or 7 (one per 10 s window). More means several function
+instances (each holds its own snapshot), not a bug in the relay. In Vercel
+→ the deployment → **Logs**, filtered to `/api/flights`: the route logs one
+JSON line per **failed** upstream call
+(`{"route":"/api/flights","upstream":…,"reason":…,"retryInMs":…}`) and
+nothing for successful ones; with only the plain URL polled (no query
+string), invocations come at most about once per 10 s.
+
+**7. Check `?live=1` on the deployed demo.** Open
+`https://kalebkougl-portfolio.vercel.app/glassgrid/?live=1` in Chrome, then
+Firefox and Safari:
+
+- the map card says "Connecting to the live feed…", then "Live · N
+  aircraft" within 20 s (a cold relay: up to about 50 s); the top bar says
+  "N rows · Live";
+- the attribution shows the relay's "Aircraft data © adsb.lol contributors,
+  ODbL 1.0" before the basemap's credits;
+- DevTools → Network: `/api/flights` once every 20 s, `200`; Console: no
+  CSP violation or error;
+- DevTools → Network: once the card says "Live", a request for
+  `samples/flights/flights-bay-30min.parquet` (0.76 MB) has gone out: the
+  recording, fetched ahead into memory;
+- then DevTools → Network → **Offline**: the status line says "Offline ·
+  retrying in N s" (counting down) and the strip offers "Watch the recorded
+  traffic instead". Click it: the strip says "Loading the recorded
+  traffic…", then "Showing recorded traffic … You are offline.", and the
+  half hour plays, still offline (it loads from memory). Back **online**
+  (No throttling): the page probes `/api/flights` at once (at most once per
+  10 s) and "Back to live" appears within a few seconds; click it: live
+  again;
+- (if the fixture request had failed, offline the strip says "The recorded
+  traffic didn't load … It will try again when you are back online", and
+  back online it loads by itself;)
+- "List view" under the map: the aircraft in view, by callsign;
+  `?sample=flights` works too.
+
+**8. Run the GPU benchmarks on a real machine** (the targets were set for
+one; this VM has no GPU) and update the README's Numbers:
+
+```sh
+pnpm install --frozen-lockfile
+pnpm --filter @glassgrid/web exec playwright install chromium
+pnpm --filter @glassgrid/web build
+GLASSGRID_E2E_FLIGHTS_PERF=1 pnpm --filter @glassgrid/web exec playwright test e2e/flights-perf.spec.ts   # brush, pan, seek → apps/web/e2e-results/flights-perf-chromium-<os>-<arch>.json
+pnpm --filter @glassgrid/web e2e:map-perf                                                                 # map frame time → apps/web/e2e-results/map-perf-chromium-<os>-<arch>.json
+```
+
+Check that the map JSON's `renderer` names the GPU, not SwiftShader; if it
+does not, add `--headed` to both commands. Both write to
+`apps/web/e2e-results/`, which Playwright's next run does not empty (its
+`test-results/` it does). Copy the JSON files to
+`docs/benchmarks/l5/`, then replace the "brush p95" and "frame interval"
+cells of the live-flights rows in `README.md` (and the Numbers table of
+`docs/live-flights.md`) with the new values and that machine's conditions.
+
 ## Limits worth knowing
 
 - **One origin with the portfolio.** The demo's headers apply only under

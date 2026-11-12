@@ -3,8 +3,9 @@
  */
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { LiveState } from '@glassgrid/core';
-import { shortFeedError, useLiveState } from './flights';
+import type { LiveSourceState, LiveState } from '@glassgrid/core';
+import { feedStatusLine, shortFeedError, useLiveState } from './flights';
+import { altitudeText } from './views/AircraftDetails';
 
 /*
  * The live feed's state in the app (useLiveState). Regression (L4 review):
@@ -102,5 +103,31 @@ describe('shortFeedError', () => {
     expect(shortFeedError('The recorded day could not start: http://127.0.0.1:4391/samples/flights/flights-bay-day.parquet answered 404')).toBe(
       'The recorded day could not start: flights-bay-day.parquet answered 404',
     );
+  });
+});
+
+describe('feedStatusLine (L5)', () => {
+  const base: LiveSourceState = { kind: 'live', status: 'live', paused: false, attribution: null, license: null, lastSuccessAt: null, dataClockMs: null, nextAttemptAt: null, failures: 0, error: null, ended: false };
+  it('never puts ", paused" after a full stop in the sentences it announces', () => {
+    const paused = { ...base, paused: true };
+    const lines = [
+      feedStatusLine({ ...paused, status: 'rate-limited', failures: 1, error: 'x: rate-limited (HTTP 429)' }, undefined, 0).announce,
+      feedStatusLine({ ...paused, status: 'backoff', failures: 2, error: 'x: HTTP 404' }, undefined, 0).announce,
+      feedStatusLine({ ...paused, status: 'backoff', failures: 2 }, undefined, 0, false).announce,
+    ];
+    for (const line of lines) {
+      expect(line).not.toMatch(/\.,/);
+      expect(line).toMatch(/It is paused while the page is hidden\.$/);
+    }
+    expect(lines[0]).toBe('The live feed is rate-limited: the relay asked us to slow down. It is paused while the page is hidden.');
+    expect(lines[2]).toBe('You are offline: the live feed cannot be reached. It is paused while the page is hidden.');
+  });
+});
+
+describe('altitudeText', () => {
+  it('writes negative altitudes with a minus sign, as the vertical rate does', () => {
+    expect(altitudeText({ altBaroFt: -175, altGeomFt: null, onGround: false })).toBe('−175 ft');
+    expect(altitudeText({ altBaroFt: null, altGeomFt: -1_250, onGround: false })).toBe('−1,250 ft (GNSS)');
+    expect(altitudeText({ altBaroFt: 3_000, altGeomFt: null, onGround: false })).toBe('3,000 ft');
   });
 });

@@ -1,4 +1,4 @@
-import { openLiveFlightsWorkspace, FLIGHTS_SAMPLE_ARCHIVE, type EngineClientLike, type SampleDataset } from '@glassgrid/app';
+import { openLiveFlightsWorkspace, FLIGHTS_SAMPLE_ARCHIVE, type EngineClientLike, type LiveFallbackChoice, type SampleDataset } from '@glassgrid/app';
 import type { CommandRegistry, LiveSourceInput, OpenCsvResult } from '@glassgrid/core';
 
 /*
@@ -12,7 +12,10 @@ import type { CommandRegistry, LiveSourceInput, OpenCsvResult } from '@glassgrid
  *   "Load full day" swaps in `flights-bay-day.parquet`.
  * - `?live=1` polls the site's `/api/flights` relay instead (every 20 s);
  *   under `pnpm dev:web` the dev server proxies it to the portfolio's dev
- *   server (dev-proxy.ts).
+ *   server (dev-proxy.ts). When the relay cannot deliver, the map card
+ *   offers the recorded half hour (L5, the app's live-fallback.ts); the
+ *   choice is kept for the tab, so a reload of `?live=1` opens the
+ *   recording.
  *
  * The workspace is built in code (`liveFlightsWorkspace` in the app) rather
  * than shipped as a `.glassgrid` sample: a sample workspace names a data
@@ -32,6 +35,17 @@ export function flightsSourceFromSearch(search: string): LiveSourceInput | null 
   if (params.get('sample') === FLIGHTS_SAMPLE.id) return FLIGHTS_SAMPLE_ARCHIVE;
   const live = params.get('live');
   return live === '1' || live === 'true' ? LIVE_FLIGHTS_SOURCE : null;
+}
+
+/**
+ * What a flights link opens (L5): `?live=1` polls the relay, unless the person already chose the recorded traffic over
+ * an unavailable feed in this tab, then the recording (the map card says so, and offers "Back to live" once the relay
+ * answers). `requested` is whether the link asked for live data either way.
+ */
+export function initialFlightsSource(search: string, choice: LiveFallbackChoice | null): { source: LiveSourceInput | null; requested: boolean } {
+  const source = flightsSourceFromSearch(search);
+  const requested = source?.source === 'live';
+  return { source: requested && choice === 'recorded' ? FLIGHTS_SAMPLE_ARCHIVE : source, requested };
 }
 
 export interface FlightsOpenDeps {

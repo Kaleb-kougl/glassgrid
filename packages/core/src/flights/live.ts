@@ -100,6 +100,9 @@ export const LIVE_FIXTURES = Object.freeze({
 export const LiveFixtureIdSchema = z.enum(['flights-bay-30min', 'flights-bay-day']);
 export type LiveFixtureId = z.infer<typeof LiveFixtureIdSchema>;
 
+/** The recording offered in place of an unavailable live feed (L5), and fetched ahead when a live feed starts so it loads offline. */
+export const LIVE_FALLBACK_FIXTURE: LiveFixtureId = 'flights-bay-30min';
+
 // ---------------------------------------------------------------------------
 // Source configuration
 
@@ -167,12 +170,15 @@ export function sameLiveSource(a: LiveSourceConfig, b: LiveSourceConfig): boolea
  *   succeeded for more than `LIVE_STALE_AFTER_MS`;
  * - `backoff`: the last attempt failed (or the endpoint answered 503); the
  *   next one waits (`nextAttemptAt`);
+ * - `rate-limited` (L5): the endpoint answered 429, or a 503 whose `reason`
+ *   is the upstream's `HTTP 429`; the next attempt waits for its
+ *   `Retry-After` (`nextAttemptAt`). Counted in `failures` like a backoff;
  * - `stopped`: not running (never started, stopped, or a replay that ended).
  *
  * Pausing (the page is hidden) is not a status: `paused` is reported beside
  * it, and nothing is fetched or ticked while it is true.
  */
-export const LIVE_STATUSES = ['connecting', 'live', 'stale', 'backoff', 'stopped'] as const;
+export const LIVE_STATUSES = ['connecting', 'live', 'stale', 'backoff', 'rate-limited', 'stopped'] as const;
 export const LiveStatusSchema = z.enum(LIVE_STATUSES);
 export type LiveStatus = z.infer<typeof LiveStatusSchema>;
 
@@ -195,6 +201,11 @@ export const LiveSourceStateSchema = z.object({
   nextAttemptAt: epochMs.nullable(),
   /** Failed attempts in a row. */
   failures: z.number().int().nonnegative(),
+  /**
+   * How long the source decided to wait after its last failure (ms: Retry-After or the backoff), so a reader can
+   * judge the wait without a clock of its own (L5's offer of recorded traffic); null after a success. Live source only.
+   */
+  retryDelayMs: z.number().int().nonnegative().nullable().optional(),
   /** The last failure, cleared by the next success. */
   error: z.string().nullable(),
   /** A replay played its whole fixture (an archive, which never plays, is never `ended`). */

@@ -14,6 +14,8 @@ export {
   type PlatformCapabilities,
   type PlatformClipboard,
   type PlatformFiles,
+  type LiveFallbackChoice,
+  type PlatformLive,
   type PlatformMap,
   type PlatformName,
   type PlatformWindow,
@@ -23,6 +25,7 @@ export {
 export { describeMismatch, documentTitle, isWorkspaceFileName } from './workspace-files';
 export { createAppWorkspace, appPolicy, type AppWorkspace } from './workspace';
 export { provideLiveFlights, type LiveWiring } from './live';
+export { FALLBACK_AFTER_FAILURES, fallbackReason, LIVE_PROBE_INTERVAL_MS, type FallbackReason } from './live-fallback';
 export {
   ARCHIVE_PLAY_SPEED,
   dataTimeRange,

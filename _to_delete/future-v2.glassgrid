@@ -1,0 +1,7 @@
+{
+  "formatVersion": 2,
+  "app": { "name": "Glassgrid", "version": "3.0.0" },
+  "savedAt": "2027-05-01T08:00:00.000Z",
+  "data": { "sources": [] },
+  "workspace": { "formulaColumns": [] }
+}

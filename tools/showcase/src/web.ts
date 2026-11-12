@@ -20,7 +20,7 @@ export interface Frame {
 
 const CROSSFILTER_MEASURE = 'glassgrid:crossfilter';
 
-async function newPage(browser: Browser, size: { width: number; height: number }, colorScheme: 'light' | 'dark'): Promise<{ context: BrowserContext; page: Page }> {
+export async function newPage(browser: Browser, size: { width: number; height: number }, colorScheme: 'light' | 'dark'): Promise<{ context: BrowserContext; page: Page }> {
   const context = await browser.newContext({ viewport: size, deviceScaleFactor: SCALE, colorScheme, reducedMotion: 'reduce', locale: 'en-US', timezoneId: 'UTC' });
   const page = await context.newPage();
   page.on('pageerror', (error) => console.warn(`[showcase] page error: ${error.message}`));
@@ -30,7 +30,7 @@ async function newPage(browser: Browser, size: { width: number; height: number }
   return { context, page };
 }
 
-async function still(page: Page, name: string): Promise<string> {
+export async function still(page: Page, name: string): Promise<string> {
   const raw = join(WORK_DIR, 'raw', `${name}@2x.png`);
   await page.screenshot({ path: raw, animations: 'disabled', caret: 'hide' });
   const out = join(MEDIA_DIR, `${name}.png`);
@@ -134,7 +134,7 @@ export async function captureStills(baseUrl: string): Promise<void> {
  * DOM APIs and CSSOM styles, which the page's CSP allows; it ignores pointer
  * events, so the app never sees it.
  */
-async function installPointer(page: Page): Promise<void> {
+export async function installPointer(page: Page): Promise<void> {
   await page.evaluate(() => {
     const ns = 'http://www.w3.org/2000/svg';
     const svg = document.createElementNS(ns, 'svg');
@@ -154,7 +154,7 @@ async function installPointer(page: Page): Promise<void> {
   });
 }
 
-async function showPointer(page: Page, x: number, y: number): Promise<void> {
+export async function showPointer(page: Page, x: number, y: number): Promise<void> {
   await page.evaluate(
     ({ left, top }) => {
       const pointer = document.getElementById('gg-showcase-pointer');

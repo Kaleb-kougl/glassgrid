@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { CROSSFILTER_MEASURE, TIME_SEEK_MEASURE, type CrossfilterMeasureDetail, type TimeSeekMeasureDetail } from '@glassgrid/app/perf';
 import { expectEngineWithParquet, watchProblems } from './support';
+import { BENCHMARK_DIR } from './results';
 
 /*
  * L4's exit gate (docs/live-flights-l4.md), in the style of the M3
@@ -30,7 +31,7 @@ import { expectEngineWithParquet, watchProblems } from './support';
  *   GLASSGRID_E2E_FLIGHTS_PERF=1 pnpm --filter @glassgrid/web exec playwright test e2e/flights-perf.spec.ts
  *   GLASSGRID_E2E_FLIGHTS_PERF_ROUNDS=30                                    # per kind (default 20)
  *
- * Writes test-results/flights-perf-chromium-<os>-<arch>.json. Skipped in the
+ * Writes e2e-results/flights-perf-chromium-<os>-<arch>.json (BENCHMARK_DIR, kept across runs). Skipped in the
  * ordinary `pnpm e2e:web` (it measures; it does not check behaviour).
  */
 
@@ -41,6 +42,8 @@ const BUDGET_P95_MS = 100;
 const FIXTURES = (process.env['GLASSGRID_E2E_FLIGHTS_PERF_FIXTURES'] ?? 'flights-bay-30min,flights-bay-day').split(',');
 
 test.skip(!ENABLED, 'benchmark: set GLASSGRID_E2E_FLIGHTS_PERF=1');
+// The JSON is named and compared as Chromium's (and reads Chromium's renderer processes); other browsers are not benchmarked.
+test.skip(({ browserName }) => browserName !== 'chromium', 'benchmark: Chromium only (its numbers are the recorded baseline)');
 
 function percentile(values: readonly number[], p: number): number {
   if (values.length === 0) return Number.NaN;
@@ -245,7 +248,7 @@ test('flights workspace: brush, pan and seek timings on the 30-minute and the da
     expect(brushRounds.every((round) => round.views.some((view) => view.view === 'map:map_1'))).toBe(true);
   }
 
-  const dir = join(import.meta.dirname, '..', 'test-results');
+  const dir = BENCHMARK_DIR;
   mkdirSync(dir, { recursive: true });
   const file = join(dir, `flights-perf-chromium-${platform()}-${arch()}.json`);
   writeFileSync(

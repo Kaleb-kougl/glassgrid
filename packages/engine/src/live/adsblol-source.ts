@@ -34,15 +34,18 @@ import { systemClock } from './clock';
  *   Requests use `cache: 'no-store'`: the browser must not answer from its
  *   own cache, the CDN's `s-maxage` already bounds the upstream rate.
  * - **Failures.** A 503 (the relay has no data) waits for its `Retry-After`
- *   (seconds or an HTTP date; never less than 10 s). Any other failure
+ *   (seconds or an HTTP date; never less than 10 s). So does a 429, which
+ *   reports `rate-limited` rather than `backoff` (L5), as does a 503 whose
+ *   body's `reason` is `HTTP 429` (the relay itself is rate-limited by
+ *   adsb.lol and has no snapshot left to serve). Any other failure
  *   (network error, timeout, other status, a body that is not the
  *   contract) backs off exponentially from the interval with jitter, up to
  *   5 minutes. Neither stops the source.
  * - **Status.** `connecting` until the first answer; `live` after a good
  *   one; `stale` when the body says `stale: true` or nothing succeeded for
- *   `LIVE_STALE_AFTER_MS`; `backoff` while waiting after a failure;
- *   `stopped`. `pause()` (the page is hidden) cancels the request in flight
- *   and the timer; `resume()` polls again once the interval since the last
+ *   `LIVE_STALE_AFTER_MS`; `backoff` while waiting after a failure,
+ *   `rate-limited` after a 429; `stopped`. `pause()` (the page is hidden)
+ *   cancels the request in flight and the timer; `resume()` polls again once the interval since the last
  *   poll has passed, so hiding and showing a tab never polls faster than
  *   the interval.
  * - **Mapping.** `fromReadsbAircraft(ac, now / 1000, 'live')`: the
@@ -114,7 +117,29 @@ export interface AdsbLolSourceOptions {
 
 type PollOutcome =
   | { ok: true; points: FlightPoint[]; nowMs: number; stale: boolean; attribution: string; license: string }
-  | { ok: false; error: string; retryAfterMs: number | null };
+  | { ok: false; error: string; retryAfterMs: number | null; rateLimited: boolean };
+
+/**
+ * The relay's 503, in words (its `reason` codes: docs/flights-proxy.md in the portfolio): a timeout is adsb.lol being
+ * slow, a 429 is adsb.lol limiting the relay, anything else is shown as its short code.
+ */
+export function relayNoData(reason: string | null): string {
+  if (reason === null) return 'no data (HTTP 503)';
+  if (reason === 'timeout') return 'adsb.lol is slow to respond (HTTP 503)';
+  if (reason === 'HTTP 429') return 'adsb.lol is rate-limiting the relay (HTTP 503)';
+  return `no data: ${reason} (HTTP 503)`;
+}
+
+/** The relay's 503 body names why its last upstream call failed (`reason`, a short code such as `HTTP 429`). */
+async function relayReason(response: Response): Promise<string | null> {
+  try {
+    const parsed: unknown = JSON.parse(await response.text());
+    const reason = parsed !== null && typeof parsed === 'object' ? (parsed as { reason?: unknown }).reason : undefined;
+    return typeof reason === 'string' && /^[\w .-]{1,40}$/.test(reason) ? reason : null;
+  } catch {
+    return null;
+  }
+}
 
 export class AdsbLolSource implements LiveSource {
   readonly kind = 'live';
@@ -247,7 +272,7 @@ export class AdsbLolSource implements LiveSource {
         this.staleTimer = this.clock.setTimeout(check, left + 1);
         return;
       }
-      // A failure in progress keeps its `backoff`; `live` turns `stale`.
+      // A failure in progress keeps its `backoff` or `rate-limited`; `live` turns `stale`.
       if (this.current.status === 'live') this.update({ status: 'stale' });
     };
     this.staleTimer = this.clock.setTimeout(check, Math.max(0, last + this.staleAfterMs - this.clock.now() + 1));
@@ -271,6 +296,7 @@ export class AdsbLolSource implements LiveSource {
         dataClockMs: outcome.nowMs,
         failures: 0,
         error: null,
+        retryDelayMs: null,
       });
       this.armStaleTimer();
       return;
@@ -281,7 +307,7 @@ export class AdsbLolSource implements LiveSource {
       outcome.retryAfterMs !== null
         ? Math.min(MAX_LIVE_BACKOFF_MS, Math.max(MIN_LIVE_INTERVAL_MS, outcome.retryAfterMs))
         : backoffDelayMs(failures, this.intervalMs, this.random);
-    this.scheduleAt(this.clock.now() + delay, { status: 'backoff', failures, error: outcome.error });
+    this.scheduleAt(this.clock.now() + delay, { status: outcome.rateLimited ? 'rate-limited' : 'backoff', failures, error: outcome.error, retryDelayMs: delay });
   }
 
   private async fetchOnce(): Promise<PollOutcome> {
@@ -300,14 +326,23 @@ export class AdsbLolSource implements LiveSource {
       });
       if (!response.ok) {
         const retry = response.status === 503 || response.status === 429 ? retryAfterMs(response.headers.get('retry-after'), this.clock.now()) : null;
-        await response.body?.cancel().catch(() => undefined);
-        const what = response.status === 503 ? 'no data (HTTP 503)' : `HTTP ${response.status}`;
-        return { ok: false, error: `${this.options.url}: ${what}`, retryAfterMs: retry };
+        // A 503's small JSON body says why the relay has nothing (docs/flights-proxy.md in the portfolio); others are not read.
+        const reason = response.status === 503 ? await relayReason(response) : null;
+        if (response.status !== 503) await response.body?.cancel().catch(() => undefined);
+        const upstreamLimited = reason === 'HTTP 429';
+        const rateLimited = response.status === 429 || upstreamLimited;
+        const what =
+          response.status === 429
+            ? 'rate-limited (HTTP 429)'
+            : response.status === 503
+              ? relayNoData(reason)
+              : `HTTP ${response.status}`;
+        return { ok: false, error: `${this.options.url}: ${what}`, retryAfterMs: retry, rateLimited };
       }
       const parsed = FlightsApiResponseSchema.safeParse(await response.json());
       if (!parsed.success) {
         const issue = parsed.error.issues[0];
-        return { ok: false, error: `Unexpected response: ${issue ? `${issue.path.join('.') || 'body'}: ${issue.message}` : 'invalid'}`, retryAfterMs: null };
+        return { ok: false, error: `Unexpected response: ${issue ? `${issue.path.join('.') || 'body'}: ${issue.message}` : 'invalid'}`, retryAfterMs: null, rateLimited: false };
       }
       const body = parsed.data;
       const nowSec = body.now / 1000;
@@ -320,7 +355,7 @@ export class AdsbLolSource implements LiveSource {
       const nowMs = Math.min(body.now, this.clock.now() + MAX_LIVE_CLOCK_AHEAD_MS);
       return { ok: true, points, nowMs, stale: body.stale, attribution: body.attribution, license: body.license };
     } catch (error) {
-      return { ok: false, error: timeout.fired ? `${this.options.url}: no answer within ${this.timeoutMs} ms` : errorMessage(error), retryAfterMs: null };
+      return { ok: false, error: timeout.fired ? `${this.options.url}: no answer within ${Math.round(this.timeoutMs / 1000)} s` : errorMessage(error), retryAfterMs: null, rateLimited: false };
     } finally {
       this.clock.clearTimeout(timer);
       if (this.inflight === controller) this.inflight = null;

@@ -24,7 +24,8 @@ export function altitudeText(aircraft: Pick<MapAircraftRow, 'altBaroFt' | 'altGe
   if (aircraft.onGround) return 'On the ground';
   const ft = aircraft.altBaroFt ?? aircraft.altGeomFt;
   if (ft === null) return 'Unknown';
-  return `${integer.format(ft)} ft${aircraft.altBaroFt === null ? ' (GNSS)' : ''}`;
+  // A true minus sign, as the vertical rate has (Intl writes a hyphen-minus): barometric altitude goes below zero near sea level.
+  return `${ft < 0 ? '−' : ''}${integer.format(Math.abs(ft))} ft${aircraft.altBaroFt === null ? ' (GNSS)' : ''}`;
 }
 
 export function verticalRateText(fpm: number | null): string {

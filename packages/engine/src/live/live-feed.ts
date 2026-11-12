@@ -1,6 +1,7 @@
 import {
   DEFAULT_LIVE_RETENTION_MS,
   INITIAL_LIVE_STATE,
+  LIVE_FALLBACK_FIXTURE,
   sameLiveSource,
   type FlightBatch,
   type LiveClock,
@@ -47,6 +48,12 @@ export interface LiveFeedHostOptions {
   fetch?: LiveFetch;
   /** A replay fixture's path on the driver's file system; without it (and `fixtureReader`) replay is `not_implemented`. */
   fixturePath?: (fixture: LiveFixtureId) => Promise<string>;
+  /**
+   * Fetch a fixture ahead of need, so it loads without the network later (L5: the recorded traffic offered when the
+   * live feed fails, offline included). Called, fire and forget, when a live source starts, with the fallback's
+   * fixture (`LIVE_FALLBACK_FIXTURE`). The web worker keeps its 0.76 MB in memory.
+   */
+  prefetchFixture?: (fixture: LiveFixtureId) => void;
   /** Supplies a fixture's fixes directly instead of reading its Parquet file (tests; drivers without Parquet). */
   fixtureReader?: (fixture: LiveFixtureId) => Promise<FixtureReader>;
   clock?: LiveClock;
@@ -220,6 +227,7 @@ export class LiveFeed {
       if (config.kind === 'replay') reader = await this.openReader(config.fixture, store);
       const source = this.newSource(config, store, reader);
       this.running = { config, source, reader };
+      if (config.kind === 'live') this.options.prefetchFixture?.(LIVE_FALLBACK_FIXTURE);
       if (this.paused) source.pause();
       source.start();
     } catch (error) {

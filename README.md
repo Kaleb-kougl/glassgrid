@@ -15,6 +15,11 @@ Also as [MP4](docs/images/showcase/crossfilter-demo.mp4) and [WebM](docs/images/
 **Try it:** web demo at <https://kalebkougl-portfolio.vercel.app/glassgrid/>
 (**TODO: not live until the first release is picked up by the portfolio**),
 with sample links `?sample=taxi`, `?sample=retail` and `?sample=sensors`.
+**Live flights:** `?sample=flights` plays a recorded half hour of Bay Area air
+traffic on a map linked to the charts and the grid; `?live=1` shows live
+traffic from adsb.lol, which needs the portfolio site's `/api/flights` relay
+on the same origin (elsewhere it offers the recording instead)
+([design note](docs/live-flights.md)).
 **Desktop:** there is no signed download yet (milestone M5); `pnpm package`
 builds an unsigned installer for your OS (see [Develop](#develop)).
 
@@ -27,7 +32,10 @@ builds an unsigned installer for your OS (see [Develop](#develop)).
 | Scroll 10M rows: p95 frame interval; renderer memory before → after a full scroll | **16.7 ms**; 181 → 183 MB | 60 fps; flat, < 300 MB | [m2 exit gate](docs/benchmarks/m2/m2-exit-gate-medians-linux-x64.json) |
 | Chart create on 10M rows (drop → drawn), p95: bar / line / histogram / **heatmap** | 88.8 / 196.5 / 206.1 / **257.1 ms** (heatmap misses) | < 250 ms | [m3 exit gate](docs/benchmarks/m3/m3-exit-gate-medians-linux-x64.json) |
 | Web demo, cold: sample link → all four charts drawn; brush → every view painted | 3.0–3.2 s; 115–265 ms | | [web demo samples](docs/benchmarks/m4/web-demo-samples-chromium-linux-x64.json) |
-| Web demo first-load JS, gzip (DuckDB-WASM loads later, in a worker, on first intent) | **253.5 kB** | < 400 kB | `pnpm --filter @glassgrid/web size` at this commit ([M4 recorded 251 kB](docs/technical-design.md#m4--persistence-and-web-demo-week-4)) |
+| Web demo first-load JS, gzip (DuckDB-WASM loads later, in a worker, on first intent; the map chunk on the first map) | **276.9 kB** (253.5 before live flights) | < 400 kB | `pnpm --filter @glassgrid/web size` at this commit ([M4 recorded 251 kB](docs/technical-design.md#m4--persistence-and-web-demo-week-4)) |
+| Live flights, recorded half hour (71,595 fixes): brush altitude → map, charts and grid painted | p50 106.9 ms, **p95 157.0 ms** (misses; no GPU) | p95 < 100 ms | [L4 gate](docs/benchmarks/l4/flights-perf-chromium-linux-x64.json) |
+| Live flights map: 183 aircraft (the recorded day's peak in view) with trails while panning, p95 frame interval; map chunk, gzip | 66.8 ms (misses; software WebGL); 294.2 kB JS, lazy | 16.7 ms | [L3 map](docs/live-flights-l3-map.md#frame-times) |
+| Live flights: load the full recorded day (1.46M fixes, 14.5 MB Parquet) into DuckDB-WASM → views drawn | 3.4 s (3.4–4.5) | | [L4](docs/live-flights-l4.md#time-scrubber-and-history) |
 
 Conditions: a Linux VM with 2 vCPUs (Xeon @ 2.1 GHz) and 8 GB, medians of three
 runs. Desktop: Electron 44 under Xvfb with software rendering; chart and
@@ -37,7 +45,18 @@ free; later runs on a busier VM put the first chart at 3.7–4.4 s
 ([web demo notes](docs/m4-web-demo.md#architecture)). The budgets were set for the macOS arm64 CI
 runners, where they have not been measured yet. The heatmap miss is query time:
 a compute-bound aggregate of about 175 ms on two cores
-([M3 notes](docs/m3-notes.md#exit-gate)).
+([M3 notes](docs/m3-notes.md#exit-gate)). The live-flights misses are mostly
+software rasterisation on a VM without a GPU (the engine's share of a brush is
+about 50 ms); they are to be re-measured on a GPU machine
+([live flights](docs/live-flights.md#numbers)).
+
+| Live flights: brush altitude → the map filters; pan → the charts follow; scrub | The map card and its three charts (light and dark) |
+| --- | --- |
+| ![Brushing the altitude histogram filters the map; panning the map filters the charts; dragging the time slider moves the aircraft back](docs/images/showcase/flights-demo.gif) | ![The live-flights map with its time scrubber, the altitude, category and vertical-rate charts](docs/images/showcase/flights-map.png) |
+
+<sub>The recorded half hour of 2026-11-09 (`?sample=flights`). Aircraft data © adsb.lol contributors,
+[ODbL 1.0](https://opendatacommons.org/licenses/odbl/1.0/); basemap Natural Earth and OurAirports (public domain).
+Also as [MP4](docs/images/showcase/flights-demo.mp4), [WebM](docs/images/showcase/flights-demo.webm) and a [dark still](docs/images/showcase/flights-map-dark.png).</sub>
 
 | Desktop: a 1.5 GB, 10M-row CSV, four charts, workspace saved | Web demo: the sensor-readings sample |
 | --- | --- |
@@ -127,7 +146,7 @@ pnpm e2e          # build, then Playwright E2E on a generated 1M-row CSV, then t
 pnpm e2e:10m      # the same with 10M rows (the exit-gate benchmarks)
 pnpm e2e:web      # web demo E2E on the production build with production headers
 pnpm package      # electron-builder installer for the current OS (unsigned)
-pnpm showcase     # rebuild, then regenerate docs/images/showcase (2–5 min; about 2 more on first run)
+pnpm showcase     # rebuild, then regenerate docs/images/showcase (3.5–6.5 min; about 2 more on first run)
 ```
 
 Live flights locally: `pnpm dev:web` proxies `/api/flights` (the live relay
@@ -141,7 +160,10 @@ the build and the production headers and CSP are unchanged
 The web demo is served from the portfolio's `/glassgrid/` subfolder:
 `GLASSGRID_BASE=/glassgrid/ pnpm e2e:web` runs its E2E on a build for that
 base, and `pnpm package:web 0.1.0` packs such a build as a release tarball
-in `apps/web/release/` ([publishing](docs/deploy.md)).
+in `apps/web/release/` ([publishing](docs/deploy.md)). The web E2E runs in
+Chromium; for Firefox and WebKit too, install them once
+(`pnpm --filter @glassgrid/web exec playwright install firefox webkit`, plus
+`--with-deps` on Linux) and run `GLASSGRID_E2E_BROWSERS=chromium,firefox,webkit pnpm e2e:web`.
 
 E2E writes benchmark JSON to `apps/desktop/e2e-results/`. On Linux without a
 display, run it under `xvfb-run -a`. Electron downloads its binary on first use;
@@ -156,6 +178,7 @@ if that is interrupted, run `pnpm --filter @glassgrid/desktop exec install-elect
 | M2 Virtualized grid | Done; exit gate met on the dev VM ([notes](docs/m2-notes.md)) |
 | M3 Charts and cross-filtering | Done; exit gate partly met: heatmap create p95 is 257 ms against 250 ms ([notes](docs/m3-notes.md)) |
 | M4 Persistence and web demo | Done except the public deploy and the Firefox and Safari passes ([persistence](docs/m4-persistence.md), [web demo](docs/m4-web-demo.md)) |
+| Live flights L0–L5 | Done except the deploy and the GPU, Firefox and WebKit runs ([design note](docs/live-flights.md), [release steps](docs/deploy.md#live-flights)) |
 | M5 Ship v1.0 | Next: screen-reader passes, designed states, signed installers and auto-update, usability check |
 | M6 MCP bridge | Planned: agents drive the command registry over MCP, with tiers, undo and an activity panel |
 

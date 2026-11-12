@@ -3,6 +3,7 @@ import { arch, cpus, platform, totalmem } from 'node:os';
 import { join } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import './map-support';
+import { BENCHMARK_DIR } from './results';
 
 /*
  * Map frame-time benchmark (milestone L3), in the style of the render-perf
@@ -30,6 +31,8 @@ const [VIEW_W, VIEW_H] = (process.env['GLASSGRID_E2E_MAP_PERF_VIEWPORT'] ?? '128
 const ONLY = (process.env['GLASSGRID_E2E_MAP_PERF_SCENARIOS'] ?? '').split(',').filter(Boolean);
 
 test.skip(!ENABLED, 'benchmark: set GLASSGRID_E2E_MAP_PERF=1 (pnpm --filter @glassgrid/web e2e:map-perf)');
+// The JSON is named and compared as Chromium's (and reads Chromium's renderer processes); other browsers are not benchmarked.
+test.skip(({ browserName }) => browserName !== 'chromium', 'benchmark: Chromium only (its numbers are the recorded baseline)');
 
 const SCENARIOS = [
   { id: 'aircraft-183-trails-playing', url: './?map-demo&n=183', note: '183 aircraft, 5-minute trails, playing (dead reckoning every frame), a synthetic poll every 10 s' },
@@ -172,7 +175,7 @@ test('map frame times: 183 aircraft with trails while panning and zooming', asyn
     },
     scenarios: results,
   };
-  const dir = join(import.meta.dirname, '..', 'e2e-results');
+  const dir = BENCHMARK_DIR;
   mkdirSync(dir, { recursive: true });
   const file = join(dir, `map-perf-chromium-${platform()}-${arch()}${VIEW_W === 1280 && VIEW_H === 800 ? '' : `-${VIEW_W}x${VIEW_H}`}.json`);
   writeFileSync(file, `${JSON.stringify(out, null, 2)}\n`);

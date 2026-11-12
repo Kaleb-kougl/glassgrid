@@ -33,26 +33,34 @@ declare global {
   }
 }
 
-export async function watchProblems(page: Page, options: { alerts?: boolean } = {}): Promise<Problems> {
+export async function watchProblems(page: Page, options: { alerts?: boolean; expected?: RegExp } = {}): Promise<Problems> {
   const problems: Problems = { list: [], info: [] };
+  // A test that provokes failures on purpose (the live relay answering 503 or 429, the page offline) names them.
+  const add = (line: string) => {
+    if (!options.expected?.test(line)) problems.list.push(line);
+  };
   page.on('console', (message) => {
     const text = message.text();
-    if (message.type() === 'error') problems.list.push(`console.error: ${text}`);
-    else if (message.type() === 'warning' && text.startsWith('[glassgrid]')) problems.list.push(`console.warn: ${text}`);
+    // A failed resource's message names no URL; its location does, so a test can expect the one it provokes.
+    if (message.type() === 'error') add(`console.error: ${text}${text.startsWith('Failed to load resource') ? ` (${message.location().url})` : ''}`);
+    else if (message.type() === 'warning' && text.startsWith('[glassgrid]')) add(`console.warn: ${text}`);
     else if (message.type() === 'info' && text.startsWith('[glassgrid]')) problems.info.push(text);
   });
-  page.on('pageerror', (error) => problems.list.push(`pageerror: ${error.message}`));
+  page.on('pageerror', (error) => add(`pageerror: ${error.message}`));
   page.on('response', (response) => {
-    if (response.status() >= 400) problems.list.push(`HTTP ${response.status()} ${response.request().method()} ${response.url()}`);
+    if (response.status() >= 400) add(`HTTP ${response.status()} ${response.request().method()} ${response.url()}`);
   });
   page.on('request', (request) => {
     const url = new URL(request.url());
     if (BASE === '/' || !/^https?:$/.test(url.protocol)) return;
-    if (url.pathname !== BASE.slice(0, -1) && !url.pathname.startsWith(BASE)) problems.list.push(`outside ${BASE}: ${request.method()} ${request.url()}`);
+    // The live relay is the site's own route at its root (/api/flights), outside the base by design (docs/live-flights-l2.md).
+    if (url.pathname === '/api/flights') return;
+    if (url.pathname !== BASE.slice(0, -1) && !url.pathname.startsWith(BASE)) add(`outside ${BASE}: ${request.method()} ${request.url()}`);
   });
   page.on('requestfailed', (request) => {
     const failure = request.failure()?.errorText ?? '';
-    if (!failure.includes('ERR_ABORTED')) problems.list.push(`request failed: ${request.method()} ${request.url()} ${failure}`);
+    // An aborted request, in each browser's words: Chromium's net::ERR_ABORTED, Firefox's NS_BINDING_ABORTED, WebKit's "cancelled".
+    if (!/ERR_ABORTED|NS_BINDING_ABORTED|^cancelled$|Load request cancelled/i.test(failure)) add(`request failed: ${request.method()} ${request.url()} ${failure}`);
   });
   await page.addInitScript((alerts) => {
     const seen: string[] = [];

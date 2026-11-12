@@ -1,5 +1,5 @@
 import { writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { ffmpeg, GIF_WIDTH, MEDIA_DIR, VIDEO, WORK_DIR } from './common.ts';
 import type { Frame } from './web.ts';
 
@@ -20,12 +20,14 @@ async function concatList(frames: readonly Frame[]): Promise<string> {
   // The concat demuxer applies the last duration only when the last file is listed again.
   const last = frames.at(-1);
   if (last) lines.push(`file '${last.file.replaceAll("'", "'\\''")}'`);
-  const list = join(WORK_DIR, 'frames', 'concat.txt');
+  const list = join(frames[0] ? dirname(frames[0].file) : join(WORK_DIR, 'frames'), 'concat.txt');
   await writeFile(list, `${lines.join('\n')}\n`);
   return list;
 }
 
-export async function encodeDemo(frames: readonly Frame[], name: string): Promise<string[]> {
+/** `width`: the video's CSS width (the frames are 2x); the GIF is GIF_WIDTH wide, or the video's width when narrower. */
+export async function encodeDemo(frames: readonly Frame[], name: string, width: number = VIDEO.width): Promise<string[]> {
+  const gifWidth = Math.min(GIF_WIDTH, width);
   const list = await concatList(frames);
   const input = ['-f', 'concat', '-safe', '0', '-i', list];
   const gif = join(MEDIA_DIR, `${name}.gif`);
@@ -34,12 +36,12 @@ export async function encodeDemo(frames: readonly Frame[], name: string): Promis
   await ffmpeg([
     ...input,
     '-filter_complex',
-    `fps=${GIF_FPS},scale=${GIF_WIDTH}:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=256:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=3:diff_mode=rectangle`,
+    `fps=${GIF_FPS},scale=${gifWidth}:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=256:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=3:diff_mode=rectangle`,
     '-loop',
     '0',
     gif,
   ]);
-  const scale = `fps=${VIDEO_FPS},scale=${VIDEO.width}:-2:flags=lanczos,format=yuv420p`;
+  const scale = `fps=${VIDEO_FPS},scale=${width - (width % 2)}:-2:flags=lanczos,format=yuv420p`;
   await ffmpeg([...input, '-vf', scale, '-c:v', 'libx264', '-preset', 'slow', '-crf', '20', '-tune', 'animation', '-movflags', '+faststart', '-an', mp4]);
   await ffmpeg([...input, '-vf', scale, '-c:v', 'libvpx-vp9', '-crf', '34', '-b:v', '0', '-row-mt', '1', '-deadline', 'good', '-cpu-used', '2', '-an', webm]);
   return [gif, mp4, webm];

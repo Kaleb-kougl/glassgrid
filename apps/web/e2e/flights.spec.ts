@@ -88,7 +88,7 @@ test('/?sample=flights loads the 30-minute fixture whole into flight_states and 
   await expect.poll(clock, { timeout: 30_000 }).toBeLessThan(Date.parse('2026-11-09T23:40:00.000Z'));
   const first = await clock();
   await expect.poll(clock, { timeout: 30_000 }).toBeGreaterThan(first + 10_000);
-  await expect(map.getByTestId('map-map_1-status')).toHaveText(/^Recorded · [1-9]\d* aircraft$/);
+  await expect(map.getByTestId('map-map_1-status')).toHaveText(/^Recorded · [1-9]\d* (?:aircraft|tracked · \d+ in view)$/);
   await expect(page.getByTestId('time-range')).toHaveText('Data: Nov 9, 2026, 23:27:00–23:57:59 UTC (31 min)');
   await expect(page.getByRole('slider', { name: 'Time shown on the map' })).toHaveAttribute('aria-valuetext', /^\d\d:\d\d:\d\d UTC, /);
   await expect(page.getByTestId('map-view')).toBeVisible();

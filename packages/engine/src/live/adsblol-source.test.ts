@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FlightBatch, FlightsApiResponse } from '@glassgrid/core';
-import { AdsbLolSource, DEFAULT_LIVE_TIMEOUT_MS, backoffDelayMs, retryAfterMs, type LiveFetch } from './adsblol-source';
+import { AdsbLolSource, DEFAULT_LIVE_TIMEOUT_MS, backoffDelayMs, relayNoData, retryAfterMs, type LiveFetch } from './adsblol-source';
 
 /*
  * The live source against a mocked `fetch` under Vitest's fake timers: the
@@ -193,9 +193,45 @@ describe('AdsbLolSource', () => {
     h.source.stop();
   });
 
+  it('words the relay’s 503 reasons: a timeout is adsb.lol being slow, a 429 its rate limit, others their code', () => {
+    expect(relayNoData(null)).toBe('no data (HTTP 503)');
+    expect(relayNoData('timeout')).toBe('adsb.lol is slow to respond (HTTP 503)');
+    expect(relayNoData('HTTP 429')).toBe('adsb.lol is rate-limiting the relay (HTTP 503)');
+    expect(relayNoData('network ENOTFOUND')).toBe('no data: network ENOTFOUND (HTTP 503)');
+  });
+
   it('caps the backoff at 5 minutes', () => {
     expect([1, 2, 3, 4, 5, 6, 10].map((n) => backoffDelayMs(n, 20_000, () => 1))).toEqual([20_000, 40_000, 80_000, 160_000, 300_000, 300_000, 300_000]);
     expect(backoffDelayMs(1, 10_000, () => 0)).toBe(10_000);
+  });
+
+  it('reports a 429 (and a 503 whose reason is the upstream’s HTTP 429) as rate-limited, waits for Retry-After, then recovers (L5)', async () => {
+    const relay503 = (reason: string) =>
+      new Response(JSON.stringify({ error: 'Live flight data is temporarily unavailable.', reason, retryAfter: 30 }), { status: 503, headers: { 'retry-after': '30', 'content-type': 'application/json' } });
+    const responses: Array<() => Response> = [
+      () => new Response('slow down', { status: 429, headers: { 'retry-after': '120' } }),
+      () => relay503('HTTP 429'),
+      () => relay503('network ENOTFOUND'),
+      () => new Response('slow down', { status: 429 }),
+      () => json(body()),
+    ];
+    const h = harness((n) => (responses[n - 1] ?? (() => json(body())))());
+    h.source.start();
+    await vi.advanceTimersByTimeAsync(0);
+    // The wait is reported as a delay too (retryDelayMs), so a reader needs no clock of its own to judge it.
+    expect(h.source.state()).toMatchObject({ status: 'rate-limited', failures: 1, error: `${URL}: rate-limited (HTTP 429)`, nextAttemptAt: T0 + 120_000, retryDelayMs: 120_000 });
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(h.source.state()).toMatchObject({ status: 'rate-limited', failures: 2, error: `${URL}: adsb.lol is rate-limiting the relay (HTTP 503)`, nextAttemptAt: T0 + 150_000 });
+    await vi.advanceTimersByTimeAsync(30_000);
+    // Any other reason is the relay's "no data", with its short code.
+    expect(h.source.state()).toMatchObject({ status: 'backoff', failures: 3, error: `${URL}: no data: network ENOTFOUND (HTTP 503)`, retryDelayMs: 30_000 });
+    await vi.advanceTimersByTimeAsync(30_000);
+    // A 429 without Retry-After backs off like any failure (random 0: half of 20 s × 2³, 80 s).
+    expect(h.source.state()).toMatchObject({ status: 'rate-limited', failures: 4, nextAttemptAt: T0 + 180_000 + 80_000 });
+    await vi.advanceTimersByTimeAsync(80_000);
+    expect(h.source.state()).toMatchObject({ status: 'live', failures: 0, error: null, retryDelayMs: null });
+    expect(h.calls()).toEqual([0, 120_000, 150_000, 180_000, 260_000]);
+    h.source.stop();
   });
 
   it('treats other statuses, timeouts and bodies off the contract as failures', async () => {
@@ -211,7 +247,7 @@ describe('AdsbLolSource', () => {
     const source = new AdsbLolSource({ url: URL, fetch, sink: () => Promise.resolve(), random: () => 0 });
     source.start();
     await vi.advanceTimersByTimeAsync(DEFAULT_LIVE_TIMEOUT_MS);
-    expect(source.state()).toMatchObject({ status: 'backoff', error: `${URL}: no answer within ${DEFAULT_LIVE_TIMEOUT_MS} ms` });
+    expect(source.state()).toMatchObject({ status: 'backoff', error: `${URL}: no answer within ${DEFAULT_LIVE_TIMEOUT_MS / 1000} s` });
     mode = '404';
     await vi.advanceTimersByTimeAsync(10_000);
     expect(source.state()).toMatchObject({ status: 'backoff', failures: 2, error: `${URL}: HTTP 404` });

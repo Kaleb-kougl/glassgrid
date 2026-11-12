@@ -137,15 +137,37 @@ function liveOptions(init: WorkerInit, files: BrowserFiles): QueryServiceOptions
   if (url !== undefined && !allowed(url)) console.warn(`[engine-worker] live endpoint ${url} is not on an allowed origin; live data is off`);
   const fixtures = init.live?.fixtures ?? {};
   const registered = new Map<LiveFixtureId, Promise<string>>();
+  // L5: fixtures fetched ahead (the recording offered when live data fails) and held in memory as a File, so they
+  // load with the network gone. A failed prefetch is forgotten; the fixture is then read over HTTP as before.
+  const held = new Map<LiveFixtureId, Promise<string | null>>();
   return {
     ...(url !== undefined && allowed(url) ? { url } : {}),
     fetch: (target, request) => fetch(target, request),
     ...(Object.keys(fixtures).length === 0
       ? {}
       : {
-          fixturePath: (fixture: LiveFixtureId) => {
+          prefetchFixture: (fixture: LiveFixtureId) => {
             const fixtureUrl = fixtures[fixture];
-            if (fixtureUrl === undefined || !allowed(fixtureUrl)) return Promise.reject(new Error(`No URL for the ${fixture} fixture`));
+            if (held.has(fixture) || fixtureUrl === undefined || !allowed(fixtureUrl)) return;
+            const job = fetch(fixtureUrl)
+              .then(async (response) => {
+                if (!response.ok) throw new Error(`${fixtureUrl} answered ${response.status}`);
+                const name = decodeURIComponent(new URL(fixtureUrl).pathname.split('/').pop() ?? '') || `${fixture}.parquet`;
+                const file = new File([await response.blob()], name, { type: 'application/vnd.apache.parquet' });
+                return (await files.registerSource(`live-${fixture}-held`, { kind: 'file', file })).path;
+              })
+              .catch((error: unknown) => {
+                held.delete(fixture);
+                console.info(`[engine-worker] ${fixture} was not fetched ahead (${error instanceof Error ? error.message : String(error)}); it will be read over HTTP`);
+                return null;
+              });
+            held.set(fixture, job);
+          },
+          fixturePath: async (fixture: LiveFixtureId) => {
+            const inMemory = await held.get(fixture);
+            if (inMemory) return inMemory;
+            const fixtureUrl = fixtures[fixture];
+            if (fixtureUrl === undefined || !allowed(fixtureUrl)) throw new Error(`No URL for the ${fixture} fixture`);
             let path = registered.get(fixture);
             if (!path) {
               path = files.registerSource(`live-${fixture}`, { kind: 'url', url: fixtureUrl }).then((source) => source.path);

@@ -1,7 +1,7 @@
 import { vi } from 'vitest';
 import type { CloseAnswer, OpenCsvResult, ThemePreference } from '@glassgrid/core';
 import type { EngineClientLike } from '../engine';
-import type { AppMenuCommand, DocumentChrome, DroppedFileRef, Platform, PlatformCapabilities, PlatformMap, SampleDataset, WorkspaceFilesApi } from '../platform';
+import type { AppMenuCommand, DocumentChrome, DroppedFileRef, Platform, PlatformCapabilities, PlatformLive, PlatformMap, SampleDataset, WorkspaceFilesApi } from '../platform';
 
 /*
  * A Platform for tests: every capability a vi.fn the test can inspect and
@@ -23,6 +23,8 @@ export interface FakePlatformOptions {
   menuShortcuts?: boolean;
   /** The basemap for map views (the web shell's). */
   map?: PlatformMap;
+  /** Live flights' offline fallback (the web shell's, L5). */
+  live?: PlatformLive;
   /** The page's visibility listener slot (web). */
   onVisibilityChange?: (listener: (visible: boolean) => void) => () => void;
 }
@@ -73,6 +75,7 @@ export function fakePlatform<E extends EngineClientLike>(engine: E, options: Fak
     capabilities: { canSaveWorkspace: false, canOpenFromPath: true, maxFileBytes: null, ...options.capabilities },
     ...(options.workspaceFiles ? { workspaceFiles: options.workspaceFiles } : {}),
     ...(options.map ? { map: options.map } : {}),
+    ...(options.live ? { live: options.live } : {}),
   };
   return {
     platform,

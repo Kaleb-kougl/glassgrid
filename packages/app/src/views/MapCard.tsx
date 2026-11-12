@@ -1,4 +1,4 @@
-import { useEffect, useState, type ComponentType, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from 'react';
 import type { MapAircraftRow, MapSpec, MapTrailRow, MapViewState, TableId } from '@glassgrid/core';
 import { Button } from '@glassgrid/ui';
 import { AltitudeLegend, loadMapView, type MapBounds, type MapViewProps } from '@glassgrid/ui/map';
@@ -6,8 +6,10 @@ import type { EngineClientLike } from '../engine';
 import { feedStatusLine, type MapClock } from '../flights';
 import type { PlatformMap } from '../platform';
 import { AircraftDetails, aircraftName } from './AircraftDetails';
+import { AircraftList, aircraftInView } from './AircraftList';
 import { MapBoundary } from './MapBoundary';
 import { useMapData, useMapTrack, type MapSnapshot } from './map-data';
+import { useNow } from './use-now';
 
 /*
  * A map view card (docs/live-flights-l3-data.md): the MapLibre component
@@ -22,22 +24,6 @@ type MapComponent = ComponentType<MapViewProps>;
 const NO_AIRCRAFT: readonly MapAircraftRow[] = Object.freeze([]);
 const NO_TRAILS: readonly MapTrailRow[] = Object.freeze([]);
 const NO_TRACK: readonly MapTrailRow[] = Object.freeze([]);
-
-/** Wall-clock time, ticking every second while `enabled` (a backing-off feed's countdown). */
-function useNow(enabled: boolean): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!enabled) return;
-    const tick = () => setNow(Date.now());
-    const first = setTimeout(tick, 0);
-    const timer = setInterval(tick, 1_000);
-    return () => {
-      clearTimeout(first);
-      clearInterval(timer);
-    };
-  }, [enabled]);
-  return now;
-}
 
 let component: Promise<MapComponent> | null = null;
 
@@ -90,6 +76,10 @@ export interface MapCardProps {
   onFilterToView?: ((mapId: string, enabled: boolean) => void) | undefined;
   /** Shown above the map (L4: the time scrubber, on the first map card). */
   toolbar?: ReactNode;
+  /** Shown between the toolbar and the map (L5: the offer of recorded traffic, or "Back to live"). */
+  notice?: ReactNode;
+  /** The browser is online (`navigator.onLine`; L5): offline, the live feed's state reads "Offline". */
+  online?: boolean;
   onRemove: () => void;
   position: { index: number; count: number };
 }
@@ -110,6 +100,8 @@ export function MapCard({
   onPainted,
   onFilterToView,
   toolbar,
+  notice,
+  online = true,
   onRemove,
   position,
 }: MapCardProps) {
@@ -134,7 +126,11 @@ export function MapCard({
     return () => cancelAnimationFrame(frame);
   }, [ready, mapId, onPainted]);
   const feed = clock.feed;
-  const now = useNow(feed?.status === 'backoff' && feed.nextAttemptAt !== null);
+  // The countdown to the next attempt ticks while the feed waits: backing off, rate-limited, or offline (L5).
+  const waiting = feed?.status === 'backoff' || feed?.status === 'rate-limited' || (!online && feed?.kind === 'live' && feed.status !== 'stopped');
+  const now = useNow(waiting && feed.nextAttemptAt !== null);
+  /** "List view" (L5): the aircraft table shown; hidden, it is still there for screen readers and the keyboard. */
+  const [listVisible, setListVisible] = useState(false);
 
   let body;
   if (platformMap === undefined) {
@@ -174,8 +170,19 @@ export function MapCard({
 
   // The line: a query error; else the live feed's state (L2) and the aircraft count. The feed's state also goes to a
   // polite live region, without the countdown, so a change of state is announced once.
-  const count = snapshot === null ? (clock.dataClockMs === null ? null : 'Loading…') : `${snapshot.aircraft.length.toLocaleString('en-US')} aircraft`;
-  const feedLine = feed === undefined ? null : feedStatusLine(feed, clock.speed, now);
+  // Every aircraft the map was given (it draws them all; filters apply, its own view does not) and, when fewer, how
+  // many are inside its view: the list's rows (L5). One count when they agree.
+  const inView = useMemo(() => aircraftInView(snapshot?.aircraft ?? NO_AIRCRAFT, map.viewport), [snapshot, map.viewport]);
+  const tracked = snapshot?.aircraft.length ?? 0;
+  const count =
+    snapshot === null
+      ? clock.dataClockMs === null
+        ? null
+        : 'Loading…'
+      : inView.length === tracked
+        ? `${tracked.toLocaleString('en-US')} aircraft`
+        : `${tracked.toLocaleString('en-US')} tracked · ${inView.length.toLocaleString('en-US')} in view`;
+  const feedLine = feed === undefined ? null : feedStatusLine(feed, clock.speed, now, online);
   let status: string;
   if (data.status === 'error') status = data.message;
   else if (feedLine !== null) status = count === null ? feedLine.text : `${feedLine.text} · ${count}`;
@@ -184,6 +191,9 @@ export function MapCard({
   const selected = selectedHex === null ? undefined : snapshot?.aircraft.find((aircraft) => aircraft.hex === selectedHex);
   const filterOn = map.filterToView !== false;
   const announce = selected === undefined ? '' : `Selected ${aircraftName(selected)}`;
+  const list = (visible: boolean) => (
+    <AircraftList aircraft={inView} selectedHex={selectedHex} onSelect={onSelect} visible={visible} title={title} id={`map-${map.id}-list`} testId={`map-${map.id}-list`} />
+  );
   return (
     <section
       className="map-card"
@@ -193,23 +203,12 @@ export function MapCard({
       data-aircraft={snapshot?.aircraft.length}
       data-clock={snapshot?.dataClockMs}
       data-filter={filterOn ? 'on' : 'off'}
+      data-in-view={snapshot === null ? undefined : inView.length}
+      // Focus lands here when a control in the card removes itself (L5: the fallback strip's buttons).
+      tabIndex={-1}
     >
       <header className="map-card__header">
         <h3 className="map-card__title">{title}</h3>
-        <span
-          className="map-card__status"
-          role={data.status === 'error' ? 'alert' : undefined}
-          title={feed?.error ? `${status}\n${feed.error}` : status}
-          data-testid={`map-${map.id}-status`}
-          data-feed={feed === undefined ? undefined : (feed?.status ?? 'none')}
-        >
-          {status}
-        </span>
-        {feedLine !== null && (
-          <span className="gg-visually-hidden" aria-live="polite" aria-atomic="true" data-testid={`map-${map.id}-feed`}>
-            {`${title}: ${feedLine.announce}`}
-          </span>
-        )}
         <span className="panel__spacer" />
         {onFilterToView && (
           <label className="map-card__filter" title="Charts and the grid show only what is inside the map's view">
@@ -221,7 +220,24 @@ export function MapCard({
           Remove
         </Button>
       </header>
+      {/* The feed's state and the counts: a line of its own under the header (it can be long: an error, a countdown),
+          wrapping to two lines at most, the whole text in its tooltip. */}
+      <p
+        className="map-card__status"
+        role={data.status === 'error' ? 'alert' : undefined}
+        title={feed?.error ? `${status}\n${feed.error}` : status}
+        data-testid={`map-${map.id}-status`}
+        data-feed={feed === undefined ? undefined : (feed?.status ?? 'none')}
+      >
+        {status}
+      </p>
+      {feedLine !== null && (
+        <span className="gg-visually-hidden" aria-live="polite" aria-atomic="true" data-testid={`map-${map.id}-feed`}>
+          {`${title}: ${feedLine.announce}`}
+        </span>
+      )}
       {toolbar}
+      {notice}
       <span className="gg-visually-hidden" aria-live="polite" aria-atomic="true" data-testid={`map-${map.id}-selection`}>
         {announce}
       </span>
@@ -238,9 +254,29 @@ export function MapCard({
         >
           {body}
           {legend && <AltitudeLegend theme={theme} className="map-card__legend" label={`${title}: aircraft altitude`} />}
-
         </MapBoundary>
+        {/* Hidden, the list lives over the map: focused, it shows there as an overlay, so nothing below moves. */}
+        {legend && !listVisible && list(false)}
       </div>
+      {legend && (
+        <div className="map-card__list-bar">
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-pressed={listVisible}
+            aria-controls={`map-${map.id}-list`}
+            onClick={() => setListVisible((shown) => !shown)}
+            title="Show the aircraft in view as a table"
+            data-testid={`map-${map.id}-list-toggle`}
+          >
+            List view
+          </Button>
+          <span className="map-card__list-count" aria-hidden="true">
+            {`${inView.length.toLocaleString('en-US')} aircraft in view`}
+          </span>
+        </div>
+      )}
+      {legend && listVisible && list(true)}
       {legend && selected !== undefined && clock.dataClockMs !== null && (
         <AircraftDetails
           aircraft={selected}

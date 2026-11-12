@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { LIVE_FLIGHTS_FINGERPRINT, LIVE_FLIGHTS_HANDLE, LIVE_FLIGHTS_TABLE_ID, liveSourceConfigFromInput, type ParsedLiveSourceInput } from '@glassgrid/core';
 import { createAppWorkspace } from '@glassgrid/app';
 import type { WorkerEngine } from '@glassgrid/engine/web';
-import { FLIGHTS_SAMPLE, flightsSourceFromSearch } from './flights';
+import { FLIGHTS_SAMPLE, flightsSourceFromSearch, initialFlightsSource } from './flights';
 import { createDuckdbWebEngine } from './web-engine';
 import { webMap } from './web-platform';
 
@@ -19,6 +19,13 @@ describe('flights links', () => {
     expect(flightsSourceFromSearch('?sample=taxi')).toBeNull();
     expect(flightsSourceFromSearch('?live=0')).toBeNull();
     expect(flightsSourceFromSearch('')).toBeNull();
+  });
+
+  it('?live=1 opens the recording instead once the person chose it in this tab (L5); other links are unaffected', () => {
+    expect(initialFlightsSource('?live=1', null)).toEqual({ source: { source: 'live' }, requested: true });
+    expect(initialFlightsSource('?live=1', 'recorded')).toEqual({ source: { source: 'archive', fixture: 'flights-bay-30min' }, requested: true });
+    expect(initialFlightsSource('?sample=flights', 'recorded')).toEqual({ source: { source: 'archive', fixture: 'flights-bay-30min' }, requested: false });
+    expect(initialFlightsSource('?sample=taxi', 'recorded')).toEqual({ source: null, requested: false });
   });
 
   it('the basemap is served under the base, with its credit', () => {

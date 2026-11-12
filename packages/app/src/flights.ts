@@ -167,11 +167,23 @@ function retentionOf(source: LiveState['source']): number | null {
   return source.retentionMs === undefined ? DEFAULT_LIVE_RETENTION_MS : source.retentionMs;
 }
 
-/** The feed's state in a few words: "Live", "Replay 5×", "Recorded", "Connecting…", "Stale", "Retrying", "Stopped", "Replay ended" (", paused"). */
-export function feedLabel(feed: LiveSourceState | null, speed: number | undefined): string {
+/**
+ * Whether the browser says it is offline (`navigator.onLine` false) while the live feed is trying to reach the
+ * relay: then no poll can succeed, and the feed's state reads "Offline" rather than its last error (L5).
+ */
+function offlineLive(feed: LiveSourceState, online: boolean): boolean {
+  return !online && feed.kind === 'live' && feed.status !== 'stopped';
+}
+
+/**
+ * The feed's state in a few words: "Live", "Replay 5×", "Recorded", "Connecting…", "Stale", "Retrying",
+ * "Rate-limited", "Offline", "Stopped", "Replay ended" (", paused").
+ */
+export function feedLabel(feed: LiveSourceState | null, speed: number | undefined, online = true): string {
   if (feed === null) return 'Starting…';
   const replay = feed.kind === 'replay';
   let label: string;
+  if (offlineLive(feed, online)) return feed.paused ? 'Offline, paused' : 'Offline';
   switch (feed.status) {
     case 'connecting':
       label = replay ? 'Starting the replay…' : feed.kind === 'archive' ? 'Loading…' : 'Connecting…';
@@ -184,6 +196,9 @@ export function feedLabel(feed: LiveSourceState | null, speed: number | undefine
       break;
     case 'backoff':
       label = 'Retrying';
+      break;
+    case 'rate-limited':
+      label = 'Rate-limited';
       break;
     case 'stopped':
       label = replay && feed.ended ? 'Replay ended' : feed.kind === 'archive' && feed.error !== null ? 'Load failed' : 'Stopped';
@@ -208,17 +223,43 @@ export function shortFeedError(error: string | null): string | null {
 
 const clockTime = new Intl.DateTimeFormat('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
 
+/** "Retrying in 14 s" (counting down to `nextAttemptAt`), "Retrying now", or "Retrying" when nothing is scheduled. */
+function retryCountdown(feed: LiveSourceState, nowMs: number): string {
+  const wait = feed.nextAttemptAt === null ? null : Math.max(0, Math.ceil((feed.nextAttemptAt - nowMs) / 1000));
+  return wait === null ? 'retrying' : wait === 0 ? 'retrying now' : `retrying in ${wait} s`;
+}
+
+const capitalised = (text: string) => `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
+
 /**
- * What the map card's status line says about the feed (L2's states):
- * `text` for the line (a backing-off feed counts down to its next attempt,
- * so it changes every second), `announce` for its polite live region (the
- * same without the countdown, so a screen reader hears each change of
- * state, not each second).
+ * What the map card's status line says about the feed (L2's states, L5's
+ * rate-limited and offline): `text` for the line (a waiting feed counts
+ * down to its next attempt, so it changes every second), `announce` for its
+ * polite live region (the same without the countdown, so a screen reader
+ * hears each change of state, not each second).
+ *
+ * | State | Line | When |
+ * | --- | --- | --- |
+ * | connecting | "Connecting to the live feed…" | started, no answer yet |
+ * | live | "Live" | the last poll succeeded |
+ * | stale | "Stale data · last update 15:02:31" | the relay said `stale: true`, or no success for the threshold |
+ * | rate-limited | "Rate-limited · retrying in 95 s" | a 429 (or the relay's upstream 429), waiting for Retry-After |
+ * | offline | "Offline · retrying in 12 s" | `navigator.onLine` is false (no poll can succeed) |
+ * | backoff | "Retrying in 14 s · HTTP 503" | any other failure |
  */
-export function feedStatusLine(feed: LiveSourceState | null, speed: number | undefined, nowMs: number): { text: string; announce: string } {
+export function feedStatusLine(feed: LiveSourceState | null, speed: number | undefined, nowMs: number, online = true): { text: string; announce: string } {
   if (feed === null) return { text: 'Starting the feed…', announce: 'Starting the feed' };
   const source = feed.kind === 'replay' ? 'replay' : feed.kind === 'archive' ? 'recorded data' : 'live feed';
   const paused = feed.paused && feed.status !== 'stopped' ? ', paused' : '';
+  // For the announcements that are whole sentences: a sentence of its own, never ", paused" after a full stop.
+  const pausedSentence = paused === '' ? '' : ' It is paused while the page is hidden.';
+  if (offlineLive(feed, online)) {
+    const since = feed.lastSuccessAt === null ? '' : ` The last update was at ${clockTime.format(feed.lastSuccessAt)}.`;
+    return {
+      text: `Offline · ${retryCountdown(feed, nowMs)}${paused}`,
+      announce: `You are offline: the live feed cannot be reached.${since}${pausedSentence}`,
+    };
+  }
   switch (feed.status) {
     case 'connecting':
       if (feed.kind === 'archive') return { text: `Loading recorded flights…${paused}`, announce: `Loading recorded flights${paused}` };
@@ -229,18 +270,26 @@ export function feedStatusLine(feed: LiveSourceState | null, speed: number | und
       if (feed.kind === 'archive') return { text: `Recorded${paused}`, announce: `Recorded flights loaded${paused}` };
       return { text: feedLabel(feed, speed), announce: feed.kind === 'replay' ? `Replaying at ${speed ?? 1}×${paused}` : `Live${paused}` };
     case 'stale': {
-      const since = feed.lastSuccessAt === null ? '' : `, last update at ${clockTime.format(feed.lastSuccessAt)}`;
-      return { text: `Stale data${paused}`, announce: `The ${source}'s data is stale${since}${paused}` };
+      // The data's own time when the relay says it is stale (its snapshot's `now`), else the last success.
+      const at = feed.dataClockMs ?? feed.lastSuccessAt;
+      const since = at === null ? '' : `, last update at ${clockTime.format(at)}`;
+      return { text: `Stale data${at === null ? '' : ` · last update ${clockTime.format(at)}`}${paused}`, announce: `The ${source}'s data is stale${since}${paused}` };
+    }
+    case 'rate-limited': {
+      const at = feed.nextAttemptAt === null ? '' : ` Next try at ${clockTime.format(feed.nextAttemptAt)}.`;
+      const upstream = /adsb\.lol/.test(feed.error ?? '') ? 'adsb.lol is limiting the relay' : 'the relay asked us to slow down';
+      return {
+        text: `Rate-limited · ${retryCountdown(feed, nowMs)}${paused}`,
+        announce: `The ${source} is rate-limited: ${upstream}.${at}${pausedSentence}`,
+      };
     }
     case 'backoff': {
       const error = shortFeedError(feed.error);
       const tries = `${feed.failures} failed ${feed.failures === 1 ? 'attempt' : 'attempts'}`;
-      const wait = feed.nextAttemptAt === null ? null : Math.max(0, Math.ceil((feed.nextAttemptAt - nowMs) / 1000));
-      const when = wait === null ? 'Retrying' : wait === 0 ? 'Retrying now' : `Retrying in ${wait} s`;
       const at = feed.nextAttemptAt === null ? '' : ` Next try at ${clockTime.format(feed.nextAttemptAt)}.`;
       return {
-        text: `${when}${error ? ` · ${error}` : ''}${paused}`,
-        announce: `The ${source} is unavailable after ${tries}${error ? `: ${error}` : ''}.${at}${paused}`,
+        text: `${capitalised(retryCountdown(feed, nowMs))}${error ? ` · ${error}` : ''}${paused}`,
+        announce: `The ${source} is unavailable after ${tries}${error ? `: ${error}` : ''}.${at}${pausedSentence}`,
       };
     }
     case 'stopped': {

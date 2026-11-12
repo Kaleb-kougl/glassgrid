@@ -194,6 +194,27 @@ describe('the live feed through the engine protocol', () => {
     service.close();
   });
 
+  it('fetches the fallback recording ahead when a live source starts, and only then (L5)', async () => {
+    const time = manualClock();
+    const prefetched: string[] = [];
+    const fetch: LiveFetch = () => Promise.resolve(new Response(JSON.stringify(apiBody(time.now, 0.3))));
+    const service = await engine({
+      url: 'https://site.example/api/flights',
+      fetch,
+      clock: time.clock,
+      fixtureReader: () => Promise.resolve(memoryFixtureReader(FIXTURE)),
+      prefetchFixture: (fixture) => prefetched.push(fixture),
+    });
+    const a = connect(service);
+    await a.request({ kind: 'liveStart', source: { kind: 'archive', fixture: 'flights-bay-day' } });
+    await a.request({ kind: 'liveStart', source: { kind: 'replay', fixture: 'flights-bay-30min', intervalMs: 1_000 } });
+    expect(prefetched).toEqual([]);
+    await a.request({ kind: 'liveStart', source: { kind: 'live' } });
+    expect(prefetched).toEqual(['flights-bay-30min']);
+    a.session.dispose();
+    service.close();
+  });
+
   it('pauses while every connection that reported is hidden', async () => {
     const time = manualClock();
     let polls = 0;

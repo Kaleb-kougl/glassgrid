@@ -78,6 +78,8 @@ import { MapBoundary } from './views/MapBoundary';
 import { useMapViewport } from './views/map-viewport';
 import { ARCHIVE_PLAY_SPEED, batchKey, dataTimeRange, feedLabel, FLIGHTS_DAY_ARCHIVE, FLIGHTS_SAMPLE_ARCHIVE, mapClock, shortFeedError, useLiveState } from './flights';
 import { TimeScrubber, type LoadDay } from './views/TimeScrubber';
+import { LiveFallbackNotice } from './views/LiveFallbackNotice';
+import { useOnline } from './live-fallback';
 import {
   displayColumns,
   EngineGridSource,
@@ -351,6 +353,20 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
   /** A cursor that played to the end of the data holds there (an archive, a file) or follows it (a feed): below. */
   const playedOut = playedToEnd(cursor, timeRange, wallNow);
   const feedKind = liveTable ? (liveState?.source?.kind ?? null) : null;
+  // Offline → replay (L5, live-fallback.ts). `wantsLive`: the person asked for live data here (`?live=1`, or a live
+  // feed ran on this live table), so recorded traffic in its place is a fallback and the way back is offered. It is
+  // forgotten when the live table closes (another file opened).
+  const liveApi = platform.live;
+  const online = useOnline(liveApi);
+  const [wantsLive, setWantsLive] = useState(liveApi?.requested === true);
+  const [hadLiveTable, setHadLiveTable] = useState(liveTable);
+  if (hadLiveTable !== liveTable) {
+    setHadLiveTable(liveTable);
+    if (!liveTable && wantsLive) setWantsLive(false);
+  }
+  if (liveTable && feedKind === 'live' && !wantsLive) setWantsLive(true);
+  /** The recorded traffic was just chosen in place of live data: play it from its first fix once it is loaded. */
+  const [playRecorded, setPlayRecorded] = useState(false);
   /** Live or replayed data keeps arriving: "Live" follows it. An archive or a file has an end instead. */
   const followsFeed = feedKind === 'live' || feedKind === 'replay';
   const atEnd = !followsFeed && cursor.mode !== 'live' && atMs !== null && timeRange !== null && atMs >= timeRange.endMs;
@@ -1057,9 +1073,17 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
   // An archive opens playing from its first fix (once per workspace: the cursor is then set), as soon as the
   // profile says where that is ...
   const archiveStart =
-    feedKind === 'archive' && state.time === undefined && state.maps.length > 0 && liveState?.feed?.status === 'live' && timeRange !== null && timeRange.startMs < timeRange.endMs
+    feedKind === 'archive' &&
+    (state.time === undefined || playRecorded) &&
+    !rangePending &&
+    state.maps.length > 0 &&
+    liveState?.feed?.status === 'live' &&
+    timeRange !== null &&
+    timeRange.startMs < timeRange.endMs
       ? timeRange.startMs
       : null;
+  // The fallback's restart is done once the cursor plays from that first fix.
+  if (playRecorded && archiveStart !== null && cursor.mode === 'playing' && cursor.atMs === archiveStart) setPlayRecorded(false);
   useEffect(() => {
     if (archiveStart !== null) dispatch('setTime', { mode: 'playing', atMs: archiveStart, speed: ARCHIVE_PLAY_SPEED });
   }, [archiveStart, dispatch]);
@@ -1084,6 +1108,41 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
           ? { state: 'failed', error: shortFeedError(archiveFeed.error) ?? archiveFeed.error, onLoad: () => startArchive(FLIGHTS_DAY_ARCHIVE), onBack: () => startArchive(FLIGHTS_SAMPLE_ARCHIVE) }
           : { state: archiveFeed?.status === 'live' ? 'loaded' : 'loading', onLoad: () => startArchive(FLIGHTS_DAY_ARCHIVE) }
         : undefined;
+  const fallbackMode = liveTable && wantsLive && liveApi !== undefined ? (feedKind === 'live' ? 'live' : feedKind === 'archive' ? 'recorded' : null) : null;
+  // The choice is kept for the tab only once the recording has loaded: one that failed (offline, before it was fetched
+  // ahead) must not make the next reload of `?live=1` open a recording that cannot load either.
+  const recordedShown = fallbackMode === 'recorded' && liveState?.feed?.kind === 'archive' && liveState.feed.status === 'live';
+  useEffect(() => {
+    if (recordedShown) liveApi?.choice.set('recorded');
+  }, [recordedShown, liveApi]);
+  const watchRecorded = () => {
+    setPlayRecorded(true);
+    // A start that fails (offline, the fixture not fetched ahead) reports a stopped archive with its error, which the
+    // fallback strip shows (and retries once back online): no toast on top of it.
+    registry.dispatch('startLive', FLIGHTS_SAMPLE_ARCHIVE, { caller: 'user' }).catch(() => undefined);
+  };
+  const backToLive = () => {
+    liveApi?.choice.set(null);
+    setPlayRecorded(false);
+    registry.dispatch('startLive', { source: 'live' }, { caller: 'user' }).then(
+      () => dispatch('setTime', { mode: 'live' }),
+      (cause: unknown) => showToast({ tone: 'error', message: messageOf(cause) }),
+    );
+  };
+  const fallbackNotice =
+    fallbackMode !== null && liveApi !== undefined ? (
+      <LiveFallbackNotice
+        mode={fallbackMode}
+        feed={liveState?.feed ?? null}
+        online={online}
+        live={liveApi}
+        shell={shell}
+        onWatchRecorded={watchRecorded}
+        onRetryRecorded={watchRecorded}
+        onBackToLive={backToLive}
+        testId="live-fallback"
+      />
+    ) : undefined;
   const timeBar = (title: string) => (
     <TimeScrubber
       label={title}
@@ -1185,7 +1244,7 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
         onRedo={() => dispatch('redo')}
         onStepTo={stepTo}
         inert={modal}
-        live={liveTable ? { rowCount: liveState?.rowCount ?? null, label: feedLabel(liveState?.feed ?? null, liveState?.source?.kind === 'replay' ? (liveState.source.speed ?? 1) : undefined) } : undefined}
+        live={liveTable ? { rowCount: liveState?.rowCount ?? null, label: feedLabel(liveState?.feed ?? null, liveState?.source?.kind === 'replay' ? (liveState.source.speed ?? 1) : undefined, online) } : undefined}
         workspaceFile={
           workspaceFiles.enabled
             ? {
@@ -1475,6 +1534,8 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
                       onPainted={onMapPainted}
                       onFilterToView={onFilterToView}
                       toolbar={index === 0 && (timeRange !== null || liveTable) ? timeBar(map.title ?? 'Map') : undefined}
+                      notice={index === 0 ? fallbackNotice : undefined}
+                      online={online}
                       position={{ index, count: state.maps.length }}
                       onRemove={() => {
                         dispatch('removeMapView', { mapId: map.id });

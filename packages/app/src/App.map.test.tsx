@@ -8,6 +8,7 @@ import {
   LIVE_FLIGHTS_HANDLE,
   LIVE_FLIGHTS_TABLE_ID,
   type LiveSourceConfigInput,
+  type LiveSourceInput,
   type LiveSourceState,
   type LiveState,
   type LiveStatus,
@@ -20,6 +21,7 @@ import { FLIGHTS_SAMPLE_REPLAY, openLiveFlightsWorkspace } from './flights';
 import { fakeEngine, mapTable } from './test-support/fake-engine';
 import { MAP_TRACK_STEP_MS } from './views/map-data';
 import { fakePlatform } from './test-support/fake-platform';
+import type { LiveFallbackChoice, PlatformLive } from './platform';
 import { stubLayout } from './test-support/jsdom';
 import { createAppWorkspace } from './workspace';
 
@@ -87,7 +89,12 @@ function liveState(
   options: { paused?: boolean; status?: LiveStatus; feed?: Partial<LiveSourceState>; rowCount?: number } = {},
 ): LiveState {
   return {
-    source: options.feed?.kind === 'live' ? { kind: 'live', intervalMs: 20_000 } : { kind: 'replay', fixture: 'flights-bay-30min', intervalMs: 2_000, speed: 5 },
+    source:
+      options.feed?.kind === 'live'
+        ? { kind: 'live', intervalMs: 20_000 }
+        : options.feed?.kind === 'archive'
+          ? { kind: 'archive', fixture: 'flights-bay-30min' }
+          : { kind: 'replay', fixture: 'flights-bay-30min', intervalMs: 2_000, speed: 5 },
     feed: {
       kind: 'replay',
       status: options.status ?? (clock === null ? 'connecting' : 'live'),
@@ -108,7 +115,7 @@ function liveState(
   };
 }
 
-function setup(options: { map?: boolean } = {}) {
+function setup(options: { map?: boolean; live?: PlatformLive; source?: LiveSourceInput } = {}) {
   let id = 0;
   const workspace = createAppWorkspace({ clock: () => 1_000, newId: (prefix) => `${prefix}_${++id}` });
   const listeners = new Set<(state: LiveState) => void>();
@@ -126,8 +133,12 @@ function setup(options: { map?: boolean } = {}) {
   };
   const base = fakeEngine();
   const engine = { ...base, live, open: vi.fn(() => Promise.resolve({ table: liveHandle, engineMs: 1 })) };
-  const fake = fakePlatform(engine, options.map === false ? {} : { map: { assetsBase: '/glassgrid/map/', attribution: [BASEMAP] } });
-  render(<App platform={fake.platform} workspace={workspace} initialOpen={() => openLiveFlightsWorkspace(FLIGHTS_SAMPLE_REPLAY, { engine, registry: workspace.registry })} />);
+  const fake = fakePlatform(engine, {
+    ...(options.map === false ? {} : { map: { assetsBase: '/glassgrid/map/', attribution: [BASEMAP] } }),
+    ...(options.live ? { live: options.live } : {}),
+  });
+  const source = options.source ?? FLIGHTS_SAMPLE_REPLAY;
+  render(<App platform={fake.platform} workspace={workspace} initialOpen={() => openLiveFlightsWorkspace(source, { engine, registry: workspace.registry })} />);
   const batch = (state: LiveState) => {
     current = state;
     act(() => listeners.forEach((listener) => listener(state)));
@@ -425,8 +436,14 @@ describe('map views', () => {
     batch(liveState(CLOCK, { feed: { kind: 'live', status: 'live' } }));
     await waitFor(() => expect(status()).toBe('Live · 2 aircraft'));
     batch(liveState(CLOCK, { feed: { kind: 'live', status: 'stale', lastSuccessAt: CLOCK } }));
-    await waitFor(() => expect(status()).toBe('Stale data · 2 aircraft'));
+    await waitFor(() => expect(status()).toMatch(/^Stale data · last update \d\d:\d\d:\d\d · 2 aircraft$/));
     expect(region().textContent).toMatch(/data is stale, last update at/);
+    // L5: a 429 is its own state, counting down to its Retry-After, and so announced.
+    batch(liveState(CLOCK, { feed: { kind: 'live', status: 'rate-limited', failures: 1, error: 'http://localhost/api/flights: rate-limited (HTTP 429)', nextAttemptAt: Date.now() + 95_000 } }));
+    await waitFor(() => expect(status()).toMatch(/^Rate-limited · retrying in 9[45] s · 2 aircraft$/));
+    expect(screen.getByTestId('map-map_1-status').getAttribute('data-feed')).toBe('rate-limited');
+    expect(region().textContent).toMatch(/^Bay Area traffic: The live feed is rate-limited: the relay asked us to slow down\. Next try at \d\d:\d\d:\d\d\.$/);
+    expect(screen.getByTestId('file-size').textContent).toMatch(/· Rate-limited$/);
     batch(liveState(CLOCK, { feed: { kind: 'live', status: 'stopped' } }));
     await waitFor(() => expect(status()).toBe('Stopped · 2 aircraft'));
   });
@@ -493,5 +510,309 @@ describe('map views', () => {
     expect(undo?.textContent).toContain('Undo');
     fireEvent.click(undo as HTMLButtonElement);
     await waitFor(() => expect(workspace.store.getState().maps).toHaveLength(2));
+  });
+});
+
+describe('the aircraft list (L5): the ARIA mirror of the map', () => {
+  const cells = (row: Element) => [...row.querySelectorAll('[role="gridcell"]')].map((cell) => cell.textContent);
+
+  it('lists the aircraft in view by callsign as a grid, hidden until "List view"; selection goes both ways; arrows move, Enter selects', async () => {
+    const { workspace, batch } = setup();
+    await waitFor(() => expect(workspace.store.getState().maps).toHaveLength(1));
+    batch(liveState(CLOCK));
+    await waitFor(() => expect(lastProps().aircraft).toHaveLength(2));
+    const list = () => screen.getByTestId('map-map_1-list');
+    let grid = screen.getByRole('grid', { name: 'Aircraft in view: Bay Area traffic' });
+    expect(list().getAttribute('data-visible')).toBe('false');
+    expect(list().className).toContain('map-list--hidden');
+    // Hidden, it lives inside the map's box (shown there as an overlay when focused: nothing below moves).
+    expect(list().closest('.map-card__view')).not.toBeNull();
+    // No live region on the table itself: only the count is ever announced.
+    expect(grid.closest('[aria-live]')).toBeNull();
+    expect(grid.getAttribute('aria-rowcount')).toBe('3');
+    expect([...grid.querySelectorAll('th')].map((th) => th.textContent)).toEqual(['Callsign', 'Type', 'Altitude', 'Ground speed', 'Heading', 'Vertical rate']);
+    const rows = () => [...grid.querySelectorAll('tbody tr')];
+    // By callsign: SWA2 before UAL1.
+    expect(rows().map(cells)).toEqual([
+      ['SWA2', 'B737', 'On the ground', '12 kt', '180°', 'Level'],
+      ['UAL1', 'B738', '3,000 ft', '251 kt', '45°', '+600 ft/min'],
+    ]);
+
+    // The toggle shows it (and says so).
+    const toggle = screen.getByTestId('map-map_1-list-toggle');
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    expect(list().getAttribute('data-visible')).toBe('true');
+    // Shown, it is under the map, in the card's flow.
+    expect(list().closest('.map-card__view')).toBeNull();
+    grid = screen.getByRole('grid', { name: 'Aircraft in view: Bay Area traffic' });
+
+    // Map → list: a selection on the map marks its row.
+    act(() => lastProps().onSelect?.('a1b2c3'));
+    expect(rows().map((row) => row.getAttribute('aria-selected'))).toEqual(['false', 'true']);
+    // List → map: Enter on a focused row selects its aircraft on the map; arrows move the roving tab stop.
+    const first = rows()[0]?.querySelector('[role="gridcell"]') as HTMLElement;
+    expect(first.tabIndex).toBe(0);
+    first.focus();
+    fireEvent.keyDown(first, { key: 'ArrowRight' });
+    expect(document.activeElement?.textContent).toBe('B737');
+    fireEvent.keyDown(document.activeElement as Element, { key: 'ArrowDown' });
+    expect(document.activeElement?.textContent).toBe('B738');
+    fireEvent.keyDown(document.activeElement as Element, { key: 'ArrowUp' });
+    fireEvent.keyDown(document.activeElement as Element, { key: 'Enter' });
+    expect(lastProps().selectedHex).toBe('b2c3d4');
+    expect(rows().map((row) => row.getAttribute('aria-selected'))).toEqual(['true', 'false']);
+    fireEvent.keyDown(document.activeElement as Element, { key: 'End', ctrlKey: true });
+    expect(document.activeElement?.textContent).toBe('+600 ft/min');
+    fireEvent.keyDown(document.activeElement as Element, { key: 'Escape' });
+    expect(lastProps().selectedHex).toBeNull();
+    // A click selects too.
+    fireEvent.click(screen.getByText('UAL1'));
+    expect(lastProps().selectedHex).toBe('a1b2c3');
+
+    // Only what the map's view holds: after a pan to a box around UAL1, SWA2 is not listed.
+    act(() => lastProps().onViewportChange?.({ west: -122.45, south: 37.55, east: -122.3, north: 37.65 }));
+    await waitFor(() => expect(rows().map((row) => cells(row)[0])).toEqual(['UAL1']));
+    expect(grid.getAttribute('aria-rowcount')).toBe('2');
+    // The status line tells the two counts apart: every aircraft the map was given, and those in its view.
+    expect(screen.getByTestId('map-map_1-status').textContent).toBe('Replay 5× · 2 tracked · 1 in view');
+  });
+
+  it('keeps focus in the list when the focused row’s aircraft leaves the view: the cell now at its place takes it', async () => {
+    const { workspace, batch } = setup();
+    await waitFor(() => expect(workspace.store.getState().maps).toHaveLength(1));
+    batch(liveState(CLOCK));
+    await waitFor(() => expect(lastProps().aircraft).toHaveLength(2));
+    const grid = screen.getByRole('grid', { name: 'Aircraft in view: Bay Area traffic' });
+    const first = grid.querySelector('tbody [role="gridcell"]') as HTMLElement;
+    act(() => first.focus());
+    // SWA2 (row 1) → the Type column of UAL1 (row 2).
+    fireEvent.keyDown(first, { key: 'ArrowDown' });
+    fireEvent.keyDown(document.activeElement as Element, { key: 'ArrowRight' });
+    expect(document.activeElement?.textContent).toBe('B738');
+    // Pan to a box around SWA2 only: UAL1's row goes, and focus moves to the same column of the row now at its place.
+    act(() => lastProps().onViewportChange?.({ west: -122.25, south: 37.65, east: -122.15, north: 37.75 }));
+    await waitFor(() => expect(grid.querySelectorAll('tbody tr')).toHaveLength(1));
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement?.textContent).toBe('B737');
+    expect(screen.getByTestId('map-map_1-list').contains(document.activeElement)).toBe(true);
+  });
+
+  it('announces only the count, politely, while focus is in the list, and not on every update', async () => {
+    const { workspace, batch } = setup();
+    await waitFor(() => expect(workspace.store.getState().maps).toHaveLength(1));
+    batch(liveState(CLOCK));
+    await waitFor(() => expect(lastProps().aircraft).toHaveLength(2));
+    const count = screen.getByTestId('map-map_1-list-count');
+    expect(count.getAttribute('role')).toBe('status');
+    expect(count.textContent).toBe('');
+    const grid = () => screen.getByRole('grid', { name: 'Aircraft in view: Bay Area traffic' });
+    const cell = grid().querySelector('[role="gridcell"]') as HTMLElement;
+    act(() => cell.focus());
+    await waitFor(() => expect(count.textContent).toBe('2 aircraft in view'));
+    // A pan within ten seconds changes the count: not announced yet (throttled).
+    act(() => lastProps().onViewportChange?.({ west: -122.45, south: 37.55, east: -122.3, north: 37.65 }));
+    await waitFor(() => expect(grid().getAttribute('aria-rowcount')).toBe('2'));
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(count.textContent).toBe('2 aircraft in view');
+  });
+});
+
+describe('offline → replay (L5)', () => {
+  function platformLive(options: { probe?: boolean } = {}) {
+    const online = new Set<(online: boolean) => void>();
+    let choice: LiveFallbackChoice | null = null;
+    const probe = vi.fn((_signal?: AbortSignal) => Promise.resolve(options.probe ?? false));
+    const live: PlatformLive = {
+      requested: true,
+      onOnlineChange: (listener) => {
+        online.add(listener);
+        listener(true);
+        return () => online.delete(listener);
+      },
+      probe,
+      choice: { get: () => choice, set: vi.fn((next: LiveFallbackChoice | null) => void (choice = next)) },
+    };
+    const setOnline = (value: boolean) => act(() => online.forEach((listener) => listener(value)));
+    return { live, probe, setOnline, choice: () => choice };
+  }
+  const notice = () => screen.queryByTestId('live-fallback');
+  const announced = () => screen.getByTestId('live-fallback-announce').textContent;
+  const failing = (failures: number, extra: Partial<LiveSourceState> = {}) =>
+    liveState(CLOCK, { feed: { kind: 'live', status: 'backoff', failures, error: 'http://localhost/api/flights: no data (HTTP 503)', nextAttemptAt: Date.now() + 10_000, retryDelayMs: 10_000, ...extra } });
+  const limited = (failures: number, delayMs: number) =>
+    liveState(CLOCK, { feed: { kind: 'live', status: 'rate-limited', failures, error: 'x: rate-limited (HTTP 429)', nextAttemptAt: Date.now() + delayMs, retryDelayMs: delayMs } });
+  const archive = (patch: Partial<LiveSourceState>) => liveState(CLOCK, { feed: { kind: 'archive', status: 'live', ...patch } });
+
+  async function liveSetup(options: { probe?: boolean } = {}) {
+    const platform = platformLive(options);
+    const app = setup({ live: platform.live, source: { source: 'live' } });
+    await waitFor(() => expect(app.workspace.store.getState().maps).toHaveLength(1));
+    app.batch(liveState(CLOCK, { feed: { kind: 'live', status: 'live' } }));
+    await screen.findByTestId('map-view');
+    return { ...platform, ...app };
+  }
+
+  it('offers the recorded traffic after three failures, not before, announcing it once (no count); nothing switches on its own', async () => {
+    const { workspace, batch } = await liveSetup();
+    expect(notice()).toBeNull();
+    batch(failing(1));
+    batch(failing(2));
+    await waitFor(() => expect(screen.getByTestId('map-map_1-status').getAttribute('data-feed')).toBe('backoff'));
+    expect(notice()).toBeNull();
+    batch(failing(3));
+    await waitFor(() => expect(notice()?.getAttribute('data-reason')).toBe('failing'));
+    expect(notice()?.textContent).toContain('The live feed has not answered 3 times in a row.');
+    expect(announced()).toBe('The live feed is not answering. Recorded traffic is available instead.');
+    // A fourth failure changes the visible count, not what the polite region says (so it is not announced again).
+    batch(failing(4));
+    await waitFor(() => expect(notice()?.textContent).toContain('4 times in a row'));
+    expect(announced()).toBe('The live feed is not answering. Recorded traffic is available instead.');
+    expect(workspace.store.getState().dataSource?.handleId).toBe(LIVE_FLIGHTS_HANDLE);
+  });
+
+  it('"Keep trying" dismisses only the current reason: a more serious one (a long 429) offers it again; so does a new failure after a recovery', async () => {
+    const { batch } = await liveSetup();
+    batch(failing(3));
+    await waitFor(() => expect(notice()?.getAttribute('data-reason')).toBe('failing'));
+    fireEvent.click(screen.getByTestId('live-fallback-keep-trying'));
+    expect(notice()).toBeNull();
+    // Focus does not fall to the page: the map card takes it.
+    expect(document.activeElement).toBe(screen.getByTestId('map-map_1'));
+    batch(failing(4));
+    expect(notice()).toBeNull();
+    batch(limited(5, 120_000));
+    await waitFor(() => expect(notice()?.getAttribute('data-reason')).toBe('rate-limited'));
+    fireEvent.click(screen.getByTestId('live-fallback-keep-trying'));
+    batch(failing(6));
+    expect(notice()).toBeNull();
+    batch(liveState(CLOCK + 20_000, { feed: { kind: 'live', status: 'live' } }));
+    batch(failing(3));
+    await waitFor(() => expect(notice()?.getAttribute('data-reason')).toBe('failing'));
+  });
+
+  it('a 429 with a short Retry-After does not offer it, even when the card’s clock lags far behind (it reads the reported delay)', async () => {
+    // The wall clock the card last read: two minutes ago (nothing ticks while the feed is healthy).
+    const realNow = Date.now.bind(Date);
+    const spy = vi.spyOn(Date, 'now').mockImplementation(() => realNow() - 120_000);
+    try {
+      const { batch } = await liveSetup();
+      spy.mockImplementation(realNow);
+      batch(limited(1, 30_000));
+      await waitFor(() => expect(screen.getByTestId('map-map_1-status').textContent).toMatch(/^Rate-limited · retrying in (29|30) s/));
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(notice()).toBeNull();
+      batch(limited(2, 120_000));
+      await waitFor(() => expect(notice()?.getAttribute('data-reason')).toBe('rate-limited'));
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('offline: offered at once, the status line counts down, and back online the offer goes', async () => {
+    const { batch, setOnline } = await liveSetup();
+    setOnline(false);
+    batch(failing(1, { error: 'Failed to fetch', nextAttemptAt: Date.now() + 12_000 }));
+    await waitFor(() => expect(notice()?.getAttribute('data-reason')).toBe('offline'));
+    const status = () => screen.getByTestId('map-map_1-status').textContent;
+    await waitFor(() => expect(status()).toMatch(/^Offline · retrying in 1[12] s · 2 aircraft$/));
+    // The countdown moves while offline.
+    await waitFor(() => expect(status()).toMatch(/^Offline · retrying in (9|10) s/), { timeout: 3_000 });
+    expect(screen.getByTestId('map-map_1-feed').textContent).toContain('You are offline');
+    expect(screen.getByTestId('file-size').textContent).toMatch(/· Offline$/);
+    setOnline(true);
+    await waitFor(() => expect(notice()).toBeNull());
+  });
+
+  it('a recording that did not load says so (not "showing"), is not remembered, and is tried again once back online', async () => {
+    const { batch, setOnline, choice, live: engineLive } = await liveSetup();
+    setOnline(false);
+    batch(failing(1, { error: 'Failed to fetch' }));
+    await waitFor(() => expect(notice()?.getAttribute('data-reason')).toBe('offline'));
+    fireEvent.click(screen.getByTestId('live-fallback-watch-recorded'));
+    await waitFor(() => expect(engineLive.start).toHaveBeenLastCalledWith({ kind: 'archive', fixture: 'flights-bay-30min' }));
+    batch(archive({ status: 'connecting' }));
+    await waitFor(() => expect(notice()?.getAttribute('data-recorded')).toBe('loading'));
+    expect(notice()?.textContent).toContain('Loading the recorded traffic');
+    // Focus went to the strip that replaced the button.
+    expect(document.activeElement).toBe(notice());
+    batch(archive({ status: 'stopped', failures: 1, error: 'The recorded day could not start: http://localhost/samples/flights/flights-bay-30min.parquet: Failed to fetch' }));
+    await waitFor(() => expect(notice()?.getAttribute('data-recorded')).toBe('failed'));
+    expect(notice()?.textContent).toContain('The recorded traffic didn’t load');
+    expect(notice()?.textContent).toContain('It will try again when you are back online.');
+    expect(notice()?.textContent).not.toContain('Showing recorded traffic');
+    expect(choice()).toBeNull();
+    const starts = engineLive.start.mock.calls.length;
+    setOnline(true);
+    await waitFor(() => expect(engineLive.start.mock.calls.length).toBe(starts + 1));
+    expect(engineLive.start).toHaveBeenLastCalledWith({ kind: 'archive', fixture: 'flights-bay-30min' });
+    batch(archive({ status: 'live' }));
+    await waitFor(() => expect(notice()?.getAttribute('data-recorded')).toBe('shown'));
+    expect(choice()).toBe('recorded');
+  });
+
+  it('shows the recorded half hour on a click, remembered once loaded; probes until "Back to live", then stops probing; Back to live', async () => {
+    const { probe, setOnline, choice, batch, workspace, live: engineLive } = await liveSetup({ probe: false });
+    batch(failing(3));
+    await waitFor(() => expect(notice()).not.toBeNull());
+    fireEvent.click(screen.getByTestId('live-fallback-watch-recorded'));
+    await waitFor(() => expect(engineLive.start).toHaveBeenLastCalledWith({ kind: 'archive', fixture: 'flights-bay-30min' }));
+    expect(choice()).toBeNull();
+    batch(archive({ status: 'live' }));
+    await waitFor(() => expect(notice()?.getAttribute('data-mode')).toBe('recorded'));
+    expect(choice()).toBe('recorded');
+    expect(notice()?.textContent).toContain('Showing recorded traffic');
+    expect(notice()?.textContent).toContain('Checking the live feed every minute.');
+    expect(screen.queryByTestId('live-fallback-back-to-live')).toBeNull();
+    // Back online: probed at once; the relay still has nothing. The probe can be aborted (it is given a signal).
+    setOnline(false);
+    setOnline(true);
+    await waitFor(() => expect(probe).toHaveBeenCalledTimes(1));
+    expect(probe.mock.calls[0]?.[0]).toBeInstanceOf(AbortSignal);
+    expect(screen.queryByTestId('live-fallback-back-to-live')).toBeNull();
+    probe.mockResolvedValue(true);
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      setOnline(false);
+      setOnline(true);
+      await act(() => vi.advanceTimersByTimeAsync(10_000));
+      await waitFor(() => expect(screen.getByTestId('live-fallback-back-to-live')).toBeTruthy());
+      expect(probe).toHaveBeenCalledTimes(2);
+      // Found: no more probes while "Back to live" shows, so it cannot come and go.
+      await act(() => vi.advanceTimersByTimeAsync(5 * 60_000));
+      expect(probe).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(announced()).toBe('Live data is available again.');
+    fireEvent.click(screen.getByTestId('live-fallback-back-to-live'));
+    await waitFor(() => expect(engineLive.start).toHaveBeenLastCalledWith({ kind: 'live' }));
+    expect(choice()).toBeNull();
+    await waitFor(() => expect(workspace.store.getState().time?.mode).toBe('live'));
+    batch(liveState(CLOCK, { feed: { kind: 'live', status: 'live' } }));
+    await waitFor(() => expect(notice()).toBeNull());
+    // The strip went with the button; focus is on the map card, not the page.
+    expect(document.activeElement).toBe(screen.getByTestId('map-map_1'));
+  });
+
+  it('the probe in flight is aborted when the card goes', async () => {
+    const { setOnline, batch, probe } = await liveSetup();
+    let signal: AbortSignal | undefined;
+    probe.mockImplementation((given?: AbortSignal) => {
+      signal = given;
+      return new Promise<boolean>(() => undefined);
+    });
+    batch(failing(3));
+    await waitFor(() => expect(notice()).not.toBeNull());
+    fireEvent.click(screen.getByTestId('live-fallback-watch-recorded'));
+    batch(archive({ status: 'live' }));
+    await waitFor(() => expect(notice()?.getAttribute('data-recorded')).toBe('shown'));
+    setOnline(false);
+    setOnline(true);
+    await waitFor(() => expect(signal).toBeDefined());
+    expect(signal?.aborted).toBe(false);
+    cleanup();
+    expect(signal?.aborted).toBe(true);
   });
 });

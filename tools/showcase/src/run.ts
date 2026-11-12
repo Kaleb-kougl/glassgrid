@@ -4,7 +4,7 @@
  *
  *   pnpm showcase                      # build, then capture everything
  *   pnpm showcase --skip-build         # reuse apps/web/dist and apps/desktop/out
- *   pnpm showcase --only web,video     # any of: web, video, desktop
+ *   pnpm showcase --only web,video     # any of: web, video, flights, flights-video, desktop
  *
  * Needs Chromium (GLASSGRID_CHROMIUM or PLAYWRIGHT_BROWSERS_PATH; nothing is
  * downloaded), ffmpeg on PATH (or FFMPEG), and on Linux without a display,
@@ -12,9 +12,10 @@
  * synthetic CSV with tools/datasets on its first run and keeps it in
  * tools/showcase/out/.
  *
- * Duration on a 2-vCPU Linux VM: 2 to 5 minutes depending on load (build
- * 10-20 s, web stills 30-45 s, demo video 1-2.5 min, desktop 30-60 s), plus
- * about 2 minutes on the first run to generate the CSV.
+ * Duration on a 2-vCPU Linux VM: 3.5 to 6.5 minutes depending on load (build
+ * 10-20 s, web stills 30-45 s, demo video 1-2.5 min, flights stills 15-20 s,
+ * flights video 1-1.5 min, desktop 30-60 s), plus about 2 minutes on the
+ * first run to generate the CSV.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, readdirSync, statSync } from 'node:fs';
@@ -26,9 +27,10 @@ import { writeArchitecture } from './architecture.ts';
 import { checkLinks } from './check-links.ts';
 import { ensureDir, log, MEDIA_DIR, REPO_ROOT, run, seconds } from './common.ts';
 import { encodeDemo } from './encode.ts';
+import { captureFlightsStills, captureFlightsVideoFrames } from './flights.ts';
 import { captureStills, captureVideoFrames } from './web.ts';
 
-const STEPS = ['web', 'video', 'desktop'] as const;
+const STEPS = ['web', 'video', 'flights', 'flights-video', 'desktop'] as const;
 type Step = (typeof STEPS)[number];
 /** The README embeds the GIF; GitHub renders large GIFs slowly. */
 const GIF_BUDGET_BYTES = 4 * 1024 * 1024;
@@ -78,7 +80,7 @@ async function serveWeb(): Promise<{ baseUrl: string; server: ChildProcess }> {
 }
 
 async function build(steps: Set<Step>): Promise<void> {
-  if (steps.has('web') || steps.has('video')) await run('pnpm', ['--filter', '@glassgrid/web', 'build']);
+  if (steps.has('web') || steps.has('video') || steps.has('flights') || steps.has('flights-video')) await run('pnpm', ['--filter', '@glassgrid/web', 'build']);
   if (steps.has('desktop')) {
     await run('pnpm', ['--filter', '@glassgrid/desktop', 'build']);
     // Electron fetches its binary on first use; do it now rather than inside Playwright's launch.
@@ -125,7 +127,7 @@ async function main(): Promise<void> {
   }
   await writeArchitecture();
 
-  if (only.has('web') || only.has('video')) {
+  if (only.has('web') || only.has('video') || only.has('flights') || only.has('flights-video')) {
     const { baseUrl, server } = await serveWeb();
     try {
       if (only.has('web')) {
@@ -139,6 +141,18 @@ async function main(): Promise<void> {
         const [gif] = await encodeDemo(frames, 'crossfilter-demo');
         if (gif && statSync(gif).size > GIF_BUDGET_BYTES) throw new Error(`crossfilter-demo.gif is ${(statSync(gif).size / 1e6).toFixed(1)} MB, over the 4 MB budget`);
         log(`video: ${seconds(stepStarted)}`);
+      }
+      if (only.has('flights')) {
+        const stepStarted = performance.now();
+        await captureFlightsStills(baseUrl);
+        log(`flights stills: ${seconds(stepStarted)}`);
+      }
+      if (only.has('flights-video')) {
+        const stepStarted = performance.now();
+        const { frames, width } = await captureFlightsVideoFrames(baseUrl);
+        const [gif] = await encodeDemo(frames, 'flights-demo', width);
+        if (gif && statSync(gif).size > GIF_BUDGET_BYTES) throw new Error(`flights-demo.gif is ${(statSync(gif).size / 1e6).toFixed(1)} MB, over the 4 MB budget`);
+        log(`flights video: ${seconds(stepStarted)}`);
       }
     } finally {
       server.kill();

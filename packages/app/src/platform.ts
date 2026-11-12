@@ -156,6 +156,25 @@ export interface PlatformMap {
   readonly attribution: readonly string[];
 }
 
+/** The person's answer to the offer of recorded traffic while live data was unavailable (L5). */
+export type LiveFallbackChoice = 'recorded';
+
+/**
+ * What the live-flights fallback (L5, `live-fallback.ts`) needs from the shell: whether the browser is online, a
+ * probe of the live relay (to offer "Back to live" while recorded traffic shows), and a per-tab memory of the
+ * person's choice. Optional; without it the app never offers the recorded traffic on its own.
+ */
+export interface PlatformLive {
+  /** The page was opened for live data (the web demo's `?live=1`). */
+  readonly requested: boolean;
+  /** Calls the listener at once with `navigator.onLine` and on every `online` / `offline` event. */
+  onOnlineChange?(listener: (online: boolean) => void): () => void;
+  /** One request to the live relay: true when it answered with fresh (not stale) data. Aborted with `signal`. */
+  probe?(signal?: AbortSignal): Promise<boolean>;
+  /** The choice for this tab (session storage), or null. */
+  readonly choice: { get(): LiveFallbackChoice | null; set(choice: LiveFallbackChoice | null): void };
+}
+
 /**
  * `.glassgrid` workspace files: the host half of core's `WorkspaceBridge`
  * (desktop: main through the preload, `window.glassgrid.workspace`; the web
@@ -206,6 +225,8 @@ export interface Platform {
   readonly workspaceFiles?: WorkspaceFilesApi;
   /** The basemap for map views (web); absent where maps cannot be shown. */
   readonly map?: PlatformMap;
+  /** Live flights' offline fallback (web, L5); absent where there is no live feed. */
+  readonly live?: PlatformLive;
 }
 
 /** Whether the save/open controls show: the capability and an implementation. */

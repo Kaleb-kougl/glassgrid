@@ -1,5 +1,5 @@
 import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
-import { createServer } from 'node:http';
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { pathToRegexp } from 'path-to-regexp';
 import { HOSTING_MANIFEST_FILE, parseBase, type HostingManifest } from '../hosting.ts';
@@ -26,6 +26,105 @@ import { HOSTING_MANIFEST_FILE, parseBase, type HostingManifest } from '../hosti
  *   outside the base (a URL the build forgot to put under its base fails
  *   the tests).
  */
+
+/*
+ * GLASSGRID_E2E_RELAY=1 adds a scriptable stand-in for the portfolio's live
+ * relay (`GET /api/flights`, at the site root whatever the base, as in
+ * production; docs/flights-proxy.md in the portfolio) for the live-flights
+ * E2E (flights-live.spec.ts). The tests set what it answers with
+ * `POST /__e2e/relay {"mode": ...}`:
+ *
+ * - `none` (the default): 404, as a host without the relay;
+ * - `ok`: 200, 40 synthetic aircraft over the Bay Area at the current time,
+ *   cached like the relay (`s-maxage=10`);
+ * - `stale`: 200 with `stale: true` and a snapshot two minutes old;
+ * - `fail`: 503 with `Retry-After: 10` and `reason: network ENOTFOUND`;
+ * - `429`: 429 with `Retry-After: <retryAfter>` (default 120).
+ *
+ * `{"fixtures": "fail"}` makes the flight fixtures (`…/samples/flights/*.parquet`)
+ * answer 503 until `{"fixtures": "ok"}` (the recording that cannot be
+ * fetched ahead, L5's offline case).
+ *
+ * `GET /__e2e/relay` returns the mode and how many relay requests it saw.
+ * Without the variable neither path exists (404).
+ */
+type RelayMode = 'none' | 'ok' | 'stale' | 'fail' | '429';
+const relay = { enabled: process.env['GLASSGRID_E2E_RELAY'] === '1', mode: 'none' as RelayMode, retryAfter: 120, requests: 0, failFixtures: false, fixtureRequests: 0 };
+
+function relayAircraft(nowMs: number): object[] {
+  const out: object[] = [];
+  for (let i = 0; i < 40; i += 1) {
+    // Deterministic: each aircraft circles its own point inside the Bay Area box (37.0–38.5°N, 123.0–121.5°W), so all 40 always count.
+    const gs = 140 + ((i * 13) % 330);
+    const angle = (nowMs / 1000 / 600) * 2 * Math.PI + i;
+    const lat = 37.3 + ((i * 0.031) % 0.9) + 0.05 * Math.sin(angle);
+    const lon = -122.8 + ((i * 0.047) % 1.0) + 0.05 * Math.cos(angle);
+    const track = Math.round(((((90 - (angle * 180) / Math.PI) % 360) + 360) % 360) * 10) / 10;
+    out.push({
+      hex: (0xa10000 + i).toString(16),
+      flight: `TST${String(100 + i)}`,
+      lat: Math.round(lat * 1e5) / 1e5,
+      lon: Math.round(lon * 1e5) / 1e5,
+      alt_baro: i % 9 === 0 ? 'ground' : 1_000 + ((i * 937) % 38_000),
+      gs,
+      track,
+      baro_rate: ((i % 5) - 2) * 640,
+      category: 'A3',
+      t: 'B738',
+      r: `N${100 + i}TS`,
+      seen: 0.2,
+      seen_pos: 0.4,
+      type: 'adsb_icao',
+    });
+  }
+  return out;
+}
+
+function relayResponse(response: ServerResponse): void {
+  relay.requests += 1;
+  const now = Date.now();
+  const credit = { source: 'adsb.lol', attribution: 'Aircraft data © adsb.lol contributors, ODbL 1.0 (E2E stand-in)', license: 'https://opendatacommons.org/licenses/odbl/1.0/' };
+  const json = (status: number, body: object, headers: Record<string, string>) =>
+    response.writeHead(status, { 'content-type': 'application/json; charset=utf-8', ...headers }).end(JSON.stringify(body));
+  switch (relay.mode) {
+    case 'none':
+      response.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }).end('not found');
+      return;
+    case 'ok':
+      json(200, { now, fetchedAt: now, stale: false, ...credit, ac: relayAircraft(now) }, { 'cache-control': 'public, s-maxage=10, stale-while-revalidate=20' });
+      return;
+    case 'stale':
+      json(200, { now: now - 120_000, fetchedAt: now - 120_000, stale: true, ...credit, ac: relayAircraft(now - 120_000) }, { 'cache-control': 'public, s-maxage=5', 'x-flights-stale': '1' });
+      return;
+    case 'fail':
+      json(503, { error: 'Live flight data is temporarily unavailable.', reason: 'network ENOTFOUND', retryAfter: 10, ...credit }, { 'cache-control': 'no-store', 'retry-after': '10' });
+      return;
+    case '429':
+      json(429, { error: 'Too many requests' }, { 'cache-control': 'no-store', 'retry-after': String(relay.retryAfter) });
+      return;
+  }
+}
+
+/** The relay stand-in's control endpoint (the tests' only way to steer it). */
+function relayControl(request: IncomingMessage, response: ServerResponse): void {
+  if (request.method !== 'POST') {
+    response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ mode: relay.mode, requests: relay.requests, fixtureRequests: relay.fixtureRequests }));
+    return;
+  }
+  let text = '';
+  request.on('data', (chunk: Buffer) => (text += chunk.toString('utf8')));
+  request.on('end', () => {
+    const body = JSON.parse(text || '{}') as { mode?: RelayMode; retryAfter?: number; reset?: boolean; fixtures?: 'ok' | 'fail' };
+    if (body.mode) relay.mode = body.mode;
+    if (typeof body.retryAfter === 'number') relay.retryAfter = body.retryAfter;
+    if (body.fixtures) relay.failFixtures = body.fixtures === 'fail';
+    if (body.reset) {
+      relay.requests = 0;
+      relay.fixtureRequests = 0;
+    }
+    response.writeHead(204).end();
+  });
+}
 
 interface Rule {
   source: string;
@@ -104,6 +203,21 @@ function fileFor(pathname: string): string | null {
 
 createServer((request, response) => {
   const url = new URL(request.url ?? '/', 'http://localhost');
+  if (relay.enabled && url.pathname === '/__e2e/relay') {
+    relayControl(request, response);
+    return;
+  }
+  if (relay.enabled && url.pathname === '/api/flights') {
+    relayResponse(response);
+    return;
+  }
+  if (relay.enabled && /\/samples\/flights\/[^/]+\.parquet$/.test(url.pathname)) {
+    relay.fixtureRequests += 1;
+    if (relay.failFixtures) {
+      response.writeHead(503, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }).end('unavailable (E2E)');
+      return;
+    }
+  }
   if (next && url.pathname !== '/' && url.pathname.endsWith('/')) {
     // Next.js's default trailing-slash redirect, before headers and rewrites.
     response.writeHead(308, { location: `${url.pathname.replace(/\/+$/, '')}${url.search}` }).end();
