@@ -166,7 +166,7 @@ export function MapView(props: MapViewProps): ReactElement {
         });
         m.on('webglcontextlost', () => layer.contextLost());
         // The message in the text too (as in `fail`): minified, the Error argument alone may print as its class name.
-        m.on('error', (event) => console.warn(`[glassgrid] map: ${event.error instanceof Error ? event.error.message : String(event.error)}`, event.error));
+        m.on('error', (event) => console.warn(`[glassgrid] map: ${event.error.message}`, event.error));
         onKeyDown = (event) => {
           if (event.key === 'Escape' && propsRef.current.selectedHex) propsRef.current.onSelect?.(null);
         };
