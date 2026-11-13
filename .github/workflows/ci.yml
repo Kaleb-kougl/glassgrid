@@ -115,15 +115,17 @@ jobs:
       - name: Install Firefox's and WebKit's system dependencies
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: pnpm --filter @glassgrid/web exec playwright install-deps firefox webkit
-      # Firefox's own dependencies include no OpenGL driver: without Mesa (llvmpipe) headless Firefox has no WebGL
-      # ("Exhausted GL driver options") and MapLibre cannot start.
-      - name: Mesa for Firefox's WebGL
-        run: sudo apt-get install -y --no-install-recommends libgl1-mesa-dri libegl1 libegl-mesa0 libgbm1
+      # Firefox's own dependencies include no OpenGL driver, and headless it has no display to make a GL context on:
+      # without Mesa (llvmpipe) and an X server (Xvfb) it has no WebGL ("Exhausted GL driver options") and MapLibre
+      # cannot start. So Firefox runs headed under xvfb-run below (WebKit stays headless).
+      - name: Mesa and Xvfb for Firefox's WebGL
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xvfb libgl1-mesa-dri libglx-mesa0 libegl1 libegl-mesa0 libgbm1
       - run: pnpm --filter @glassgrid/web build
       - name: Web E2E in Firefox and WebKit
-        run: pnpm --filter @glassgrid/web exec playwright test e2e/flights.spec.ts e2e/flights-a11y.spec.ts e2e/flights-live.spec.ts e2e/smoke.spec.ts
+        run: xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" pnpm --filter @glassgrid/web exec playwright test e2e/flights.spec.ts e2e/flights-a11y.spec.ts e2e/flights-live.spec.ts e2e/smoke.spec.ts
         env:
           GLASSGRID_E2E_BROWSERS: firefox,webkit
+          GLASSGRID_E2E_FIREFOX_HEADED: '1'
       - name: Upload browser test results
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

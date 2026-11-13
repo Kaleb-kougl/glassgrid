@@ -36,12 +36,15 @@ const isRoot = process.platform === 'linux' && process.getuid?.() === 0;
 // An empty or unknown value throws here (playwright-browsers.ts): never zero projects that "pass".
 const BROWSERS = parseBrowsers(process.env['GLASSGRID_E2E_BROWSERS']);
 // Firefox and WebKit keep a trace of each failure (CI uploads test-results/). Firefox: WebGL on a runner without a GPU
-// needs Mesa's software driver (CI installs it) and must not be blocked on it; Chromium has SwiftShader.
+// needs Mesa's software driver (CI installs it), must not be blocked on it, and needs a display to make its GL context
+// on: headless it has none ("Exhausted GL driver options" even with Mesa), so CI sets GLASSGRID_E2E_FIREFOX_HEADED=1
+// and runs under xvfb-run. Chromium has SwiftShader.
+const FIREFOX_HEADED = process.env['GLASSGRID_E2E_FIREFOX_HEADED'] === '1';
 const projects: Project[] = BROWSERS.map((browserName) =>
   browserName === 'chromium'
     ? { name: 'chromium', use: { browserName, launchOptions: { executablePath: findChromium(), args: isRoot ? ['--no-sandbox'] : [] } } }
     : browserName === 'firefox'
-      ? { name: 'firefox', use: { browserName, trace: 'retain-on-failure', launchOptions: { firefoxUserPrefs: { 'webgl.force-enabled': true, 'webgl.disabled': false } } } }
+      ? { name: 'firefox', use: { browserName, trace: 'retain-on-failure', headless: !FIREFOX_HEADED, launchOptions: { firefoxUserPrefs: { 'webgl.force-enabled': true, 'webgl.disabled': false } } } }
       : { name: browserName, use: { browserName, trace: 'retain-on-failure' } },
 );
 
