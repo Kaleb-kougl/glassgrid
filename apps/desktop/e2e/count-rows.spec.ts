@@ -23,6 +23,7 @@ import {
   countEntries,
   digits,
   gridGeometry,
+  launchApp,
   machineInfo,
   measureCount,
   mirror,
@@ -38,6 +39,7 @@ import {
   setTheme,
   toRun,
   writeBaseline,
+  type LaunchedApp,
 } from './support';
 
 /** What the M2 exit gate measured in this run, written by the last test. */
@@ -49,7 +51,8 @@ const exitGate: {
 } = {};
 
 test.describe('data path', () => {
-  // The tests share one app instance: the first opens the file, the second counts it.
+  // The tests share one app instance: the first opens the file, the second counts it. The scroll test
+  // relaunches it (see there), and the tests after it run in that second instance.
   test.describe.configure({ mode: 'serial' });
 
   let workDir: string;
@@ -61,6 +64,8 @@ test.describe('data path', () => {
   const logs: string[] = [];
   /** Console errors and uncaught exceptions, e.g. CSP violations. */
   const rendererErrors: string[] = [];
+  /** The second app instance, launched by the scroll test, with its own logs and renderer errors. */
+  let relaunched: LaunchedApp | undefined;
 
   test.beforeAll(async () => {
     if (PACKAGED_EXECUTABLE) {
@@ -108,7 +113,7 @@ test.describe('data path', () => {
     if (testInfo.status !== testInfo.expectedStatus) {
       await mkdir(RESULTS_DIR, { recursive: true });
       const path = join(RESULTS_DIR, 'app-logs.txt');
-      await writeFile(path, logs.join(''));
+      await writeFile(path, [...logs, ...(relaunched?.logs ?? [])].join(''));
       await testInfo.attach('app-logs', { path, contentType: 'text/plain' });
     }
   });
@@ -390,14 +395,23 @@ test.describe('data path', () => {
 
   test(`scrolls ${ROWS.toLocaleString('en-US')} rows: fling frame times and flat memory (M2 exit gate b, c)`, async () => {
     if (!app) throw new Error('Electron app failed to launch');
-    // File order (the header cycles asc -> desc -> none) and the view loaded at the top.
+    // A fresh app: the renderer of the tests above still holds what the profile, the chart and the cross-filter
+    // left behind (about 40 MB of working set on macOS that the OS may or may not take back mid-sweep), which
+    // would count against the scroll budget and can hide growth behind a falling baseline. Its own userData,
+    // so nothing of the first instance is restored.
+    await app.close();
+    relaunched = await launchApp(csvPath, join(workDir, 'user-data-scroll'));
+    app = relaunched.app;
+    page = relaunched.page;
+    await expect(page.getByTestId('empty-state')).toBeVisible();
+    const previousProfile = await measureCount(page, PROFILE_MEASURE);
+    await page.getByTestId('open-csv').click();
+    // Settled before measuring: the profile and the row count are in.
+    await nextMeasure(page, PROFILE_MEASURE, previousProfile);
+    await expect.poll(async () => digits(await page.getByTestId('row-count').textContent())).toBe(String(ROWS));
+
+    // File order and the view loaded at the top.
     const grid = await gridGeometry(page);
-    const idHeader = grid.header(0);
-    for (let i = 0; i < 3 && (await mirrorHeader(page, 'id').getAttribute('aria-sort')) !== null; i += 1) {
-      const before = await mirrorHeader(page, 'id').getAttribute('aria-sort');
-      await page.mouse.click(idHeader.x, idHeader.y);
-      await expect(mirrorHeader(page, 'id')).not.toHaveAttribute('aria-sort', before ?? '');
-    }
     await expect(mirrorHeader(page, 'id')).not.toHaveAttribute('aria-sort', /.+/);
     await expect(mirrorRow(page, 0)).toHaveText(['1', 'alpha', '0.00', '2026-01-01']);
     await page.mouse.move(grid.cell(5, 1).x, grid.cell(5, 1).y);
@@ -421,7 +435,7 @@ test.describe('data path', () => {
     // Flat: a full scroll down and back leaves the renderer where it started (within 50 MB), under the 300 MB budget.
     expect(afterUp.workingSetBytes - before.workingSetBytes).toBeLessThan(50 * 1024 * 1024);
     expect(peak).toBeLessThan(300 * 1024 * 1024);
-    expect(rendererErrors, 'renderer console errors (CSP violations, exceptions)').toEqual([]);
+    expect([...rendererErrors, ...relaunched.rendererErrors], 'renderer console errors (CSP violations, exceptions)').toEqual([]);
   });
 
   test(`sorts ${ROWS.toLocaleString('en-US')} rows and paints the first sorted rows (M2 exit gate d)`, async () => {
