@@ -234,7 +234,8 @@ export function AircraftList({ aircraft, selectedHex, onSelect, visible, title, 
         }, 0);
       }}
     >
-      <div className="map-list__scroller gg-scroll" ref={scroller}>
+      {/* Firefox makes a scrollable box a Tab stop of its own, ahead of the grid's cell, where the arrow keys only scroll: not in the Tab order. */}
+      <div className="map-list__scroller gg-scroll" ref={scroller} tabIndex={-1}>
         <table
           id={id}
           className="map-list__table"

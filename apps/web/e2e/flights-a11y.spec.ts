@@ -137,6 +137,8 @@ test('/?sample=flights: the list mirrors the map (in view, by callsign); selecti
   // Arrow keys move within the list; Enter selects that aircraft on the map (its details strip opens).
   const focusedRow = () => page.evaluate(() => document.activeElement?.closest('tr')?.getAttribute('data-hex') ?? null);
   const first = await focusedRow();
+  // Tab landed on a cell, not on the list's scrolling box (a Tab stop of its own in Firefox unless taken out).
+  expect(first).not.toBeNull();
   await page.keyboard.press('ArrowDown');
   const second = await focusedRow();
   expect(second).not.toBeNull();
