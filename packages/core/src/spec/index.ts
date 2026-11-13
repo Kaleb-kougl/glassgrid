@@ -4,3 +4,4 @@ export * from './filter.js';
 export * from './chart.js';
 export * from './rows.js';
 export * from './crossfilter.js';
+export * from './map.js';

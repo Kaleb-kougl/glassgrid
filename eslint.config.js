@@ -94,6 +94,7 @@ export default defineConfig(
       'apps/desktop/e2e/**',
       'apps/web/e2e/**',
       'apps/web/scripts/**',
+      'apps/web/dev-proxy*.ts',
       'tools/**',
       'packages/ui/bench/*.ts',
       ...ENGINE_NODE_FILES,

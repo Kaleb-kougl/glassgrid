@@ -981,6 +981,53 @@
             "$type": "color",
             "$value": "#1c3f6b"
           }
+        },
+        "altitude": {
+          "1": {
+            "$type": "color",
+            "$value": "#fca636",
+            "$description": "Aircraft below 1,000 ft"
+          },
+          "2": {
+            "$type": "color",
+            "$value": "#ed7a52",
+            "$description": "1,000 to 4,999 ft"
+          },
+          "3": {
+            "$type": "color",
+            "$value": "#d4536f",
+            "$description": "5,000 to 9,999 ft"
+          },
+          "4": {
+            "$type": "color",
+            "$value": "#b42d8e",
+            "$description": "10,000 to 19,999 ft"
+          },
+          "5": {
+            "$type": "color",
+            "$value": "#8409a5",
+            "$description": "20,000 to 29,999 ft"
+          },
+          "6": {
+            "$type": "color",
+            "$value": "#41049d",
+            "$description": "30,000 ft and above"
+          }
+        },
+        "altitude-ground": {
+          "$type": "color",
+          "$value": "{color.neutral.500}",
+          "$description": "Aircraft on the ground (drawn as a ring, not a plane)"
+        },
+        "altitude-unknown": {
+          "$type": "color",
+          "$value": "#9aa2ad",
+          "$description": "Airborne without a reported altitude"
+        },
+        "aircraft-outline": {
+          "$type": "color",
+          "$value": "{color.neutral.925}",
+          "$description": "Outline around aircraft glyphs on the map"
         }
       },
       "tooltip": {
@@ -995,6 +1042,38 @@
         "muted": {
           "$type": "color",
           "$value": "#c2c8d0"
+        }
+      },
+      "map": {
+        "land": {
+          "$type": "color",
+          "$value": "{color.neutral.25}",
+          "$description": "Basemap land"
+        },
+        "water": {
+          "$type": "color",
+          "$value": "{color.blue.200}",
+          "$description": "Basemap sea, bay and lakes"
+        },
+        "urban": {
+          "$type": "color",
+          "$value": "{color.neutral.75}",
+          "$description": "Basemap urban areas"
+        },
+        "runway": {
+          "$type": "color",
+          "$value": "{color.neutral.600}",
+          "$description": "Runways"
+        },
+        "label": {
+          "$type": "color",
+          "$value": "{color.neutral.700}",
+          "$description": "Place and airport labels"
+        },
+        "label-halo": {
+          "$type": "color",
+          "$value": "{color.neutral.25}",
+          "$description": "Halo behind map labels"
         }
       },
       "opacity": {
@@ -1404,6 +1483,53 @@
             "$type": "color",
             "$value": "#a9c6ea"
           }
+        },
+        "altitude": {
+          "1": {
+            "$type": "color",
+            "$value": "#f4ec22",
+            "$description": "Aircraft below 1,000 ft"
+          },
+          "2": {
+            "$type": "color",
+            "$value": "#fcb62f",
+            "$description": "1,000 to 4,999 ft"
+          },
+          "3": {
+            "$type": "color",
+            "$value": "#f38749",
+            "$description": "5,000 to 9,999 ft"
+          },
+          "4": {
+            "$type": "color",
+            "$value": "#dd5e66",
+            "$description": "10,000 to 19,999 ft"
+          },
+          "5": {
+            "$type": "color",
+            "$value": "#be3884",
+            "$description": "20,000 to 29,999 ft"
+          },
+          "6": {
+            "$type": "color",
+            "$value": "#9613a0",
+            "$description": "30,000 ft and above"
+          }
+        },
+        "altitude-ground": {
+          "$type": "color",
+          "$value": "{color.neutral.400}",
+          "$description": "Aircraft on the ground (drawn as a ring, not a plane)"
+        },
+        "altitude-unknown": {
+          "$type": "color",
+          "$value": "#5f6772",
+          "$description": "Airborne without a reported altitude"
+        },
+        "aircraft-outline": {
+          "$type": "color",
+          "$value": "#e7eaee",
+          "$description": "Outline around aircraft glyphs on the map"
         }
       },
       "tooltip": {
@@ -1418,6 +1544,38 @@
         "muted": {
           "$type": "color",
           "$value": "{color.neutral.300}"
+        }
+      },
+      "map": {
+        "land": {
+          "$type": "color",
+          "$value": "{color.neutral.875}",
+          "$description": "Basemap land"
+        },
+        "water": {
+          "$type": "color",
+          "$value": "#1a2533",
+          "$description": "Basemap sea, bay and lakes"
+        },
+        "urban": {
+          "$type": "color",
+          "$value": "{color.neutral.825}",
+          "$description": "Basemap urban areas"
+        },
+        "runway": {
+          "$type": "color",
+          "$value": "#a6aeb9",
+          "$description": "Runways"
+        },
+        "label": {
+          "$type": "color",
+          "$value": "{color.neutral.300}",
+          "$description": "Place and airport labels"
+        },
+        "label-halo": {
+          "$type": "color",
+          "$value": "{color.neutral.900}",
+          "$description": "Halo behind map labels"
         }
       },
       "opacity": {

@@ -32,10 +32,12 @@ export {
   type TableProfile,
 } from './query-service';
 export { DEFAULT_RESULT_CACHE_BYTES, ResultCache } from './result-cache';
+export * from './live/index';
 export {
   EngineSession,
   prepareCrossfilter,
   runAggregate,
+  runMapQuery,
   runCount,
   toFragment,
   type AggregateOutcome,

@@ -184,16 +184,26 @@ describe('registration and listing', () => {
       'renameChart',
       'setShelf',
       'setMark',
+      'addMapView',
+      'updateMapView',
+      'removeMapView',
+      'setMapViewport',
+      'setMapViewFilter',
+      'setTime',
+      'setChartsFollowTime',
       'saveWorkspace',
       'saveWorkspaceAs',
       'openWorkspace',
       'listRecentWorkspaces',
       'loadWorkspace',
       'markWorkspaceSaved',
+      'startLive',
+      'stopLive',
+      'setLiveSource',
       'undo',
       'redo',
     ]);
-    for (const name of ['sortGrid', 'resizeColumn', 'reorderColumn', 'setSelection', 'setFilter', 'clearFilter', 'addFilter', 'brush', 'addChart', 'removeChart', 'renameChart', 'setShelf', 'setMark']) {
+    for (const name of ['sortGrid', 'resizeColumn', 'reorderColumn', 'setSelection', 'setFilter', 'clearFilter', 'addFilter', 'brush', 'addChart', 'removeChart', 'renameChart', 'setShelf', 'setMark', 'setMapViewFilter', 'setTime', 'setChartsFollowTime']) {
       expect(list.find((info) => info.name === name), name).toMatchObject({ tier: 'edit', mcp: { exposed: true } });
     }
 

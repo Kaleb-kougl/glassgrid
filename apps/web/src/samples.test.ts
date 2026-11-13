@@ -6,7 +6,7 @@ import { openSampleWorkspace, sampleFromSearch, SAMPLES, SAMPLES_PATH, type Samp
 
 /*
  * The committed sample workspaces (public/samples/*.glassgrid, written by
- * tools/datasets/src/samples.ts) are valid format-v1 workspaces for core's
+ * tools/datasets/src/samples.ts) are valid current-format (v2) workspaces for core's
  * reader, match the start screen's catalog and the data they describe, and
  * open through `loadWorkspace` with the data relinked by URL.
  */
@@ -24,7 +24,8 @@ describe('sample workspaces', () => {
       const parsed = parseWorkspace(byName.get(sample.workspace));
       expect(parsed.migratedFrom).toBeNull();
       expect(parsed.warnings).toEqual([]);
-      expect(parsed.file.formatVersion).toBe(1);
+      expect(parsed.file.formatVersion).toBe(2);
+      expect(parsed.workspace.maps).toEqual([]);
       expect(parsed.data.fileName).toBe(sample.file);
       expect(parsed.data.fingerprint.sizeBytes).toBe(sample.bytes);
       // The columns are the data's, in order; every chart reads only those; 3–4 charts, each with a card.

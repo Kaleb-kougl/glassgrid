@@ -1,7 +1,7 @@
 import { vi } from 'vitest';
 import type { CloseAnswer, OpenCsvResult, ThemePreference } from '@glassgrid/core';
 import type { EngineClientLike } from '../engine';
-import type { AppMenuCommand, DocumentChrome, DroppedFileRef, Platform, PlatformCapabilities, SampleDataset, WorkspaceFilesApi } from '../platform';
+import type { AppMenuCommand, DocumentChrome, DroppedFileRef, Platform, PlatformCapabilities, PlatformLive, PlatformMap, SampleDataset, WorkspaceFilesApi } from '../platform';
 
 /*
  * A Platform for tests: every capability a vi.fn the test can inspect and
@@ -21,6 +21,12 @@ export interface FakePlatformOptions {
   workspaceFiles?: WorkspaceFilesApi;
   /** A native menu owns the file shortcuts (desktop). */
   menuShortcuts?: boolean;
+  /** The basemap for map views (the web shell's). */
+  map?: PlatformMap;
+  /** Live flights' offline fallback (the web shell's, L5). */
+  live?: PlatformLive;
+  /** The page's visibility listener slot (web). */
+  onVisibilityChange?: (listener: (visible: boolean) => void) => () => void;
 }
 
 export function fakePlatform<E extends EngineClientLike>(engine: E, options: FakePlatformOptions = {}) {
@@ -58,6 +64,7 @@ export function fakePlatform<E extends EngineClientLike>(engine: E, options: Fak
       closeListeners.add(listener);
       return () => closeListeners.delete(listener);
     },
+    ...(options.onVisibilityChange ? { onVisibilityChange: options.onVisibilityChange } : {}),
   };
   const platform: Platform = {
     name: options.name ?? 'linux',
@@ -67,6 +74,8 @@ export function fakePlatform<E extends EngineClientLike>(engine: E, options: Fak
     window: shell,
     capabilities: { canSaveWorkspace: false, canOpenFromPath: true, maxFileBytes: null, ...options.capabilities },
     ...(options.workspaceFiles ? { workspaceFiles: options.workspaceFiles } : {}),
+    ...(options.map ? { map: options.map } : {}),
+    ...(options.live ? { live: options.live } : {}),
   };
   return {
     platform,

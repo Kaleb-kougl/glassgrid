@@ -78,6 +78,19 @@ const stateArb: fc.Arbitrary<WorkspaceState> = fc
         }),
         { maxLength: 4 },
       ),
+      maps: fc.array(
+        fc.record({
+          lat: fc.constantFrom(...names),
+          lon: fc.constantFrom(...names),
+          id: fc.constantFrom(...names),
+          time: fc.constantFrom(...names),
+          filters: fc.array(filterArb(names), { maxLength: 2 }),
+          trailMinutes: fc.option(fc.integer({ min: 0, max: 30 }), { nil: undefined }),
+          title: fc.option(fc.string({ minLength: 1, maxLength: 20 }).map((t) => t.trim()).filter((t) => t.length > 0), { nil: undefined }),
+          card: fc.record({ x: fc.nat(6), y: fc.nat(20), w: fc.integer({ min: 1, max: 4 }), h: fc.integer({ min: 1, max: 4 }) }),
+        }),
+        { maxLength: 2 },
+      ),
       selected: fc.array(fc.boolean(), { minLength: 5, maxLength: 5 }),
       clauses: fc.array(
         fc.record({
@@ -121,6 +134,19 @@ const stateArb: fc.Arbitrary<WorkspaceState> = fc
       },
       ...(chart.title === undefined ? {} : { title: chart.title }),
     }));
+    const maps = plan.maps.map((map, i) => ({
+      id: id('map', i + 1),
+      spec: {
+        kind: 'map' as const,
+        lat: map.lat,
+        lon: map.lon,
+        id: map.id,
+        time: map.time,
+        filters: map.filters,
+        ...(map.trailMinutes === undefined ? {} : { trailMinutes: map.trailMinutes }),
+      },
+      ...(map.title === undefined ? {} : { title: map.title }),
+    }));
     const views = [...charts.map((chart) => chart.id), 'grid'];
     const selections: Record<string, unknown> = {};
     views.forEach((view, i) => {
@@ -130,10 +156,13 @@ const stateArb: fc.Arbitrary<WorkspaceState> = fc
       dataSource: { handleId: 'fh_0123456789abcdef', fileName: 'data.csv', fingerprint: { sizeBytes: 1, mtimeMs: 2, headTailSha256: 'e'.repeat(64), key: 'f'.repeat(32) } },
       columns,
       charts,
+      maps,
       selections,
       userFilters: plan.userFilters.map((filter, i) => ({ id: id('filter', i + 1), filter })),
       grid: { sort: plan.sort, columnOrder: plan.order, columnWidths: plan.widths, selection: plan.cell === null ? null : { anchor: plan.cell, focus: plan.cell } },
-      layout: { cards: plan.charts.map((chart, i) => ({ chartId: id('chart', i + 1), ...chart.card })) },
+      layout: {
+        cards: [...plan.charts.map((chart, i) => ({ chartId: id('chart', i + 1), ...chart.card })), ...plan.maps.map((map, i) => ({ chartId: id('map', i + 1), ...map.card }))],
+      },
       ...(plan.document === undefined ? {} : { document: { id: 'doc_12345678', fileName: plan.document.fileName, savedDigest: '0123456789abcdef' } }),
     };
     // Canonical: what the store would hold (schema defaults applied).

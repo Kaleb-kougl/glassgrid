@@ -8,7 +8,9 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   define: { __GG_RENDER_PERF__: 'false' },
   test: {
-    include: ['src/**/*.test.{ts,tsx}'],
+    // dev-proxy.test.ts: the dev server's /api/flights proxy (Node; runs a real Vite dev server).
+    // playwright-browsers.test.ts: the E2E configuration's browser list and benchmark folder (Node).
+    include: ['src/**/*.test.{ts,tsx}', 'dev-proxy.test.ts', 'playwright-browsers.test.ts'],
     environment: 'node',
   },
 });

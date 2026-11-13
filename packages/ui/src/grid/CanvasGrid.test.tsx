@@ -638,4 +638,27 @@ describe('CanvasGrid scrolling', () => {
     expect(handle.current?.controller?.virtualTop).toBe(0);
     expect(onSelectionChange).toHaveBeenCalledWith(null);
   });
+
+  it('stays where it is on a reset that keeps the position (the same view of changed data), clamped to the rows there are', () => {
+    const source = makeSource(10_000);
+    const onSelectionChange = vi.fn();
+    const handle: { current: CanvasGridHandle | null } = { current: null };
+    setup({ source, handleRef: handle, onSelectionChange, initialSelection: { anchor: { row: 5_005, col: 0 }, focus: { row: 5_005, col: 1 } } });
+    act(() => handle.current?.scrollToRow(5_000));
+    expect(handle.current?.controller?.virtualTop).toBe(160_000);
+    const reset = (rowCount: number) =>
+      act(() => {
+        source.rowCount = rowCount;
+        for (const listener of source.listeners) listener({ kind: 'reset', keepPosition: true });
+      });
+    reset(9_000);
+    expect(handle.current?.controller?.virtualTop).toBe(160_000);
+    expect(onSelectionChange).not.toHaveBeenCalled();
+    // Fewer rows than the position: clamped to the last page, and a selection past the end goes.
+    reset(3_000);
+    const top = handle.current?.controller?.virtualTop ?? 0;
+    expect(top).toBeGreaterThan(90_000);
+    expect(top).toBeLessThanOrEqual(3_000 * 32);
+    expect(onSelectionChange).toHaveBeenCalledWith(null);
+  });
 });

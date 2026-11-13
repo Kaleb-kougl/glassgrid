@@ -1,6 +1,8 @@
-import type { CommandRegistry, OpenCsvResult } from '@glassgrid/core';
+import { FLIGHTS_SAMPLE_ARCHIVE } from '@glassgrid/app';
+import { LIVE_FIXTURES, liveFlightsUrl, type CommandRegistry, type LiveFixtureId, type OpenCsvResult } from '@glassgrid/core';
 import { createWorkerEngine, type WorkerEngine } from '@glassgrid/engine/web';
 import { absoluteUrl } from './base';
+import { FLIGHTS_SAMPLE, openFlightsWorkspace } from './flights';
 import { openSampleWorkspace, SAMPLES, type SampleInfo } from './samples';
 import type { WebEngine } from './web-platform';
 
@@ -30,12 +32,27 @@ export interface WebEngineOptions {
   readonly samples?: readonly SampleInfo[];
   /** An engine to use (tests); default: a new worker engine that starts lazily. */
   readonly engine?: WorkerEngine;
-  readonly onSampleOpened?: (sample: SampleInfo) => void;
+  /** A sample workspace opened (`flights` is the live-flights replay, which has no SampleInfo of its own). */
+  readonly onSampleOpened?: (sample: Pick<SampleInfo, 'id'>) => void;
+  /**
+   * The live-flights endpoint (docs/live-flights-l2.md). Default: the site's
+   * `/api/flights` on this origin (`liveFlightsUrl`), not under the app's
+   * base. Under `pnpm dev:web` Vite proxies it to the portfolio's dev server
+   * (`GLASSGRID_FLIGHTS_PROXY`, default http://localhost:3000; dev-proxy.ts);
+   * `vite preview` has no such route (the live source backs off on its 404s).
+   */
+  readonly liveFlightsUrl?: string;
 }
 
 export interface DuckdbWebEngine extends WebEngine {
   /** The worker client itself (`ready`, `registerUrl`, diagnostics). */
   readonly worker: WorkerEngine;
+}
+
+/** The replay fixtures' URLs: `<base>samples/flights/<file>` on this origin. */
+export function liveFixtureUrls(origin: string, base?: string): Record<LiveFixtureId, string> {
+  const url = (id: LiveFixtureId) => absoluteUrl(`samples/flights/${LIVE_FIXTURES[id].file}`, origin, base);
+  return { 'flights-bay-30min': url('flights-bay-30min'), 'flights-bay-day': url('flights-bay-day') };
 }
 
 /** The signed Parquet extension's repository on this origin: `https://host/duckdb-extensions`, or under the base. */
@@ -44,7 +61,13 @@ export function extensionRepository(origin: string, base?: string): string {
 }
 
 export function createDuckdbWebEngine(options: WebEngineOptions): DuckdbWebEngine {
-  const worker = options.engine ?? createWorkerEngine({ start: 'lazy', extensionRepository: options.extensionRepository ?? extensionRepository(location.origin) });
+  const worker =
+    options.engine ??
+    createWorkerEngine({
+      start: 'lazy',
+      extensionRepository: options.extensionRepository ?? extensionRepository(location.origin),
+      live: { url: options.liveFlightsUrl ?? liveFlightsUrl(location.origin), fixtures: liveFixtureUrls(location.origin) },
+    });
   const samples = options.samples ?? SAMPLES;
   // Visible in the console (and to the E2E tests): what DuckDB-WASM runs as, and whether Parquet loaded.
   worker.ready.then(
@@ -64,8 +87,17 @@ export function createDuckdbWebEngine(options: WebEngineOptions): DuckdbWebEngin
       const source = await worker.registerFile(file);
       return { status: 'opened', file: { handle: source.handle, displayName: source.fileName, sizeBytes: source.sizeBytes } };
     },
-    samples,
+    samples: [...samples, FLIGHTS_SAMPLE],
     openSample: async (id: string): Promise<OpenCsvResult> => {
+      if (id === FLIGHTS_SAMPLE.id) {
+        // The flights workspace over the live table, the 30-minute fixture loaded whole for the time scrubber (flights.ts).
+        const result = await openFlightsWorkspace(FLIGHTS_SAMPLE_ARCHIVE, { engine: worker, registry: options.registry });
+        if (result.status === 'cancelled') {
+          performance.mark(SAMPLE_LOADED_MARK, { detail: { sample: FLIGHTS_SAMPLE.id } });
+          options.onSampleOpened?.(FLIGHTS_SAMPLE);
+        }
+        return result;
+      }
       const sample = samples.find((candidate) => candidate.id === id);
       if (!sample) return { status: 'failed', message: `There is no sample called ${id}` };
       const result = await openSampleWorkspace(sample, {

@@ -3,7 +3,7 @@ import type { OpenWorkspaceResult, RecoveryUpdate, SaveWorkspaceRequest, SaveWor
 import { isWorkspaceMenuCommand, type WorkspaceBridge } from '../protocol/ipc.js';
 import { closeAnswer, provideWorkspacePersistence, reportUnsavedWork } from '../workspace-file/host.js';
 import { digestPersisted, isWorkspaceDirty, persistedWorkspace, type OpenedData } from '../workspace-file/persisted.js';
-import { must, taxiData, taxiWorkspace } from '../workspace-file/test-support.js';
+import { flightsData, flightsWorkspace, must, taxiData, taxiWorkspace } from '../workspace-file/test-support.js';
 import { CommandError } from './errors.js';
 import { desktopLikePolicy, openFileInput, testWorkspace } from './test-support.js';
 
@@ -74,6 +74,22 @@ describe('loadWorkspace', () => {
 
     await registry.dispatch('undo', {}, user);
     expect(store.getState()).toEqual(before);
+  });
+
+  it('restores map views with their cards; undo takes them away again', async () => {
+    const { registry, store } = testWorkspace();
+    const flights = persistedWorkspace(flightsWorkspace());
+    await registry.dispatch('loadWorkspace', { data: flightsData(), workspace: flights, document: { id: null, fileName: null }, recovered: false }, user);
+    expect(store.getState().maps).toEqual(flightsWorkspace().maps);
+    expect(persistedWorkspace(store.getState())).toEqual(flights);
+    expect(isWorkspaceDirty(store.getState())).toBe(false);
+    // A map change is unsaved work.
+    await registry.dispatch('updateMapView', { mapId: 'map_4', trailMinutes: 10 }, user);
+    expect(isWorkspaceDirty(store.getState())).toBe(true);
+    await registry.dispatch('undo', {}, user);
+    expect(isWorkspaceDirty(store.getState())).toBe(false);
+    await registry.dispatch('undo', {}, user);
+    expect(store.getState().maps).toEqual([]);
   });
 
   it('a recovery snapshot, or a workspace that lost something on restore, starts dirty', async () => {

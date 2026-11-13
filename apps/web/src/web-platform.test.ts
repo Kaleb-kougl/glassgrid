@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { toFileHandle, type OpenCsvResult } from '@glassgrid/core';
 import type { EngineClientLike } from '@glassgrid/app';
 import { isGalleryRoute } from './routes';
-import { createWebPlatform, pickFile, WEB_MAX_FILE_BYTES, type WebEngine } from './web-platform';
+import { createWebPlatform, LIVE_CHOICE_STORAGE_KEY, pickFile, WEB_MAX_FILE_BYTES, webLive, type WebEngine } from './web-platform';
 
 const opened: OpenCsvResult = { status: 'opened', file: { handle: toFileHandle('0b6c8f0e-6d0a-4f43-9d3e-2f1f1a0d9c11'), displayName: 'trips.csv', sizeBytes: 3 } };
 
@@ -27,6 +27,8 @@ describe('web platform', () => {
     expect('onMenuCommand' in platform.window).toBe(false);
     expect(platform.capabilities).toEqual({ canSaveWorkspace: false, canOpenFromPath: false, maxFileBytes: WEB_MAX_FILE_BYTES });
     expect(platform.workspaceFiles).toBeUndefined();
+    // Map views draw on the basemap under the base (docs/live-flights-l3-data.md).
+    expect(platform.map).toEqual({ assetsBase: '/map/', attribution: [] });
     expect(platform.files.privacyNote).toBe('The file is read in this browser and never uploaded.');
   });
 
@@ -123,5 +125,94 @@ describe('routes', () => {
     expect(isGalleryRoute({ pathname: '/', search: '?gallery' })).toBe(true);
     expect(isGalleryRoute({ pathname: '/', search: '' })).toBe(false);
     expect(isGalleryRoute({ pathname: '/galleryx', search: '?theme=dark' })).toBe(false);
+  });
+});
+
+describe('page visibility (the live-flights feed pauses on it)', () => {
+  it('reports the current visibility at once, then every change', () => {
+    const state: { visibilityState: DocumentVisibilityState } = { visibilityState: 'visible' };
+    const doc = Object.assign(new EventTarget(), state);
+    const web = { engine: {} as EngineClientLike, registerFile: vi.fn(() => Promise.resolve(opened)) };
+    const platform = createWebPlatform(web, { nav: { platform: 'Linux', clipboard: {} } as unknown as Navigator, target: new EventTarget(), doc });
+    const seen: boolean[] = [];
+    const stop = platform.window.onVisibilityChange?.((visible) => seen.push(visible));
+    doc.visibilityState = 'hidden';
+    doc.dispatchEvent(new Event('visibilitychange'));
+    doc.visibilityState = 'visible';
+    doc.dispatchEvent(new Event('visibilitychange'));
+    stop?.();
+    doc.visibilityState = 'hidden';
+    doc.dispatchEvent(new Event('visibilitychange'));
+    expect(seen).toEqual([true, false, true]);
+  });
+});
+
+describe('live flights’ offline fallback (L5)', () => {
+  const URL = 'https://site.example/api/flights';
+  const body = (stale: boolean) => new Response(JSON.stringify({ now: 1, fetchedAt: 1, stale, source: 'adsb.lol', attribution: 'a', license: 'l', ac: [] }), { status: 200 });
+
+  it('reports navigator.onLine at once and on online / offline events', () => {
+    const nav = { onLine: true };
+    const target = new EventTarget();
+    const live = webLive({ requested: true, url: URL, nav, target, storage: null });
+    const seen: boolean[] = [];
+    const stop = live.onOnlineChange?.((online) => seen.push(online));
+    nav.onLine = false;
+    target.dispatchEvent(new Event('offline'));
+    nav.onLine = true;
+    target.dispatchEvent(new Event('online'));
+    stop?.();
+    target.dispatchEvent(new Event('offline'));
+    expect(seen).toEqual([true, false, true]);
+    expect(live.requested).toBe(true);
+  });
+
+  it('probes the relay once, without the browser cache: fresh data is true; stale data, a 503 or a network error false', async () => {
+    const answers: Array<() => Promise<Response>> = [
+      () => Promise.resolve(body(false)),
+      () => Promise.resolve(body(true)),
+      () => Promise.resolve(new Response('{}', { status: 503, headers: { 'retry-after': '10' } })),
+      () => Promise.reject(new TypeError('Failed to fetch')),
+      () => Promise.resolve(new Response('<html>', { status: 200 })),
+    ];
+    const fetch = vi.fn((_url: string, _init: RequestInit) => (answers.shift() ?? (() => Promise.resolve(body(false))))());
+    const live = webLive({ requested: true, url: URL, fetch, storage: null, nav: { onLine: true }, target: new EventTarget() });
+    expect(await live.probe?.()).toBe(true);
+    expect(fetch).toHaveBeenCalledWith(URL, expect.objectContaining({ cache: 'no-store' }));
+    expect(await live.probe?.()).toBe(false);
+    expect(await live.probe?.()).toBe(false);
+    expect(await live.probe?.()).toBe(false);
+    expect(await live.probe?.()).toBe(false);
+    expect(fetch).toHaveBeenCalledTimes(5);
+  });
+
+  it('aborts a probe in flight when its caller does', async () => {
+    let seen: AbortSignal | undefined;
+    const fetch = vi.fn((_url: string, init: RequestInit) => {
+      seen = init.signal ?? undefined;
+      return new Promise<Response>((_resolve, reject) => init.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError'))));
+    });
+    const live = webLive({ requested: true, url: URL, fetch, storage: null, nav: { onLine: true }, target: new EventTarget() });
+    const caller = new AbortController();
+    const probing = live.probe?.(caller.signal);
+    caller.abort();
+    expect(await probing).toBe(false);
+    expect(seen?.aborted).toBe(true);
+  });
+
+  it('keeps the choice in session storage, and survives storage that throws', () => {
+    const map = new Map<string, string>();
+    const storage = { getItem: (k: string) => map.get(k) ?? null, setItem: (k: string, v: string) => void map.set(k, v), removeItem: (k: string) => void map.delete(k) };
+    const live = webLive({ requested: true, url: URL, storage, nav: { onLine: true }, target: new EventTarget() });
+    expect(live.choice.get()).toBeNull();
+    live.choice.set('recorded');
+    expect(map.get(LIVE_CHOICE_STORAGE_KEY)).toBe('recorded');
+    expect(live.choice.get()).toBe('recorded');
+    live.choice.set(null);
+    expect(map.has(LIVE_CHOICE_STORAGE_KEY)).toBe(false);
+    const blocked = { getItem: () => { throw new Error('SecurityError'); }, setItem: () => { throw new Error('SecurityError'); }, removeItem: () => { throw new Error('SecurityError'); } };
+    const guarded = webLive({ requested: false, url: URL, storage: blocked, nav: { onLine: true }, target: new EventTarget() });
+    expect(guarded.choice.get()).toBeNull();
+    expect(() => guarded.choice.set('recorded')).not.toThrow();
   });
 });

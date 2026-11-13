@@ -32,7 +32,7 @@ const dirty: Extract<CloseAnswer, { dirty: true }> = {
   documentId: 'doc_12345678',
   snapshot: {
     dataSource: { handleId: toFileHandle('00000000-0000-0000-0000-000000000001'), fileName: 'trips.csv', fingerprint: { sizeBytes: 1, mtimeMs: 1, headTailSha256: 'a'.repeat(64), key: 'b'.repeat(32) } },
-    workspace: { columns: [], charts: [], selections: {}, userFilters: [], grid: { sort: [], columnOrder: [], columnWidths: [] }, layout: { cards: [] } },
+    workspace: { columns: [], charts: [], maps: [], selections: {}, userFilters: [], grid: { sort: [], columnOrder: [], columnWidths: [] }, layout: { cards: [] } },
   },
 };
 

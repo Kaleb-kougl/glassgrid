@@ -10,7 +10,12 @@ import type {
   EngineEvent,
   FileHandle,
   FilterInput,
+  LiveSourceConfigInput,
+  LiveState,
+  MapQueryKind,
+  MapSpecInput,
   Mark,
+  LiveMemoryStats,
   ParquetCacheStats,
   ParquetMode,
   PreparedCube,
@@ -82,6 +87,16 @@ export interface CountResult extends Timed {
   fromCube?: boolean;
 }
 
+/** A map view's query (docs/live-flights-l3-data.md): the latest fix per aircraft, their trails, or (L4) one aircraft's track, at a data clock. */
+export interface MapQueryRequest {
+  spec: MapSpecInput;
+  query: MapQueryKind;
+  /** Epoch milliseconds (an integer): the data clock the map shows. */
+  dataClockMs: number;
+  /** `track` only (and required for it): the aircraft's id as text. */
+  aircraft?: string;
+}
+
 export interface PrepareCrossfilterResult {
   /** One entry per target, in order: `ready` with its cells, or `skipped` with the reason. */
   cubes: PreparedCube[];
@@ -108,6 +123,8 @@ export interface ParquetCacheResult {
 export interface CacheStats {
   results: ResultCacheStats;
   parquet: ParquetCacheStats;
+  /** The live feed's database: DuckDB's memory and attached databases (absent before a feed has a store). */
+  live?: LiveMemoryStats;
 }
 
 export interface ColumnTypesResult {
@@ -129,6 +146,23 @@ export interface PageOptions {
 /** What the canvas grid calls per page: `limit` is at most 1,000. */
 export type FetchPage = (offset: number, limit: number, signal?: AbortSignal) => Promise<RowsResult>;
 
+/**
+ * The engine's live-flights feed (docs/live-flights-l2.md): one per engine,
+ * filling its `flight_states` table from the live endpoint or a replayed
+ * fixture. Every call answers the feed's state; `onState` reports changes
+ * (status, and each ingested batch).
+ */
+export interface LiveEngineApi {
+  start(source: LiveSourceConfigInput): Promise<LiveState>;
+  stop(): Promise<LiveState>;
+  setSource(source: LiveSourceConfigInput): Promise<LiveState>;
+  state(): Promise<LiveState>;
+  /** The page or window is visible or hidden: the feed pauses while it (and every other reporting window) is hidden. */
+  setVisible(visible: boolean): Promise<void>;
+  /** Returns an unsubscribe function. */
+  onState(listener: (state: LiveState) => void): () => void;
+}
+
 /** The engine as the app sees it, on the desktop and on the web. */
 export interface EngineClientApi {
   open(file: FileHandle, options?: { parquet?: ParquetMode; signal?: AbortSignal }): Promise<OpenResult>;
@@ -139,6 +173,11 @@ export interface EngineClientApi {
   pageFetcher(table: TableId, view?: { viewId?: string; sort?: SortKey[]; filters?: readonly FilterInput[] }): FetchPage;
   setColumnTypes(table: TableId, overrides: readonly ColumnTypeOverride[], options?: { signal?: AbortSignal }): Promise<ColumnTypesResult>;
   aggregate(table: TableId, spec: AggregateSpecInput, options?: QueryOptions & CrossfilterQueryOptions): Promise<AggregateResult>;
+  /**
+   * A map view's latest-fix or trails query: Arrow with `MAP_AIRCRAFT_FIELDS` / `MAP_TRAIL_FIELDS`.
+   * Use one view id per map and query (`map:<id>:latest`), so a newer clock supersedes the stale one.
+   */
+  mapQuery(table: TableId, request: MapQueryRequest, options?: QueryOptions): Promise<RowsResult>;
   prepareCrossfilter(
     table: TableId,
     plan: { dimension: CrossfilterDimension; targets: readonly CubeTarget[] },
@@ -155,5 +194,7 @@ export interface EngineClientApi {
   onRestarted(listener: () => void): () => void;
   /** Engine events (Parquet progress, table updates). Returns an unsubscribe function. */
   onEvent(listener: (event: EngineEvent) => void): () => void;
+  /** The live-flights feed, on clients that offer it (the web demo's worker engine); absent elsewhere. */
+  readonly live?: LiveEngineApi;
   dispose(): void;
 }

@@ -65,6 +65,9 @@ const PATHS = [
   'samples/taxi.glassgrid',
   'samples/taxi-trips-2025h1.parquet',
   'samples/samples.manifest.json',
+  'map/basemap.json',
+  'map/basemap.geojson',
+  'map/fonts/Noto Sans Regular/0-255.pbf',
 ];
 
 describe('vercel.json', () => {
@@ -73,7 +76,7 @@ describe('vercel.json', () => {
   });
 
   it('keeps vercel.json’s source syntax', () => {
-    expect(HEADER_RULES.map((rule) => vercelSource(rule.match))).toEqual(['/(.*)', '/assets/(.*)', '/duckdb-extensions/(.*)', '/samples/(.*)\\.parquet', '/samples/(.*)\\.glassgrid', '/(.*)\\.wasm']);
+    expect(HEADER_RULES.map((rule) => vercelSource(rule.match))).toEqual(['/(.*)', '/assets/(.*)', '/duckdb-extensions/(.*)', '/samples/(.*)\\.parquet', '/samples/(.*)\\.glassgrid', '/(.*)\\.wasm', '/map/(.*)\\.geojson', '/map/(.*)\\.pbf']);
   });
 });
 
@@ -90,6 +93,8 @@ describe('glassgrid-hosting.json (Next.js)', () => {
       '/glassgrid/samples/:file(.*\\.parquet)',
       '/glassgrid/samples/:file(.*\\.glassgrid)',
       '/glassgrid/:file(.*\\.wasm)',
+      '/glassgrid/map/:file(.*\\.geojson)',
+      '/glassgrid/map/:file(.*\\.pbf)',
     ]);
     // Each compiles as Next.js compiles it (a pattern Next rejects throws here too: capturing groups, unbalanced, "*" with no prefix).
     for (const rule of manifest.headers) expect(() => nextMatcher(rule.source)).not.toThrow();
@@ -145,6 +150,8 @@ describe('glassgrid-hosting.json (Next.js)', () => {
       '/samples/:file(.*\\.parquet)',
       '/samples/:file(.*\\.glassgrid)',
       '/:file(.*\\.wasm)',
+      '/map/:file(.*\\.geojson)',
+      '/map/:file(.*\\.pbf)',
     ]);
     expect(nextSource({ kind: 'folder', folder: 'assets' }, '/projects/glassgrid/')).toBe('/projects/glassgrid/assets/:path*');
     expect(nextMatcher(nextSource({ kind: 'everything' }, '/projects/glassgrid/')).test('/projects/glassgrid')).toBe(true);

@@ -102,3 +102,37 @@ test('loads the signed Parquet extension from this origin: read_parquet over HTT
   expect(result.cache).toMatchObject({ usingParquetCache: true, rowCount: 20_000, reread: { usingParquetCache: true, rowCount: 20_000 } });
   expect(result.cache.sizeBytes).toBeGreaterThan(0);
 });
+
+test('live flights: a fixture replayed over HTTP into flight_states, then the live endpoint polled and paused', async ({ page }) => {
+  const result = await page.evaluate(() => globalThis.gg.liveFlights());
+  console.info(JSON.stringify({ replayMs: Math.round(result.replayMs), replay: result.replay.lastBatch, afterPoll: result.afterPoll.feed }));
+  // The whole fixture, nothing dropped or doubled (the exact cell-by-cell check is the Vitest replay gate).
+  expect(result.replay).toMatchObject({ rowCount: 71_595, ingestError: null, feed: { kind: 'replay', status: 'stopped', ended: true, failures: 0 } });
+  // Switching to live empties the table; one poll brings the endpoint's two aircraft.
+  expect(result.switchedRows).toBe(0);
+  expect(result.afterPoll).toMatchObject({ rowCount: 2, feed: { kind: 'live', status: 'live', failures: 0, license: 'ODbL-1.0' }, lastBatch: { received: 2, inserted: 2 } });
+  expect(result.hidden.feed).toMatchObject({ paused: true, nextAttemptAt: null });
+  expect(result.shown.feed).toMatchObject({ paused: false });
+  expect(result.stopped.feed).toMatchObject({ status: 'stopped' });
+});
+
+test('live flights (L4): the day loaded whole, then the half hour, then the day again: each store is freed on the switch', async ({ page }) => {
+  test.setTimeout(240_000);
+  const steps = await page.evaluate(() => globalThis.gg.archiveSwitches());
+  console.info(JSON.stringify(steps));
+  // Every load succeeds, the second and third day too (they ran out of memory when a store's database stayed attached).
+  expect(steps.map((step) => [step.fixture, step.status, step.rows, step.error])).toEqual([
+    ['flights-bay-day', 'live', 1_456_777, null],
+    ['flights-bay-30min', 'live', 71_595, null],
+    ['flights-bay-day', 'live', 1_456_777, null],
+    ['flights-bay-30min', 'live', 71_595, null],
+    ['flights-bay-day', 'live', 1_456_777, null],
+  ]);
+  // One store attached at a time, and a day's memory is freed with it: the half hour's store alone is small (~20
+  // MB; it was ~680 MB when a filtered grid index built as the live table closed), and the days do not pile up.
+  const days = steps.filter((step) => step.fixture === 'flights-bay-day');
+  const halves = steps.filter((step) => step.fixture === 'flights-bay-30min');
+  expect(new Set(steps.map((step) => step.databases)).size).toBe(1);
+  for (const half of halves) expect(half.memoryMb ?? Infinity).toBeLessThan(100);
+  for (const day of days) expect(day.memoryMb ?? Infinity).toBeLessThan(400);
+});

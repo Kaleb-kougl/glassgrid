@@ -22,7 +22,7 @@
     "dev": "pnpm --filter @glassgrid/desktop dev",
     "dev:web": "pnpm --filter @glassgrid/web dev",
     "build": "pnpm -r --filter \"./apps/*\" build",
-    "lint": "eslint .",
+    "lint": "node --max-old-space-size=4096 node_modules/eslint/bin/eslint.js .",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r --if-present test",
     "e2e": "pnpm --filter @glassgrid/desktop build && pnpm --filter @glassgrid/desktop e2e && pnpm --filter @glassgrid/engine e2e",

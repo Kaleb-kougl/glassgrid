@@ -107,11 +107,15 @@ export const loadWorkspace = defineCommand({
     draft.dataSource = state.dataSource;
     draft.columns = state.columns;
     draft.charts = state.charts;
+    draft.maps = state.maps;
     draft.selections = state.selections;
     draft.userFilters = state.userFilters;
     draft.grid = state.grid;
     draft.layout = state.layout;
     draft.document = state.document;
+    // View state of the previous workspace (L4): the time cursor and whether charts follow it.
+    delete draft.time;
+    delete draft.chartsFollowTime;
   },
 });
 

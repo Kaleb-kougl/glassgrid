@@ -1,6 +1,8 @@
 import type { Table } from 'apache-arrow';
 import {
   effectiveColumnType,
+  effectiveFilters,
+  GRID_VIEW_ID,
   gridColumnOrder,
   type ColumnState,
   type Filter,
@@ -8,6 +10,7 @@ import {
   type GridState,
   type SortKey,
   type TableId,
+  type WorkspaceState,
 } from '@glassgrid/core';
 import {
   ArrowPagedSource,
@@ -81,6 +84,34 @@ export interface GridView {
   readonly columns: readonly GridColumn[];
   /** Rows in the view once counted; null while unknown. */
   readonly rowCount: number | null;
+  /**
+   * What the person asked the grid to show (sort, their filters and
+   * selections, column types), without what moves on its own (a map's
+   * viewport, the time window, new live data). A new view with the same
+   * intent keeps the grid's scroll position and selection; a new intent
+   * sends it back to the top. Undefined: every new view is a new intent.
+   */
+  readonly intent?: string | undefined;
+}
+
+/**
+ * The grid's intent (GridView.intent) in a workspace: its sort, the user
+ * filters and every selection but its own, each map's "Filter to map view"
+ * switch, "Charts follow time" and the column types; not the maps'
+ * viewports, the time window's position or the data version, which move on
+ * their own.
+ */
+export function gridIntentKey(
+  state: Pick<WorkspaceState, 'charts' | 'selections' | 'userFilters' | 'maps' | 'chartsFollowTime'> & { readonly grid: Pick<GridState, 'sort'> },
+  columns: readonly Pick<GridColumn, 'name' | 'type'>[],
+): string {
+  return JSON.stringify([
+    state.grid.sort,
+    effectiveFilters({ charts: state.charts, selections: state.selections, userFilters: state.userFilters }, GRID_VIEW_ID),
+    state.maps.map((map) => map.filterToView !== false),
+    state.chartsFollowTime === true,
+    columns.map((column) => [column.name, column.type]),
+  ]);
 }
 
 /**
@@ -88,13 +119,14 @@ export interface GridView {
  * `engine.pageFetcher(table, { viewId: 'grid', sort, filters })`; a new sort,
  * filter set, type change or engine restart is a new view, which resets the
  * source (pages dropped, requests aborted, the grid back at the top with
- * nothing selected). Until the count arrives the view shows one page; a
+ * nothing selected, unless only what moves on its own changed: `intent`). Until the count arrives the view shows one page; a
  * first page shorter than that is the whole view.
  */
 export class EngineGridSource {
   readonly source: ArrowPagedSource;
   private readonly firstPageListeners = new Set<(result: RowsResult) => void>();
   private key: string;
+  private intent: string | undefined;
   private fetch: FetchPage;
 
   constructor(
@@ -103,6 +135,7 @@ export class EngineGridSource {
     view: GridView,
   ) {
     this.key = EngineGridSource.keyOf(view);
+    this.intent = view.intent;
     this.fetch = this.fetcherFor(view);
     this.source = new ArrowPagedSource({
       columns: view.columns,
@@ -136,13 +169,19 @@ export class EngineGridSource {
     return () => this.firstPageListeners.delete(listener);
   }
 
-  /** Applies the latest view: resets on a new view, otherwise takes a newly arrived row count. */
+  /**
+   * Applies the latest view: resets on a new view (keeping the grid's
+   * position when its intent is the same, and the old row count until the
+   * new one is known), otherwise takes a newly arrived row count.
+   */
   update(view: GridView): 'reset' | 'resized' | 'unchanged' {
     const key = EngineGridSource.keyOf(view);
     if (key !== this.key) {
+      const keepPosition = view.intent !== undefined && view.intent === this.intent;
       this.key = key;
+      this.intent = view.intent;
       this.fetch = this.fetcherFor(view);
-      this.source.reset({ rowCount: view.rowCount ?? PAGE_SIZE, columns: view.columns });
+      this.source.reset({ rowCount: view.rowCount ?? (keepPosition ? this.source.rowCount : PAGE_SIZE), columns: view.columns, keepPosition });
       return 'reset';
     }
     if (view.rowCount !== null && view.rowCount !== this.source.rowCount) {

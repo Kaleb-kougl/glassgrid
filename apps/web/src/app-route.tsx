@@ -2,9 +2,11 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import '@glassgrid/app/app.css';
 import { App, applyInitialTheme, createAppWorkspace, installRenderPerf, perfRegion } from '@glassgrid/app';
+import { liveFlightsUrl } from '@glassgrid/core';
+import { flightsSourceFromSearch, FLIGHTS_SAMPLE, initialFlightsSource, openFlightsWorkspace } from './flights';
 import { sampleFromSearch } from './samples';
 import { createDuckdbWebEngine } from './web-engine';
-import { createWebPlatform } from './web-platform';
+import { createWebPlatform, webLive } from './web-platform';
 
 /**
  * `/`: the shared app on the web platform, with DuckDB-WASM in a Web Worker
@@ -33,11 +35,23 @@ export function mountApp(root: HTMLElement): void {
       setSampleParam(null);
     }
   });
-  const platform = createWebPlatform(web);
   const linked = sampleFromSearch(window.location.search);
+  // `?sample=flights` loads the recorded flights fixture into the live table, `?live=1` polls the live relay (flights.ts).
+  const requested = flightsSourceFromSearch(window.location.search)?.source === 'live';
+  const live = webLive({ requested, url: liveFlightsUrl(window.location.origin) });
+  // `?live=1` in a tab where the person already chose the recorded traffic over an unavailable feed (L5) opens the
+  // recording (the card says so and offers "Back to live" once the relay answers), not another wait.
+  const flights = initialFlightsSource(window.location.search, live.choice.get()).source;
+  const platform = createWebPlatform(web, { live });
   // A sample link opens data right away: start DuckDB-WASM now, before the app mounts. Otherwise it starts on intent.
-  if (linked) web.worker.start();
-  const initialOpen = linked ? () => platform.files.openSample?.(linked.id) ?? Promise.resolve({ status: 'cancelled' as const }) : undefined;
+  if (linked || flights) web.worker.start();
+  const initialOpen = linked
+    ? () => platform.files.openSample?.(linked.id) ?? Promise.resolve({ status: 'cancelled' as const })
+    : flights !== null && flights.source !== 'live' && !requested
+      ? () => platform.files.openSample?.(FLIGHTS_SAMPLE.id) ?? Promise.resolve({ status: 'cancelled' as const })
+      : flights
+        ? () => openFlightsWorkspace(flights, { engine: web.worker, registry: workspace.registry })
+        : undefined;
 
   createRoot(root).render(
     <StrictMode>{perfRegion('App', <App platform={platform} workspace={workspace} {...(initialOpen ? { initialOpen } : {})} />)}</StrictMode>,

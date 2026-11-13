@@ -22,6 +22,7 @@ const snapshot = (sort: 'asc' | 'desc' | null = null): WorkspaceSnapshot => ({
   workspace: {
     columns: [{ name: 'id', inferredType: 'integer', typeOverride: null }],
     charts: [],
+    maps: [],
     selections: {},
     userFilters: [],
     grid: { sort: sort === null ? [] : [{ column: 'id', direction: sort }], columnOrder: [], columnWidths: [] },

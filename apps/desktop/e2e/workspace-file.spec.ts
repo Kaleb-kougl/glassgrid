@@ -54,6 +54,7 @@ test.describe('workspace files', () => {
           { name: 'created_on', inferredType: 'date', typeOverride: null },
         ],
         charts: [{ id: 'chart_1', spec: { mark: 'bar', x: { column: 'category' }, filters: [] }, title: 'By category' }],
+        maps: [],
         selections: { chart_1: { source: 'click', clauses: [{ channel: 'x', filter: { kind: 'in', column: 'category', values: ['alpha'] } }] } },
         userFilters: [],
         grid: { sort: [{ column: 'amount', direction: 'desc' }], columnOrder: [], columnWidths: [] },

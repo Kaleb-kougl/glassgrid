@@ -96,7 +96,7 @@ export interface ChartCreateMeasureDetail {
 export const CROSSFILTER_MEASURE = 'glassgrid:crossfilter';
 
 export interface CrossfilterViewTiming {
-  /** `chart:<id>`, `grid:count` or `grid:rows`. */
+  /** `chart:<id>`, `grid:count`, `grid:rows` or (L4) `map:<id>`. */
   view: string;
   /** Brush end -> this view painted. */
   ms: number;
@@ -107,7 +107,7 @@ export interface CrossfilterViewTiming {
 }
 
 export interface CrossfilterMeasureDetail {
-  /** The brushed (or clicked) chart. */
+  /** The brushed (or clicked) chart, or (L4) `map:<id>` for a map's viewport change. */
   source: string;
   /** The grid's filters after the commit (every selection and user filter). */
   filters: unknown[];
@@ -208,4 +208,21 @@ export interface RenderPerfRecording {
   armedAt: number;
   events: RenderPerfEvent[];
   commits: RenderPerfCommit[];
+}
+
+/**
+ * performance.measure name for a time-cursor seek (L4, docs/live-flights-l4.md):
+ * a `setTime` dispatched (the scrubber dragged, a key pressed) -> the map
+ * painted with aircraft as of the new T (the frame after its component got
+ * the snapshot).
+ */
+export const TIME_SEEK_MEASURE = 'glassgrid:time-seek';
+
+export interface TimeSeekMeasureDetail {
+  /** The map that painted. */
+  mapId: string;
+  /** T, epoch ms. */
+  atMs: number;
+  /** Engine time of the map's latest-fix and trails queries. */
+  engineMs: number;
 }

@@ -91,6 +91,7 @@ const persisted: PersistedWorkspace = {
     { name: 'amount', inferredType: 'float', typeOverride: null },
   ],
   charts: [{ id: 'chart_1', spec: { mark: 'histogram', x: { column: 'amount', bin: 'auto' }, filters: [] }, title: 'Amounts' }],
+  maps: [],
   selections: { chart_1: { source: 'brush', clauses: [{ channel: 'x', filter: { kind: 'range', column: 'amount', min: 1, max: 3, minInclusive: true, maxInclusive: false } }] } },
   userFilters: [],
   grid: { sort: [{ column: 'amount', direction: 'desc' }], columnOrder: [], columnWidths: [{ column: 'id', width: 80 }] },

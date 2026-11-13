@@ -1,0 +1,40 @@
+/* The map test page (?map-demo): a toolbar over a full-window map. */
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+.map-demo {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--gg-panel-bg);
+  color: var(--gg-text-primary);
+  font: var(--gg-type-ui-md);
+}
+
+.map-demo__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gg-space-2) var(--gg-space-4);
+  padding: var(--gg-space-2) var(--gg-space-4);
+  border-bottom: 1px solid var(--gg-border-subtle);
+}
+
+.map-demo__title {
+  margin: 0;
+  font: var(--gg-type-ui-md-strong);
+}
+
+.map-demo__legend {
+  margin-left: auto;
+}
+
+.map-demo__map {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}

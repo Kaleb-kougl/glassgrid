@@ -1,0 +1,1231 @@
+{
+  "recordedAt": "2026-11-11T19:14:06.458Z",
+  "budgetP95Ms": 100,
+  "machine": {
+    "platform": "linux",
+    "arch": "x64",
+    "cpus": 2,
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "memoryGb": 8,
+    "loadAvg": [
+      1.46,
+      1.3,
+      1.3
+    ]
+  },
+  "browser": "153.0.8010.12",
+  "conditions": "production build and headers, 1440x1000 CSS px, DPR 1, headless Chromium (SwiftShader WebGL), DuckDB-WASM in the page worker; T paused at 23:45 UTC; \"Filter to map view\" on; brushes on the altitude histogram (cubes prepared at pointer down); 300 ms between rounds",
+  "rssStartMb": 159,
+  "flights-bay-30min": {
+    "load": null,
+    "rssMb": 643,
+    "firstBrushMs": 92.5,
+    "brush": {
+      "count": 20,
+      "p50": 106.9,
+      "p95": 157,
+      "max": 165,
+      "mapAndCharts": {
+        "count": 20,
+        "p50": 60.3,
+        "p95": 108.3,
+        "max": 120
+      },
+      "perView": {
+        "chart:chart_3": {
+          "count": 20,
+          "p50": 46.1,
+          "p95": 107.6,
+          "max": 120,
+          "engineMs": {
+            "count": 20,
+            "p50": 7.3,
+            "p95": 17.6,
+            "max": 18
+          }
+        },
+        "chart:chart_4": {
+          "count": 20,
+          "p50": 49.8,
+          "p95": 99.1,
+          "max": 113.1,
+          "engineMs": {
+            "count": 20,
+            "p50": 5.9,
+            "p95": 10.8,
+            "max": 15
+          }
+        },
+        "map:map_1": {
+          "count": 20,
+          "p50": 53,
+          "p95": 84,
+          "max": 107.7,
+          "engineMs": {
+            "count": 20,
+            "p50": 23,
+            "p95": 32.2,
+            "max": 33.4
+          }
+        },
+        "grid:count": {
+          "count": 20,
+          "p50": 85.4,
+          "p95": 135.7,
+          "max": 156.5,
+          "engineMs": {
+            "count": 20,
+            "p50": 3.1,
+            "p95": 12.6,
+            "max": 16.3
+          }
+        },
+        "grid:rows": {
+          "count": 20,
+          "p50": 105.5,
+          "p95": 148.6,
+          "max": 165,
+          "engineMs": {
+            "count": 20,
+            "p50": 17,
+            "p95": 38.8,
+            "max": 48.7
+          }
+        }
+      },
+      "fromCube": 60,
+      "rounds": [
+        {
+          "ms": 98.1,
+          "rows": 1395,
+          "views": [
+            "chart:chart_3 40/5 cube",
+            "chart:chart_4 43/4 cube",
+            "map:map_1 46/22",
+            "grid:count 84/2 cube",
+            "grid:rows 98/27"
+          ]
+        },
+        {
+          "ms": 137.9,
+          "rows": 9873,
+          "views": [
+            "chart:chart_3 68/10 cube",
+            "chart:chart_4 73/9 cube",
+            "map:map_1 83/31",
+            "grid:count 129/12 cube",
+            "grid:rows 138/22"
+          ]
+        },
+        {
+          "ms": 101,
+          "rows": 671,
+          "views": [
+            "chart:chart_3 45/7 cube",
+            "chart:chart_4 50/6 cube",
+            "map:map_1 54/27",
+            "grid:count 95/3 cube",
+            "grid:rows 101/22"
+          ]
+        },
+        {
+          "ms": 118.3,
+          "rows": 2384,
+          "views": [
+            "chart:chart_4 60/5 cube",
+            "grid:count 61/3 cube",
+            "chart:chart_3 66/6 cube",
+            "map:map_1 76/30",
+            "grid:rows 118/26"
+          ]
+        },
+        {
+          "ms": 106.9,
+          "rows": 27055,
+          "views": [
+            "chart:chart_4 45/3 cube",
+            "chart:chart_3 52/6 cube",
+            "grid:count 55/2 cube",
+            "map:map_1 58/20",
+            "grid:rows 107/5"
+          ]
+        },
+        {
+          "ms": 91.4,
+          "rows": 1112,
+          "views": [
+            "chart:chart_3 41/5 cube",
+            "chart:chart_4 43/5 cube",
+            "grid:count 48/4 cube",
+            "map:map_1 52/17",
+            "grid:rows 91/28"
+          ]
+        },
+        {
+          "ms": 106.9,
+          "rows": 5526,
+          "views": [
+            "map:map_1 40/21",
+            "chart:chart_4 98/8 cube",
+            "grid:count 100/7 cube",
+            "grid:rows 102/10",
+            "chart:chart_3 107/18 cube"
+          ]
+        },
+        {
+          "ms": 77.7,
+          "rows": 438,
+          "views": [
+            "chart:chart_3 30/4 cube",
+            "map:map_1 32/17",
+            "chart:chart_4 75/4 cube",
+            "grid:count 75/8 cube",
+            "grid:rows 78/13"
+          ]
+        },
+        {
+          "ms": 104.3,
+          "rows": 1805,
+          "views": [
+            "chart:chart_3 43/5 cube",
+            "chart:chart_4 50/4 cube",
+            "grid:count 50/2 cube",
+            "map:map_1 57/22",
+            "grid:rows 104/20"
+          ]
+        },
+        {
+          "ms": 107.8,
+          "rows": 16657,
+          "views": [
+            "chart:chart_3 47/6 cube",
+            "chart:chart_4 50/5 cube",
+            "grid:count 56/5 cube",
+            "map:map_1 62/29",
+            "grid:rows 108/13"
+          ]
+        },
+        {
+          "ms": 129.1,
+          "rows": 824,
+          "views": [
+            "chart:chart_3 44/10 cube",
+            "chart:chart_4 48/6 cube",
+            "map:map_1 52/20",
+            "grid:rows 118/34",
+            "grid:count 129/3 cube"
+          ]
+        },
+        {
+          "ms": 98,
+          "rows": 2723,
+          "views": [
+            "chart:chart_3 45/5 cube",
+            "chart:chart_4 47/3 cube",
+            "map:map_1 50/23",
+            "grid:count 87/3 cube",
+            "grid:rows 98/12"
+          ]
+        },
+        {
+          "ms": 165,
+          "rows": 29216,
+          "views": [
+            "chart:chart_3 38/8 cube",
+            "chart:chart_4 40/8 cube",
+            "grid:count 44/2 cube",
+            "map:map_1 49/16",
+            "grid:rows 165/13"
+          ]
+        },
+        {
+          "ms": 136.4,
+          "rows": 1258,
+          "views": [
+            "chart:chart_3 56/11 cube",
+            "chart:chart_4 61/6 cube",
+            "map:map_1 65/33",
+            "grid:count 135/8 cube",
+            "grid:rows 136/49"
+          ]
+        },
+        {
+          "ms": 130,
+          "rows": 9726,
+          "views": [
+            "chart:chart_3 57/7 cube",
+            "chart:chart_4 59/5 cube",
+            "grid:count 68/3 cube",
+            "map:map_1 77/30",
+            "grid:rows 130/11"
+          ]
+        },
+        {
+          "ms": 156.6,
+          "rows": 586,
+          "views": [
+            "chart:chart_3 75/14 cube",
+            "chart:chart_4 84/15 cube",
+            "map:map_1 108/32",
+            "grid:rows 148/38",
+            "grid:count 157/16 cube"
+          ]
+        },
+        {
+          "ms": 100.8,
+          "rows": 1617,
+          "views": [
+            "chart:chart_3 40/9 cube",
+            "chart:chart_4 49/10 cube",
+            "map:map_1 52/22",
+            "grid:count 100/6 cube",
+            "grid:rows 101/32"
+          ]
+        },
+        {
+          "ms": 120,
+          "rows": 25900,
+          "views": [
+            "map:map_1 50/23",
+            "chart:chart_4 113/11 cube",
+            "grid:count 115/2 cube",
+            "grid:rows 117/14",
+            "chart:chart_3 120/18 cube"
+          ]
+        },
+        {
+          "ms": 104,
+          "rows": 543,
+          "views": [
+            "map:map_1 47/29",
+            "chart:chart_4 98/7 cube",
+            "grid:count 98/2 cube",
+            "grid:rows 101/13",
+            "chart:chart_3 104/7 cube"
+          ]
+        },
+        {
+          "ms": 95.9,
+          "rows": 4758,
+          "views": [
+            "chart:chart_3 45/8 cube",
+            "chart:chart_4 49/7 cube",
+            "grid:count 55/3 cube",
+            "map:map_1 58/23",
+            "grid:rows 96/13"
+          ]
+        }
+      ]
+    },
+    "pan": {
+      "count": 20,
+      "p50": 77.8,
+      "p95": 119.5,
+      "max": 143.8,
+      "perView": {
+        "chart:chart_2": {
+          "count": 20,
+          "p50": 25.8,
+          "p95": 34.4,
+          "max": 62.1,
+          "engineMs": {
+            "count": 20,
+            "p50": 14.1,
+            "p95": 24.5,
+            "max": 36
+          }
+        },
+        "chart:chart_3": {
+          "count": 20,
+          "p50": 41.8,
+          "p95": 64.9,
+          "max": 94.5,
+          "engineMs": {
+            "count": 20,
+            "p50": 12.5,
+            "p95": 18.4,
+            "max": 32.4
+          }
+        },
+        "chart:chart_4": {
+          "count": 20,
+          "p50": 49.1,
+          "p95": 75.2,
+          "max": 107.4,
+          "engineMs": {
+            "count": 20,
+            "p50": 10.7,
+            "p95": 16.8,
+            "max": 21.5
+          }
+        },
+        "grid:count": {
+          "count": 20,
+          "p50": 62,
+          "p95": 96,
+          "max": 121.2,
+          "engineMs": {
+            "count": 20,
+            "p50": 8.1,
+            "p95": 17.9,
+            "max": 18.8
+          }
+        },
+        "grid:rows": {
+          "count": 20,
+          "p50": 77.8,
+          "p95": 119.4,
+          "max": 143.7,
+          "engineMs": {
+            "count": 20,
+            "p50": 10.3,
+            "p95": 18.2,
+            "max": 33.3
+          }
+        }
+      },
+      "rounds": [
+        {
+          "ms": 100.1,
+          "rows": 5301,
+          "views": [
+            "chart:chart_2 33/24",
+            "chart:chart_3 46/11",
+            "chart:chart_4 56/11",
+            "grid:count 64/7",
+            "grid:rows 100/33"
+          ]
+        },
+        {
+          "ms": 143.8,
+          "rows": 4729,
+          "views": [
+            "chart:chart_2 62/36",
+            "chart:chart_3 95/32",
+            "chart:chart_4 107/17",
+            "grid:count 121/12",
+            "grid:rows 144/11"
+          ]
+        },
+        {
+          "ms": 84.7,
+          "rows": 5241,
+          "views": [
+            "chart:chart_2 22/15",
+            "chart:chart_3 40/18",
+            "chart:chart_4 54/14",
+            "grid:count 68/11",
+            "grid:rows 85/13"
+          ]
+        },
+        {
+          "ms": 77.3,
+          "rows": 4915,
+          "views": [
+            "chart:chart_2 22/9",
+            "chart:chart_3 26/9",
+            "chart:chart_4 38/12",
+            "grid:count 54/10",
+            "grid:rows 77/16"
+          ]
+        },
+        {
+          "ms": 67.5,
+          "rows": 5100,
+          "views": [
+            "chart:chart_2 30/13",
+            "chart:chart_3 41/8",
+            "chart:chart_4 55/8",
+            "grid:count 56/6",
+            "grid:rows 67/8"
+          ]
+        },
+        {
+          "ms": 82.1,
+          "rows": 4901,
+          "views": [
+            "chart:chart_2 26/17",
+            "chart:chart_3 44/13",
+            "chart:chart_4 49/11",
+            "grid:count 62/8",
+            "grid:rows 82/15"
+          ]
+        },
+        {
+          "ms": 65.2,
+          "rows": 5300,
+          "views": [
+            "chart:chart_2 22/10",
+            "chart:chart_4 42/8",
+            "chart:chart_3 42/11",
+            "grid:count 58/10",
+            "grid:rows 65/7"
+          ]
+        },
+        {
+          "ms": 64.6,
+          "rows": 4409,
+          "views": [
+            "chart:chart_2 25/14",
+            "chart:chart_3 36/12",
+            "chart:chart_4 46/8",
+            "grid:count 57/7",
+            "grid:rows 65/8"
+          ]
+        },
+        {
+          "ms": 76.8,
+          "rows": 5212,
+          "views": [
+            "chart:chart_2 21/13",
+            "chart:chart_3 37/16",
+            "chart:chart_4 48/8",
+            "grid:count 64/12",
+            "grid:rows 77/13"
+          ]
+        },
+        {
+          "ms": 77.4,
+          "rows": 5035,
+          "views": [
+            "chart:chart_2 19/9",
+            "chart:chart_3 37/8",
+            "chart:chart_4 42/13",
+            "grid:count 52/10",
+            "grid:rows 77/8"
+          ]
+        },
+        {
+          "ms": 81.1,
+          "rows": 5085,
+          "views": [
+            "chart:chart_2 33/24",
+            "chart:chart_3 48/16",
+            "chart:chart_4 57/9",
+            "grid:count 67/8",
+            "grid:rows 81/10"
+          ]
+        },
+        {
+          "ms": 73,
+          "rows": 4828,
+          "views": [
+            "chart:chart_2 21/11",
+            "chart:chart_3 32/14",
+            "chart:chart_4 47/9",
+            "grid:count 56/6",
+            "grid:rows 73/12"
+          ]
+        },
+        {
+          "ms": 69.2,
+          "rows": 5300,
+          "views": [
+            "chart:chart_2 26/18",
+            "chart:chart_3 42/15",
+            "chart:chart_4 49/9",
+            "grid:count 61/8",
+            "grid:rows 69/7"
+          ]
+        },
+        {
+          "ms": 66.5,
+          "rows": 4781,
+          "views": [
+            "chart:chart_2 26/18",
+            "chart:chart_3 34/8",
+            "chart:chart_4 41/8",
+            "grid:count 50/6",
+            "grid:rows 67/7"
+          ]
+        },
+        {
+          "ms": 118.2,
+          "rows": 5176,
+          "views": [
+            "chart:chart_2 33/20",
+            "chart:chart_3 63/17",
+            "chart:chart_4 74/22",
+            "grid:count 95/19",
+            "grid:rows 118/17"
+          ]
+        },
+        {
+          "ms": 60,
+          "rows": 4955,
+          "views": [
+            "chart:chart_2 23/9",
+            "chart:chart_3 29/9",
+            "chart:chart_4 36/8",
+            "grid:count 48/6",
+            "grid:rows 60/10"
+          ]
+        },
+        {
+          "ms": 96.3,
+          "rows": 5066,
+          "views": [
+            "chart:chart_2 28/17",
+            "chart:chart_3 49/16",
+            "chart:chart_4 64/15",
+            "grid:count 71/6",
+            "grid:rows 96/15"
+          ]
+        },
+        {
+          "ms": 99.6,
+          "rows": 4942,
+          "views": [
+            "chart:chart_2 27/13",
+            "chart:chart_3 43/15",
+            "chart:chart_4 53/14",
+            "grid:count 77/9",
+            "grid:rows 100/10"
+          ]
+        },
+        {
+          "ms": 78.3,
+          "rows": 5289,
+          "views": [
+            "chart:chart_2 25/13",
+            "chart:chart_3 32/12",
+            "chart:chart_4 46/11",
+            "grid:count 63/18",
+            "grid:rows 78/9"
+          ]
+        },
+        {
+          "ms": 86.1,
+          "rows": 4560,
+          "views": [
+            "chart:chart_2 33/21",
+            "chart:chart_3 43/13",
+            "chart:chart_4 58/12",
+            "grid:count 73/14",
+            "grid:rows 86/10"
+          ]
+        }
+      ]
+    },
+    "seek": {
+      "count": 20,
+      "p50": 132.7,
+      "p95": 176.7,
+      "max": 181.3,
+      "engineMs": {
+        "count": 20,
+        "p50": 61.8,
+        "p95": 90.9,
+        "max": 108.9
+      }
+    }
+  },
+  "flights-bay-day": {
+    "load": {
+      "ms": 3406,
+      "rssBeforeMb": 643,
+      "rssAfterMb": 1157
+    },
+    "rssMb": 1169,
+    "firstBrushMs": 81.19999999925494,
+    "brush": {
+      "count": 20,
+      "p50": 97.6,
+      "p95": 125.7,
+      "max": 132,
+      "mapAndCharts": {
+        "count": 20,
+        "p50": 64.2,
+        "p95": 105.6,
+        "max": 115.7
+      },
+      "perView": {
+        "chart:chart_4": {
+          "count": 20,
+          "p50": 50.6,
+          "p95": 105.6,
+          "max": 115.7,
+          "engineMs": {
+            "count": 20,
+            "p50": 4.5,
+            "p95": 13.4,
+            "max": 18.1
+          }
+        },
+        "grid:count": {
+          "count": 20,
+          "p50": 55.3,
+          "p95": 117,
+          "max": 120.7,
+          "engineMs": {
+            "count": 20,
+            "p50": 3,
+            "p95": 9.8,
+            "max": 13.5
+          }
+        },
+        "chart:chart_3": {
+          "count": 20,
+          "p50": 50.2,
+          "p95": 65.9,
+          "max": 73.8,
+          "engineMs": {
+            "count": 20,
+            "p50": 5.6,
+            "p95": 17.1,
+            "max": 18.1
+          }
+        },
+        "grid:rows": {
+          "count": 20,
+          "p50": 97.6,
+          "p95": 125.7,
+          "max": 132,
+          "engineMs": {
+            "count": 20,
+            "p50": 15.8,
+            "p95": 47.1,
+            "max": 60.9
+          }
+        },
+        "map:map_1": {
+          "count": 20,
+          "p50": 59.9,
+          "p95": 78.1,
+          "max": 79.9,
+          "engineMs": {
+            "count": 20,
+            "p50": 21.3,
+            "p95": 27,
+            "max": 35
+          }
+        }
+      },
+      "fromCube": 60,
+      "rounds": [
+        {
+          "ms": 66.8,
+          "rows": 45916,
+          "views": [
+            "chart:chart_4 49/4 cube",
+            "grid:count 50/3 cube",
+            "chart:chart_3 51/4 cube",
+            "grid:rows 64/13",
+            "map:map_1 67/20"
+          ]
+        },
+        {
+          "ms": 92.9,
+          "rows": 159232,
+          "views": [
+            "chart:chart_3 41/10 cube",
+            "map:map_1 57/15",
+            "chart:chart_4 90/7 cube",
+            "grid:count 91/3 cube",
+            "grid:rows 93/16"
+          ]
+        },
+        {
+          "ms": 114.6,
+          "rows": 11955,
+          "views": [
+            "chart:chart_3 43/4 cube",
+            "chart:chart_4 45/4 cube",
+            "grid:count 51/3 cube",
+            "map:map_1 58/24",
+            "grid:rows 115/61"
+          ]
+        },
+        {
+          "ms": 65.1,
+          "rows": 75289,
+          "views": [
+            "chart:chart_4 53/6 cube",
+            "grid:count 53/3 cube",
+            "chart:chart_3 54/5 cube",
+            "map:map_1 65/18",
+            "grid:rows 65/15"
+          ]
+        },
+        {
+          "ms": 98.1,
+          "rows": 526792,
+          "views": [
+            "chart:chart_4 43/3 cube",
+            "chart:chart_3 49/6 cube",
+            "grid:count 54/2 cube",
+            "map:map_1 60/22",
+            "grid:rows 98/6"
+          ]
+        },
+        {
+          "ms": 95.5,
+          "rows": 23226,
+          "views": [
+            "chart:chart_3 34/4 cube",
+            "chart:chart_4 36/6 cube",
+            "grid:count 39/3 cube",
+            "map:map_1 49/16",
+            "grid:rows 96/35"
+          ]
+        },
+        {
+          "ms": 132,
+          "rows": 114174,
+          "views": [
+            "chart:chart_3 66/6 cube",
+            "chart:chart_4 71/13 cube",
+            "map:map_1 78/35",
+            "grid:count 121/7 cube",
+            "grid:rows 132/18"
+          ]
+        },
+        {
+          "ms": 108.8,
+          "rows": 7649,
+          "views": [
+            "chart:chart_4 45/3 cube",
+            "chart:chart_3 47/4 cube",
+            "grid:count 52/3 cube",
+            "map:map_1 57/21",
+            "grid:rows 109/41"
+          ]
+        },
+        {
+          "ms": 102.5,
+          "rows": 56528,
+          "views": [
+            "chart:chart_3 41/9 cube",
+            "map:map_1 44/21",
+            "chart:chart_4 99/5 cube",
+            "grid:count 101/4 cube",
+            "grid:rows 103/13"
+          ]
+        },
+        {
+          "ms": 62.6,
+          "rows": 318984,
+          "views": [
+            "chart:chart_4 45/3 cube",
+            "grid:count 46/3 cube",
+            "chart:chart_3 56/4 cube",
+            "grid:rows 60/6",
+            "map:map_1 63/12"
+          ]
+        },
+        {
+          "ms": 108,
+          "rows": 15627,
+          "views": [
+            "chart:chart_3 41/10 cube",
+            "map:map_1 43/20",
+            "chart:chart_4 92/4 cube",
+            "grid:count 93/8 cube",
+            "grid:rows 108/46"
+          ]
+        },
+        {
+          "ms": 125.4,
+          "rows": 64756,
+          "views": [
+            "chart:chart_3 54/11 cube",
+            "map:map_1 64/19",
+            "chart:chart_4 116/18 cube",
+            "grid:count 117/14 cube",
+            "grid:rows 125/31"
+          ]
+        },
+        {
+          "ms": 79.9,
+          "rows": 570862,
+          "views": [
+            "chart:chart_4 56/6 cube",
+            "grid:count 57/3 cube",
+            "chart:chart_3 74/5 cube",
+            "grid:rows 75/11",
+            "map:map_1 80/24"
+          ]
+        },
+        {
+          "ms": 106.1,
+          "rows": 36341,
+          "views": [
+            "chart:chart_4 50/4 cube",
+            "grid:count 51/2 cube",
+            "chart:chart_3 61/5 cube",
+            "map:map_1 63/22",
+            "grid:rows 106/16"
+          ]
+        },
+        {
+          "ms": 108,
+          "rows": 211216,
+          "views": [
+            "chart:chart_3 53/18 cube",
+            "map:map_1 60/27",
+            "chart:chart_4 105/6 cube",
+            "grid:count 106/10 cube",
+            "grid:rows 108/11"
+          ]
+        },
+        {
+          "ms": 110.9,
+          "rows": 10133,
+          "views": [
+            "chart:chart_4 51/4 cube",
+            "grid:count 52/2 cube",
+            "chart:chart_3 54/5 cube",
+            "map:map_1 59/23",
+            "grid:rows 111/40"
+          ]
+        },
+        {
+          "ms": 86.3,
+          "rows": 50799,
+          "views": [
+            "chart:chart_3 42/12 cube",
+            "map:map_1 45/22",
+            "chart:chart_4 84/5 cube",
+            "grid:count 85/3 cube",
+            "grid:rows 86/22"
+          ]
+        },
+        {
+          "ms": 64.3,
+          "rows": 599386,
+          "views": [
+            "chart:chart_4 46/4 cube",
+            "chart:chart_3 48/6 cube",
+            "grid:count 54/4 cube",
+            "map:map_1 64/22",
+            "grid:rows 64/7"
+          ]
+        },
+        {
+          "ms": 97.2,
+          "rows": 13830,
+          "views": [
+            "chart:chart_4 47/5 cube",
+            "chart:chart_3 53/5 cube",
+            "grid:count 59/4 cube",
+            "map:map_1 63/23",
+            "grid:rows 97/39"
+          ]
+        },
+        {
+          "ms": 64.8,
+          "rows": 121554,
+          "views": [
+            "chart:chart_3 27/17 cube",
+            "chart:chart_4 29/4 cube",
+            "map:map_1 33/0",
+            "grid:rows 58/0 cached",
+            "grid:count 65/8 cube"
+          ]
+        }
+      ]
+    },
+    "pan": {
+      "count": 20,
+      "p50": 294.3,
+      "p95": 397,
+      "max": 403.3,
+      "perView": {
+        "chart:chart_2": {
+          "count": 20,
+          "p50": 81.9,
+          "p95": 109.2,
+          "max": 121.9,
+          "engineMs": {
+            "count": 20,
+            "p50": 71.1,
+            "p95": 101.3,
+            "max": 113.8
+          }
+        },
+        "chart:chart_3": {
+          "count": 20,
+          "p50": 159.6,
+          "p95": 397,
+          "max": 403.2,
+          "engineMs": {
+            "count": 20,
+            "p50": 74.8,
+            "p95": 275.9,
+            "max": 284.4
+          }
+        },
+        "chart:chart_4": {
+          "count": 20,
+          "p50": 224.1,
+          "p95": 287.4,
+          "max": 402.6,
+          "engineMs": {
+            "count": 20,
+            "p50": 68.3,
+            "p95": 98.7,
+            "max": 178
+          }
+        },
+        "grid:count": {
+          "count": 20,
+          "p50": 281.3,
+          "p95": 365.5,
+          "max": 377.4,
+          "engineMs": {
+            "count": 20,
+            "p50": 52,
+            "p95": 70.5,
+            "max": 75
+          }
+        },
+        "grid:rows": {
+          "count": 20,
+          "p50": 294.3,
+          "p95": 387.7,
+          "max": 396,
+          "engineMs": {
+            "count": 20,
+            "p50": 10.5,
+            "p95": 17.6,
+            "max": 19.7
+          }
+        }
+      },
+      "rounds": [
+        {
+          "ms": 293.6,
+          "rows": 137916,
+          "views": [
+            "chart:chart_2 79/68",
+            "chart:chart_3 151/69",
+            "chart:chart_4 214/58",
+            "grid:count 261/52",
+            "grid:rows 294/12"
+          ]
+        },
+        {
+          "ms": 279.9,
+          "rows": 127216,
+          "views": [
+            "chart:chart_2 84/71",
+            "chart:chart_3 166/75",
+            "chart:chart_4 217/57",
+            "grid:count 267/48",
+            "grid:rows 280/10"
+          ]
+        },
+        {
+          "ms": 312.2,
+          "rows": 137231,
+          "views": [
+            "chart:chart_2 86/76",
+            "chart:chart_3 159/74",
+            "chart:chart_4 222/62",
+            "grid:count 293/70",
+            "grid:rows 312/12"
+          ]
+        },
+        {
+          "ms": 349,
+          "rows": 125830,
+          "views": [
+            "chart:chart_2 98/89",
+            "chart:chart_3 192/92",
+            "chart:chart_4 269/79",
+            "grid:count 335/61",
+            "grid:rows 349/12"
+          ]
+        },
+        {
+          "ms": 333,
+          "rows": 135171,
+          "views": [
+            "chart:chart_2 122/114",
+            "chart:chart_3 200/74",
+            "chart:chart_4 263/66",
+            "grid:count 314/49",
+            "grid:rows 333/11"
+          ]
+        },
+        {
+          "ms": 306.2,
+          "rows": 131837,
+          "views": [
+            "chart:chart_2 69/60",
+            "chart:chart_3 144/74",
+            "chart:chart_4 230/87",
+            "grid:count 291/60",
+            "grid:rows 306/8"
+          ]
+        },
+        {
+          "ms": 277.6,
+          "rows": 137852,
+          "views": [
+            "chart:chart_2 73/64",
+            "chart:chart_3 148/73",
+            "chart:chart_4 202/57",
+            "grid:count 256/49",
+            "grid:rows 278/20"
+          ]
+        },
+        {
+          "ms": 274.4,
+          "rows": 118129,
+          "views": [
+            "chart:chart_2 68/55",
+            "chart:chart_3 133/65",
+            "chart:chart_4 191/60",
+            "grid:count 256/61",
+            "grid:rows 274/9"
+          ]
+        },
+        {
+          "ms": 396.7,
+          "rows": 137085,
+          "views": [
+            "chart:chart_2 99/92",
+            "chart:chart_4 281/72",
+            "grid:count 365/75",
+            "grid:rows 387/18",
+            "chart:chart_3 397/284"
+          ]
+        },
+        {
+          "ms": 403.3,
+          "rows": 135911,
+          "views": [
+            "chart:chart_2 109/101",
+            "grid:count 377/50",
+            "grid:rows 396/9",
+            "chart:chart_4 403/178",
+            "chart:chart_3 403/276"
+          ]
+        },
+        {
+          "ms": 276,
+          "rows": 134970,
+          "views": [
+            "chart:chart_2 78/65",
+            "chart:chart_3 142/68",
+            "chart:chart_4 211/68",
+            "grid:count 261/48",
+            "grid:rows 276/10"
+          ]
+        },
+        {
+          "ms": 350.1,
+          "rows": 122937,
+          "views": [
+            "chart:chart_2 87/79",
+            "chart:chart_3 176/86",
+            "chart:chart_4 268/95",
+            "grid:count 333/61",
+            "grid:rows 350/12"
+          ]
+        },
+        {
+          "ms": 287.6,
+          "rows": 137766,
+          "views": [
+            "chart:chart_2 71/62",
+            "chart:chart_3 151/76",
+            "chart:chart_4 216/69",
+            "grid:count 267/50",
+            "grid:rows 288/8"
+          ]
+        },
+        {
+          "ms": 295,
+          "rows": 128547,
+          "views": [
+            "chart:chart_2 102/93",
+            "chart:chart_3 176/74",
+            "chart:chart_4 234/58",
+            "grid:count 286/48",
+            "grid:rows 295/9"
+          ]
+        },
+        {
+          "ms": 291,
+          "rows": 136775,
+          "views": [
+            "chart:chart_2 80/71",
+            "chart:chart_3 161/79",
+            "chart:chart_4 228/69",
+            "grid:count 279/50",
+            "grid:rows 291/9"
+          ]
+        },
+        {
+          "ms": 267.2,
+          "rows": 126637,
+          "views": [
+            "chart:chart_2 71/64",
+            "chart:chart_3 145/71",
+            "chart:chart_4 202/60",
+            "grid:count 256/52",
+            "grid:rows 267/8"
+          ]
+        },
+        {
+          "ms": 300.3,
+          "rows": 134728,
+          "views": [
+            "chart:chart_2 87/76",
+            "chart:chart_3 162/69",
+            "chart:chart_4 219/64",
+            "grid:count 283/63",
+            "grid:rows 300/14"
+          ]
+        },
+        {
+          "ms": 288.1,
+          "rows": 133167,
+          "views": [
+            "chart:chart_2 83/75",
+            "chart:chart_3 158/75",
+            "chart:chart_4 227/69",
+            "grid:count 276/47",
+            "grid:rows 288/9"
+          ]
+        },
+        {
+          "ms": 288.4,
+          "rows": 137683,
+          "views": [
+            "chart:chart_2 69/60",
+            "chart:chart_3 143/75",
+            "chart:chart_4 212/68",
+            "grid:count 271/55",
+            "grid:rows 288/11"
+          ]
+        },
+        {
+          "ms": 338.1,
+          "rows": 119499,
+          "views": [
+            "chart:chart_2 81/71",
+            "chart:chart_3 177/89",
+            "chart:chart_4 252/81",
+            "grid:count 319/63",
+            "grid:rows 338/15"
+          ]
+        }
+      ]
+    },
+    "seek": {
+      "count": 20,
+      "p50": 60.6,
+      "p95": 76.3,
+      "max": 149.3,
+      "engineMs": {
+        "count": 20,
+        "p50": 40.5,
+        "p95": 53.5,
+        "max": 56.3
+      }
+    }
+  }
+}

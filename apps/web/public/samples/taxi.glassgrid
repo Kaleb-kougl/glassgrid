@@ -1,5 +1,5 @@
 {
-  "formatVersion": 1,
+  "formatVersion": 2,
   "app": {
     "name": "Glassgrid",
     "version": "0.0.0"
@@ -131,6 +131,7 @@
         "title": "Pickup locations"
       }
     ],
+    "maps": [],
     "selections": {},
     "userFilters": [],
     "grid": {

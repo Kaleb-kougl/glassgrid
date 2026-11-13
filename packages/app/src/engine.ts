@@ -22,6 +22,7 @@ export type {
   EngineClientApi,
   FetchPage,
   FilteredQueryOptions,
+  LiveEngineApi,
   OpenResult,
   PageOptions,
   ParquetCacheResult,

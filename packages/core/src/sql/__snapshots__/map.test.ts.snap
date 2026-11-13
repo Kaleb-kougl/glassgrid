@@ -1,0 +1,128 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`compileMapLatestQuery > reads columns named by the spec, and nulls the attributes a table lacks 1`] = `
+"WITH latest AS (
+  SELECT unnest(__gg_fix)
+  FROM (
+    SELECT arg_max(__gg_row, (__gg_row."seen at", -__gg_row."latitude", -__gg_row."longitude")) AS __gg_fix
+    FROM "gg_tb_live-flight-states" AS __gg_row
+    WHERE "seen at" > epoch_ms(CAST($1 AS BIGINT)) AND "seen at" <= epoch_ms(CAST($2 AS BIGINT))
+      AND "icao" IS NOT NULL AND "latitude" IS NOT NULL AND "longitude" IS NOT NULL
+    GROUP BY "icao"
+  )
+),
+shown AS (
+  SELECT *
+  FROM latest
+  ORDER BY "seen at" DESC, "icao"
+  LIMIT 2000
+)
+SELECT CAST("icao" AS VARCHAR) AS "hex",
+  TRY_CAST("flight" AS VARCHAR) AS "flight",
+  CAST(NULL AS VARCHAR) AS "typeCode",
+  CAST(NULL AS VARCHAR) AS "category",
+  CAST("latitude" AS DOUBLE) AS "lat",
+  CAST("longitude" AS DOUBLE) AS "lon",
+  CAST(NULL AS DOUBLE) AS "altBaroFt",
+  CAST(NULL AS DOUBLE) AS "altGeomFt",
+  coalesce(CAST(NULL AS BOOLEAN), false) AS "onGround",
+  CAST(NULL AS DOUBLE) AS "gsKt",
+  CAST(NULL AS DOUBLE) AS "trackDeg",
+  CAST(NULL AS DOUBLE) AS "baroRateFpm",
+  CAST(epoch_ms("seen at") AS DOUBLE) AS "ts",
+  CAST(NULL AS VARCHAR) AS "registration"
+FROM shown
+ORDER BY 13 DESC, 1"
+`;
+
+exports[`compileMapLatestQuery > takes the newest fix per aircraft in the freshness window, then filters it 1`] = `
+"WITH latest AS (
+  SELECT unnest(__gg_fix)
+  FROM (
+    SELECT arg_max(__gg_row, (__gg_row."ts", -__gg_row."lat", -__gg_row."lon")) AS __gg_fix
+    FROM "gg_tb_live-flight-states" AS __gg_row
+    WHERE "ts" > epoch_ms(CAST($1 AS BIGINT)) AND "ts" <= epoch_ms(CAST($2 AS BIGINT))
+      AND "hex" IS NOT NULL AND "lat" IS NOT NULL AND "lon" IS NOT NULL
+    GROUP BY "hex"
+  )
+),
+shown AS (
+  SELECT *
+  FROM latest
+  WHERE "altBaroFt" >= CAST($3 AS DOUBLE)
+    AND ("category" IN (CAST($4 AS VARCHAR)) OR "category" IS NULL)
+  ORDER BY "ts" DESC, "hex"
+  LIMIT 2000
+)
+SELECT CAST("hex" AS VARCHAR) AS "hex",
+  TRY_CAST("flight" AS VARCHAR) AS "flight",
+  TRY_CAST("typeCode" AS VARCHAR) AS "typeCode",
+  TRY_CAST("category" AS VARCHAR) AS "category",
+  CAST("lat" AS DOUBLE) AS "lat",
+  CAST("lon" AS DOUBLE) AS "lon",
+  TRY_CAST("altBaroFt" AS DOUBLE) AS "altBaroFt",
+  TRY_CAST("altGeomFt" AS DOUBLE) AS "altGeomFt",
+  coalesce(TRY_CAST("onGround" AS BOOLEAN), false) AS "onGround",
+  TRY_CAST("gsKt" AS DOUBLE) AS "gsKt",
+  TRY_CAST("trackDeg" AS DOUBLE) AS "trackDeg",
+  TRY_CAST("baroRateFpm" AS DOUBLE) AS "baroRateFpm",
+  CAST(epoch_ms("ts") AS DOUBLE) AS "ts",
+  TRY_CAST("registration" AS VARCHAR) AS "registration"
+FROM shown
+ORDER BY 13 DESC, 1"
+`;
+
+exports[`compileMapTrackQuery (L4) > one aircraft, its fixes in the two hours up to the clock, thinned to MAP_TRACK_BUCKETS buckets of at least 2 s, ordered by time and capped 1`] = `
+"WITH fixes AS (
+  SELECT epoch_ms("ts") AS __gg_ms, "lat" AS __gg_lat, "lon" AS __gg_lon, TRY_CAST("altBaroFt" AS DOUBLE) AS __gg_alt
+  FROM "gg_tb_live-flight-states"
+  WHERE "hex" = CAST($1 AS VARCHAR) AND "ts" <= epoch_ms(CAST($2 AS BIGINT)) AND "ts" > epoch_ms(CAST($3 AS BIGINT))
+    AND "lat" IS NOT NULL AND "lon" IS NOT NULL
+),
+span AS (
+  SELECT min(__gg_ms) AS __gg_first, greatest(CAST($5 AS DOUBLE), ceil((max(__gg_ms) - min(__gg_ms) + 1) / CAST($4 AS DOUBLE))) AS __gg_bucket FROM fixes
+),
+track AS (
+  SELECT fixes.* FROM fixes, span
+  QUALIFY row_number() OVER (PARTITION BY floor((__gg_ms - __gg_first) / __gg_bucket) ORDER BY __gg_ms DESC, __gg_lat, __gg_lon) = 1
+)
+SELECT CAST($1 AS VARCHAR) AS "hex", CAST(__gg_ms AS DOUBLE) AS "ts", CAST(__gg_lat AS DOUBLE) AS "lat", CAST(__gg_lon AS DOUBLE) AS "lon", __gg_alt AS "altBaroFt"
+FROM track
+ORDER BY 2
+LIMIT 2001"
+`;
+
+exports[`compileMapTrailsQuery > thins the trails of the aircraft on the map to 1/100 of the trail, ordered by aircraft and time 1`] = `
+"WITH latest AS (
+  SELECT unnest(__gg_fix)
+  FROM (
+    SELECT arg_max(__gg_row, (__gg_row."ts", -__gg_row."lat", -__gg_row."lon")) AS __gg_fix
+    FROM "gg_tb_live-flight-states" AS __gg_row
+    WHERE "ts" > epoch_ms(CAST($1 AS BIGINT)) AND "ts" <= epoch_ms(CAST($2 AS BIGINT))
+      AND "hex" IS NOT NULL AND "lat" IS NOT NULL AND "lon" IS NOT NULL
+    GROUP BY "hex"
+  )
+),
+shown AS (
+  SELECT *
+  FROM latest
+  ORDER BY "ts" DESC, "hex"
+  LIMIT 2000
+),
+trail AS (
+  SELECT "hex" AS __gg_id, "ts" AS __gg_ts, "lat" AS __gg_lat, "lon" AS __gg_lon, TRY_CAST("altBaroFt" AS DOUBLE) AS __gg_alt
+  FROM "gg_tb_live-flight-states"
+  WHERE "ts" > epoch_ms(CAST($3 AS BIGINT)) AND "ts" <= epoch_ms(CAST($4 AS BIGINT))
+    AND "lat" IS NOT NULL AND "lon" IS NOT NULL
+    AND "hex" IN (SELECT "hex" FROM shown)
+  QUALIFY row_number() OVER (PARTITION BY "hex", floor(epoch_ms("ts") / CAST($5 AS DOUBLE)) ORDER BY "ts" DESC, "lat", "lon") = 1
+)
+SELECT CAST(__gg_id AS VARCHAR) AS "hex",
+  CAST(epoch_ms(__gg_ts) AS DOUBLE) AS "ts",
+  CAST(__gg_lat AS DOUBLE) AS "lat",
+  CAST(__gg_lon AS DOUBLE) AS "lon",
+  __gg_alt AS "altBaroFt"
+FROM trail
+ORDER BY 1, 2
+LIMIT 202000"
+`;

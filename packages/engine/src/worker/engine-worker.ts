@@ -12,10 +12,14 @@
  *   build needs cross-origin isolation and pthread workers, which the
  *   synchronous bindings do not support; see docs/m4-engine-portability.md.
  */
+// Static, not `await import(...)`: a dynamic import split DuckDB-WASM into its own chunk that imported Arrow back
+// from this (the entry) chunk, and WebKit evaluates a module worker's entry a second time when a chunk imports it.
+// The second copy replaced `onmessage` with one that had no session, so every request after `gg:init` waited forever.
+import * as duckdbBlocking from '@duckdb/duckdb-wasm/blocking';
 import { config as zodConfig } from 'zod';
-import type { EngineResponse } from '@glassgrid/core';
+import type { EngineResponse, LiveFixtureId } from '@glassgrid/core';
 import { errorMessage } from '../errors';
-import { QueryService } from '../query-service';
+import { QueryService, type QueryServiceOptions } from '../query-service';
 import { EngineSession } from '../session';
 import type { WasmBindings } from '../wasm/bindings';
 import { WasmDriver } from '../wasm/driver';
@@ -78,7 +82,7 @@ let session: EngineSession | null = null;
 const early: unknown[] = [];
 
 async function start(init: WorkerInit): Promise<Started> {
-  const duckdb = (await import('@duckdb/duckdb-wasm/blocking')) as unknown as BlockingModule;
+  const duckdb = duckdbBlocking as unknown as BlockingModule;
   const bindings = await duckdb.createDuckDB(
     { mvp: { mainModule: init.bundles.mvp, mainWorker: '' }, eh: { mainModule: init.bundles.eh, mainWorker: '' } },
     new duckdb.VoidLogger(),
@@ -106,6 +110,7 @@ async function start(init: WorkerInit): Promise<Started> {
     tempDir: TEMP_ROOT,
     autoConvertMinBytes: files.hasCache ? (init.autoConvertMinBytes ?? DEFAULT_WEB_AUTO_CONVERT_BYTES) : Number.MAX_SAFE_INTEGER,
     parquetCacheMaxBytes: init.parquetCacheMaxBytes ?? DEFAULT_WEB_CACHE_BYTES,
+    live: liveOptions(init, files),
   });
   const capabilities = driver.capabilities;
   post({
@@ -121,6 +126,62 @@ async function start(init: WorkerInit): Promise<Started> {
     extensionErrors: driver.extensionErrors,
   });
   return { service, files, driver, init };
+}
+
+/**
+ * The live feed's configuration: the endpoint and the fixture URLs, each
+ * only from an allowed origin (as for sample datasets; the CSP's
+ * `connect-src 'self'` would refuse others anyway). A fixture is registered
+ * as an HTTP source the first time a replay needs it.
+ */
+function liveOptions(init: WorkerInit, files: BrowserFiles): QueryServiceOptions['live'] {
+  const origins = init.allowedOrigins ?? [scope.location.origin];
+  const allowed = (url: string) => origins.includes(new URL(url).origin);
+  const url = init.live?.url;
+  if (url !== undefined && !allowed(url)) console.warn(`[engine-worker] live endpoint ${url} is not on an allowed origin; live data is off`);
+  const fixtures = init.live?.fixtures ?? {};
+  const registered = new Map<LiveFixtureId, Promise<string>>();
+  // L5: fixtures fetched ahead (the recording offered when live data fails) and held in memory as a File, so they
+  // load with the network gone. A failed prefetch is forgotten; the fixture is then read over HTTP as before.
+  const held = new Map<LiveFixtureId, Promise<string | null>>();
+  return {
+    ...(url !== undefined && allowed(url) ? { url } : {}),
+    fetch: (target, request) => fetch(target, request),
+    ...(Object.keys(fixtures).length === 0
+      ? {}
+      : {
+          prefetchFixture: (fixture: LiveFixtureId) => {
+            const fixtureUrl = fixtures[fixture];
+            if (held.has(fixture) || fixtureUrl === undefined || !allowed(fixtureUrl)) return;
+            const job = fetch(fixtureUrl)
+              .then(async (response) => {
+                if (!response.ok) throw new Error(`${fixtureUrl} answered ${response.status}`);
+                const name = decodeURIComponent(new URL(fixtureUrl).pathname.split('/').pop() ?? '') || `${fixture}.parquet`;
+                const file = new File([await response.blob()], name, { type: 'application/vnd.apache.parquet' });
+                return (await files.registerSource(`live-${fixture}-held`, { kind: 'file', file })).path;
+              })
+              .catch((error: unknown) => {
+                held.delete(fixture);
+                console.info(`[engine-worker] ${fixture} was not fetched ahead (${error instanceof Error ? error.message : String(error)}); it will be read over HTTP`);
+                return null;
+              });
+            held.set(fixture, job);
+          },
+          fixturePath: async (fixture: LiveFixtureId) => {
+            const inMemory = await held.get(fixture);
+            if (inMemory) return inMemory;
+            const fixtureUrl = fixtures[fixture];
+            if (fixtureUrl === undefined || !allowed(fixtureUrl)) throw new Error(`No URL for the ${fixture} fixture`);
+            let path = registered.get(fixture);
+            if (!path) {
+              path = files.registerSource(`live-${fixture}`, { kind: 'url', url: fixtureUrl }).then((source) => source.path);
+              path.catch(() => registered.delete(fixture));
+              registered.set(fixture, path);
+            }
+            return path;
+          },
+        }),
+  };
 }
 
 function hasSyncAccessHandles(): boolean {

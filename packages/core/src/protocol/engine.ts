@@ -1,9 +1,11 @@
 import { z } from 'zod';
+import { LiveSourceConfigSchema, LiveStateSchema } from '../flights/live.js';
 import { FileHandleSchema, RequestIdSchema, type FileHandle } from '../ids.js';
 import { ChartSpecSchema, MarkSchema } from '../spec/chart.js';
 import { ColumnProfileSchema, ColumnTypeSchema } from '../spec/column.js';
 import { CrossfilterDimensionSchema, CrossfilterHintSchema } from '../spec/crossfilter.js';
 import { FilterSchema } from '../spec/filter.js';
+import { MapSpecSchema, MAX_MAP_AIRCRAFT_ID } from '../spec/map.js';
 import { SortKeySchema } from '../spec/rows.js';
 import { MAX_PIXEL_WIDTH } from '../sql/chart.js';
 
@@ -225,6 +227,37 @@ export const AggregateRequestSchema = z.object({
   crossfilter: CrossfilterHintSchema.optional(),
 });
 
+/** Which of a map view's two queries (see `compileMapLatestQuery`, `compileMapTrailsQuery`). */
+export const MapQueryKindSchema = z.enum(['latest', 'trails', 'track']);
+export type MapQueryKind = z.infer<typeof MapQueryKindSchema>;
+
+/**
+ * A map view's query (docs/live-flights-l3-data.md): the latest fix per
+ * aircraft, or their trails, at `dataClockMs`. The engine compiles the spec
+ * against the table's columns and answers `arrow` with the
+ * `MAP_AIRCRAFT_FIELDS` / `MAP_TRAIL_FIELDS` columns. Cached like chart
+ * aggregates (the clock is a bound value, so each clock is its own entry).
+ * Use a view id per map and query (`map:<id>:latest`), so a newer clock
+ * supersedes the stale one. `track` (L4) is one aircraft's fixes up to the
+ * clock (`aircraft`, required for it and refused otherwise), thinned to at
+ * most MAX_MAP_TRACK_POINTS, with the `MAP_TRAIL_FIELDS` columns.
+ */
+export const MapRequestSchema = z
+  .object({
+    kind: z.literal('map'),
+    ...QueryBase,
+    spec: MapSpecSchema,
+    query: MapQueryKindSchema,
+    /** Epoch milliseconds: the data clock the map shows (T). */
+    dataClockMs: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    /** `track` only: the aircraft, a value of the spec's id column as text. */
+    aircraft: z.string().min(1).max(MAX_MAP_AIRCRAFT_ID).optional(),
+  })
+  .refine((request) => (request.query === 'track') === (request.aircraft !== undefined), {
+    message: 'A track query names its aircraft, and only a track query does',
+    path: ['aircraft'],
+  });
+
 /** Most cubes one `prepareCrossfilter` builds. */
 export const MAX_CROSSFILTER_TARGETS = 64;
 
@@ -306,12 +339,67 @@ export const CloseTableRequestSchema = z.object({
   table: TableIdSchema,
 });
 
+// Live flights (docs/live-flights-l2.md). One feed per engine, shared by
+// every connection: the engine polls or replays and appends to its
+// `flight_states` table. The endpoint URL and the fixture locations are the
+// engine host's configuration, never part of a request; a host without them
+// answers `not_implemented`.
+
+/**
+ * Start the feed with `source` (or keep it running when it already runs
+ * with exactly this configuration). Switching to another source, or
+ * restarting a replay, empties `flight_states` first; restarting the same
+ * live source keeps what was ingested. Answered with `liveState`.
+ */
+export const LiveStartRequestSchema = z.object({
+  kind: z.literal('liveStart'),
+  requestId: RequestIdSchema,
+  source: LiveSourceConfigSchema,
+});
+
+/** Stop polling or ticking; `flight_states` keeps its rows. Answered with `liveState`. */
+export const LiveStopRequestSchema = z.object({
+  kind: z.literal('liveStop'),
+  requestId: RequestIdSchema,
+});
+
+/**
+ * Choose the source without changing whether the feed runs: a running feed
+ * switches to it (as `liveStart` would), a stopped one starts with it next
+ * time. Answered with `liveState`.
+ */
+export const LiveSetSourceRequestSchema = z.object({
+  kind: z.literal('liveSetSource'),
+  requestId: RequestIdSchema,
+  source: LiveSourceConfigSchema,
+});
+
+/** The feed's state now. Answered with `liveState`. */
+export const LiveStateRequestSchema = z.object({
+  kind: z.literal('liveState'),
+  requestId: RequestIdSchema,
+});
+
+/**
+ * The page (or window) this connection serves became hidden or visible. A
+ * worker cannot see `document.visibilityState`, so the app reports it. The
+ * feed pauses while every connection that reported is hidden, and resumes
+ * when one is visible again; connections that never report do not count.
+ * Answered with `ack`.
+ */
+export const LiveVisibilityRequestSchema = z.object({
+  kind: z.literal('liveVisibility'),
+  requestId: RequestIdSchema,
+  visible: z.boolean(),
+});
+
 export const EngineRequestSchema = z.discriminatedUnion('kind', [
   OpenRequestSchema,
   ProfileRequestSchema,
   RowsRequestSchema,
   CountRequestSchema,
   AggregateRequestSchema,
+  MapRequestSchema,
   CancelRequestSchema,
   EnsureParquetCacheRequestSchema,
   ClearCacheRequestSchema,
@@ -319,6 +407,11 @@ export const EngineRequestSchema = z.discriminatedUnion('kind', [
   SetColumnTypesRequestSchema,
   CloseTableRequestSchema,
   PrepareCrossfilterRequestSchema,
+  LiveStartRequestSchema,
+  LiveStopRequestSchema,
+  LiveSetSourceRequestSchema,
+  LiveStateRequestSchema,
+  LiveVisibilityRequestSchema,
 ]);
 export type EngineRequest = z.infer<typeof EngineRequestSchema>;
 export type OpenRequest = z.infer<typeof OpenRequestSchema>;
@@ -326,6 +419,7 @@ export type ProfileRequest = z.infer<typeof ProfileRequestSchema>;
 export type RowsRequest = z.infer<typeof RowsRequestSchema>;
 export type CountRequest = z.infer<typeof CountRequestSchema>;
 export type AggregateRequest = z.infer<typeof AggregateRequestSchema>;
+export type MapRequest = z.infer<typeof MapRequestSchema>;
 export type CancelRequest = z.infer<typeof CancelRequestSchema>;
 export type EnsureParquetCacheRequest = z.infer<typeof EnsureParquetCacheRequestSchema>;
 export type ClearCacheRequest = z.infer<typeof ClearCacheRequestSchema>;
@@ -333,9 +427,14 @@ export type CacheStatsRequest = z.infer<typeof CacheStatsRequestSchema>;
 export type SetColumnTypesRequest = z.infer<typeof SetColumnTypesRequestSchema>;
 export type CloseTableRequest = z.infer<typeof CloseTableRequestSchema>;
 export type PrepareCrossfilterRequest = z.infer<typeof PrepareCrossfilterRequestSchema>;
+export type LiveStartRequest = z.infer<typeof LiveStartRequestSchema>;
+export type LiveStopRequest = z.infer<typeof LiveStopRequestSchema>;
+export type LiveSetSourceRequest = z.infer<typeof LiveSetSourceRequestSchema>;
+export type LiveStateRequest = z.infer<typeof LiveStateRequestSchema>;
+export type LiveVisibilityRequest = z.infer<typeof LiveVisibilityRequestSchema>;
 
 /** Requests subject to per-view ordering and superseding. */
-export type ViewScopedRequest = ProfileRequest | RowsRequest | CountRequest | AggregateRequest | PrepareCrossfilterRequest;
+export type ViewScopedRequest = ProfileRequest | RowsRequest | CountRequest | AggregateRequest | MapRequest | PrepareCrossfilterRequest;
 
 export function isViewScopedRequest(request: EngineRequest): request is ViewScopedRequest {
   return (
@@ -343,6 +442,7 @@ export function isViewScopedRequest(request: EngineRequest): request is ViewScop
     request.kind === 'rows' ||
     request.kind === 'count' ||
     request.kind === 'aggregate' ||
+    request.kind === 'map' ||
     request.kind === 'prepareCrossfilter'
   );
 }
@@ -475,11 +575,25 @@ export const ParquetCacheStatsSchema = z.object({
 });
 export type ParquetCacheStats = z.infer<typeof ParquetCacheStatsSchema>;
 
+/**
+ * The live feed's DuckDB database (L4 diagnostics): what `duckdb_memory()`
+ * accounts on the instance that holds `flight_states` (DuckDB-WASM: the one
+ * instance of the worker, every table included; native: the feed's own
+ * instance), and how many databases are attached to it. Absent before a feed
+ * has a store.
+ */
+export const LiveMemoryStatsSchema = z.object({
+  memoryBytes: z.number().int().nonnegative(),
+  databases: z.number().int().nonnegative(),
+});
+export type LiveMemoryStats = z.infer<typeof LiveMemoryStatsSchema>;
+
 export const CacheStatsResultSchema = z.object({
   kind: z.literal('cacheStats'),
   requestId: RequestIdSchema,
   results: ResultCacheStatsSchema,
   parquet: ParquetCacheStatsSchema,
+  live: LiveMemoryStatsSchema.optional(),
 });
 
 /** One overridden column after `setColumnTypes`. */
@@ -502,6 +616,13 @@ export const ColumnTypesResultSchema = z.object({
   /** One entry per requested override, in request order. */
   columns: z.array(ColumnTypeResultSchema),
   ...Timing,
+});
+
+/** The live feed's state (answers every live request but `liveVisibility`). */
+export const LiveStateResultSchema = z.object({
+  kind: z.literal('liveState'),
+  requestId: RequestIdSchema,
+  state: LiveStateSchema,
 });
 
 export const AckResultSchema = z.object({
@@ -543,6 +664,11 @@ export const EngineEventSchema = z.discriminatedUnion('type', [
     type: z.literal('tableUpdated'),
     table: TableHandleSchema,
   }),
+  /** The live feed changed: its status, or a batch was ingested into `flight_states`. */
+  z.object({
+    type: z.literal('liveState'),
+    state: LiveStateSchema,
+  }),
 ]);
 export type EngineEvent = z.infer<typeof EngineEventSchema>;
 
@@ -561,6 +687,7 @@ export const EngineResponseSchema = z.discriminatedUnion('kind', [
   CacheStatsResultSchema,
   ColumnTypesResultSchema,
   CrossfilterPreparedResultSchema,
+  LiveStateResultSchema,
   AckResultSchema,
   EngineErrorSchema,
   EngineEventMessageSchema,
@@ -576,6 +703,7 @@ export type CacheStatsResult = z.infer<typeof CacheStatsResultSchema>;
 export type AckResult = z.infer<typeof AckResultSchema>;
 export type ColumnTypesResult = z.infer<typeof ColumnTypesResultSchema>;
 export type CrossfilterPreparedResult = z.infer<typeof CrossfilterPreparedResultSchema>;
+export type LiveStateResult = z.infer<typeof LiveStateResultSchema>;
 export type EngineError = z.infer<typeof EngineErrorSchema>;
 export type EngineEventMessage = z.infer<typeof EngineEventMessageSchema>;
 

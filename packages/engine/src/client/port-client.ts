@@ -4,6 +4,8 @@ import {
   CrossfilterHintSchema,
   CubeTargetSchema,
   EngineResponseSchema,
+  LiveSourceConfigSchema,
+  MapSpecSchema,
   RequestFiltersSchema,
   type AggregateSpecInput,
   type CacheScope,
@@ -15,6 +17,8 @@ import {
   type EngineRequest,
   type FileHandle,
   type FilterInput,
+  type LiveSourceConfigInput,
+  type LiveState,
   type ParquetMode,
   type RowsQuery,
   type SortKey,
@@ -29,6 +33,8 @@ import type {
   EngineClientApi,
   FetchPage,
   FilteredQueryOptions,
+  LiveEngineApi,
+  MapQueryRequest,
   OpenResult,
   PageOptions,
   ParquetCacheResult,
@@ -309,6 +315,24 @@ export class PortEngineClient implements EngineClientApi {
   }
 
   /**
+   * A map view's latest-fix or trails query at a data clock (docs/live-flights-l3-data.md). View
+   * scoped: use `map:<id>:latest` and `map:<id>:trails`, so a newer clock supersedes a stale one.
+   */
+  async mapQuery(table: TableId, request: MapQueryRequest, options: QueryOptions = {}): Promise<RowsResult> {
+    const spec = parseOrReject(MapSpecSchema.safeParse(request.spec), 'map spec');
+    const body = {
+      kind: 'map' as const,
+      table,
+      spec,
+      query: request.query,
+      dataClockMs: request.dataClockMs,
+      ...(request.aircraft === undefined ? {} : { aircraft: request.aircraft }),
+    };
+    const reply = await this.call(this.viewScoped(body, options), 'arrow', options);
+    return { table: decode(reply), engineMs: reply.engineMs, cached: reply.cached };
+  }
+
+  /**
    * At brush start (pointer down): build the cubes the other views will need
    * (`crossfilterPlan(state, chartId)` gives the dimension and targets), so
    * the brush's commit is answered from them. Use one `viewId` for brushing
@@ -349,7 +373,7 @@ export class PortEngineClient implements EngineClientApi {
 
   async cacheStats(): Promise<CacheStats> {
     const reply = await this.call({ kind: 'cacheStats' }, 'cacheStats');
-    return { results: reply.results, parquet: reply.parquet };
+    return { results: reply.results, parquet: reply.parquet, ...(reply.live === undefined ? {} : { live: reply.live }) };
   }
 
   /**
@@ -386,6 +410,23 @@ export class PortEngineClient implements EngineClientApi {
     return () => this.listeners.delete(listener);
   }
 
+  /** The engine's live-flights feed (`live*` requests and `liveState` events). */
+  readonly live: LiveEngineApi = {
+    start: async (source: LiveSourceConfigInput): Promise<LiveState> =>
+      (await this.call({ kind: 'liveStart', source: parseOrReject(LiveSourceConfigSchema.safeParse(source), 'live source') }, 'liveState')).state,
+    setSource: async (source: LiveSourceConfigInput): Promise<LiveState> =>
+      (await this.call({ kind: 'liveSetSource', source: parseOrReject(LiveSourceConfigSchema.safeParse(source), 'live source') }, 'liveState')).state,
+    stop: async (): Promise<LiveState> => (await this.call({ kind: 'liveStop' }, 'liveState')).state,
+    state: async (): Promise<LiveState> => (await this.call({ kind: 'liveState' }, 'liveState')).state,
+    setVisible: async (visible: boolean): Promise<void> => {
+      await this.call({ kind: 'liveVisibility', visible }, 'ack');
+    },
+    onState: (listener: (state: LiveState) => void): (() => void) =>
+      this.onEvent((event) => {
+        if (event.type === 'liveState') listener(event.state);
+      }),
+  };
+
   dispose(): void {
     if (this.port) this.port.onmessage = null;
     this.port = null;
@@ -404,7 +445,7 @@ export class PortEngineClient implements EngineClientApi {
     return { filters: parseOrReject(RequestFiltersSchema.safeParse(options.filters), 'filters') };
   }
 
-  private viewScoped<B extends { kind: 'profile' | 'rows' | 'count' | 'aggregate' | 'prepareCrossfilter' }>(body: B, options: QueryOptions) {
+  private viewScoped<B extends { kind: 'profile' | 'rows' | 'count' | 'aggregate' | 'map' | 'prepareCrossfilter' }>(body: B, options: QueryOptions) {
     // Requests without a view get a private one, so they never supersede anything.
     const viewId = options.viewId ?? `once-${this.nextId + 1}`;
     const seq = (this.seqs.get(viewId) ?? 0) + 1;
@@ -493,6 +534,14 @@ export class PortEngineClient implements EngineClientApi {
     const parsed = EngineResponseSchema.safeParse(raw);
     if (!parsed.success) {
       console.error('[engine-client] dropped malformed response', parsed.error.issues);
+      // A reply to a request we wait for must still settle it, or its caller (an MCP command) would hang.
+      const requestId = typeof raw === 'object' && raw !== null && 'requestId' in raw && typeof raw.requestId === 'string' ? raw.requestId : null;
+      const pending = requestId === null ? undefined : this.pending.get(requestId);
+      if (requestId !== null && pending) {
+        this.pending.delete(requestId);
+        const issue = parsed.error.issues[0];
+        pending.reject(new EngineRequestError('bad_response', `The engine sent a malformed reply${issue ? ` (${issue.path.join('.')}: ${issue.message})` : ''}`));
+      }
       return;
     }
     const response = parsed.data;

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { FileHandleSchema, RequestIdSchema } from '@glassgrid/core';
+import { FileHandleSchema, LiveFixtureIdSchema, RequestIdSchema } from '@glassgrid/core';
 
 /*
  * Control messages between the page and the engine worker, next to the
@@ -31,6 +31,18 @@ export const WorkerInitSchema = z.object({
   autoConvertMinBytes: z.number().int().nonnegative().optional(),
   /** LRU cap of the OPFS Parquet cache. Default 2 GB. */
   parquetCacheMaxBytes: z.number().int().positive().optional(),
+  /**
+   * The live-flights feed (docs/live-flights-l2.md). `url` is the live
+   * endpoint (the site's `/api/flights`; it must be on an allowed origin);
+   * `fixtures` the replay fixtures' URLs (on an allowed origin too). A part
+   * left out makes that source answer `not_implemented`.
+   */
+  live: z
+    .object({
+      url: z.url().optional(),
+      fixtures: z.partialRecord(LiveFixtureIdSchema, z.url()).optional(),
+    })
+    .optional(),
 });
 export type WorkerInit = z.infer<typeof WorkerInitSchema>;
 

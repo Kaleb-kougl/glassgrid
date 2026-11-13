@@ -3,6 +3,7 @@ import { MAX_CHARTS } from '../commands/builtins/charts.js';
 import { FingerprintSchema } from '../protocol/engine.js';
 import type { ChartSpec } from '../spec/chart.js';
 import { ColumnTypeSchema, type ColumnType } from '../spec/column.js';
+import { mapSpecColumns } from '../spec/map.js';
 import { SortKeySchema } from '../spec/rows.js';
 import {
   ChartStateSchema,
@@ -11,12 +12,15 @@ import {
   GRID_VIEW_ID,
   GridColumnWidthSchema,
   LayoutStateSchema,
+  MapViewStateSchema,
+  MAX_MAP_VIEWS,
   MAX_USER_FILTERS,
   SelectionSchema,
   UserFilterSchema,
   ViewIdSchema,
   type ChartState,
   type LayoutCard,
+  type MapViewState,
   type Selection,
   type WorkspaceDocument,
   type WorkspaceState,
@@ -31,7 +35,10 @@ import { canonicalJson, digestString } from './digest.js';
  *   ─────────────────────────────────────   ───────────────────────────────────────────────
  *   columns: name, inferred type, override  column profiles (recomputed from the data)
  *   charts: id, spec, title                 grid cell selection (view state; rows refer to
- *   layout cards                              the current view and go stale)
+ *   map views: id, spec, title (format 2)     the current view and go stale)
+ *   layout cards                            the selected aircraft, the map's viewport and its "Filter to
+ *                                             map view" switch, the time cursor and whether charts follow
+ *                                             it (view state, L4)
  *   selections (brushes, clicks, filters)   undo history, the data handle (per session)
  *   user filters ("+ Filter" chips)         the document id and saved digest (main's)
  *   grid sort, column order, column widths  AI and MCP settings, raw-row access (app state)
@@ -59,11 +66,22 @@ export type PersistedGrid = z.infer<typeof PersistedGridSchema>;
 
 const MAX_COLUMNS = 10_000;
 
+/** A map view as saved (format 2): id, spec and title. Its viewport and view filter are view state (L4). */
+export const PersistedMapViewSchema = MapViewStateSchema.omit({ filterToView: true, viewport: true });
+export type PersistedMapView = z.infer<typeof PersistedMapViewSchema>;
+
+/** A map view without its view state. */
+function persistedMap(map: MapViewState): PersistedMapView {
+  return structuredCloneJson({ id: map.id, spec: map.spec, ...(map.title === undefined ? {} : { title: map.title }) });
+}
+
 /** The persisted subset of `WorkspaceState` (the `workspace` block of a `.glassgrid` file). */
 export const PersistedWorkspaceSchema = z
   .strictObject({
     columns: z.array(PersistedColumnSchema).max(MAX_COLUMNS),
     charts: z.array(ChartStateSchema).max(MAX_CHARTS),
+    /** Map views (format 2). */
+    maps: z.array(PersistedMapViewSchema).max(MAX_MAP_VIEWS),
     /** One selection per view (chart id or "grid"): brushes and clicks are part of the analysis. */
     selections: z.record(ViewIdSchema, SelectionSchema),
     userFilters: z.array(UserFilterSchema).max(MAX_USER_FILTERS),
@@ -79,6 +97,9 @@ export const PersistedWorkspaceSchema = z
     if (column !== undefined) ctx.addIssue({ code: 'custom', path: ['columns'], message: `Column ${JSON.stringify(column)} appears twice` });
     const chart = duplicate(workspace.charts.map((c) => c.id));
     if (chart !== undefined) ctx.addIssue({ code: 'custom', path: ['charts'], message: `Chart id ${JSON.stringify(chart)} appears twice` });
+    // Charts and maps share the layout's card ids, so one id names one view.
+    const view = duplicate([...workspace.charts.map((c) => c.id), ...workspace.maps.map((m) => m.id)]);
+    if (view !== undefined && chart === undefined) ctx.addIssue({ code: 'custom', path: ['maps'], message: `View id ${JSON.stringify(view)} appears twice` });
     const filter = duplicate(workspace.userFilters.map((f) => f.id));
     if (filter !== undefined) ctx.addIssue({ code: 'custom', path: ['userFilters'], message: `Filter id ${JSON.stringify(filter)} appears twice` });
   });
@@ -103,6 +124,7 @@ export function persistedWorkspace(state: WorkspaceState): PersistedWorkspace {
       typeOverride: column.typeOverride,
     })),
     charts: state.charts.map((chart) => structuredCloneJson(chart)),
+    maps: state.maps.map(persistedMap),
     selections: structuredCloneJson(state.selections),
     userFilters: structuredCloneJson(state.userFilters),
     grid: {
@@ -155,6 +177,8 @@ export const WorkspaceWarningCodeSchema = z.enum([
   /** The engine now infers a different type for a saved column. */
   'column_type_changed',
   'chart_dropped',
+  /** A map view reads a column the data no longer has (format 2). */
+  'map_dropped',
   'selection_dropped',
   'filter_dropped',
   /** Sort keys, widths or order entries for missing columns were dropped. */
@@ -259,6 +283,20 @@ export function restoreWorkspace(
   const chartIds = new Set(charts.map((chart) => chart.id));
   const droppedCharts = new Set(saved.charts.map((chart) => chart.id).filter((id) => !chartIds.has(id)));
 
+  const maps: MapViewState[] = [];
+  for (const map of saved.maps) {
+    const gone = mapSpecColumns(map.spec).filter((name) => !known.has(name));
+    if (gone.length > 0) {
+      const label = map.title === undefined ? `map ${JSON.stringify(map.id)}` : `map ${JSON.stringify(map.title)}`;
+      warnings.push({ code: 'map_dropped', message: `Removed ${label}: it uses ${names(gone)}, which the data no longer has` });
+    } else {
+      maps.push(persistedMap(map));
+    }
+  }
+  /** Views with a layout card: charts, then maps. */
+  const viewIds = new Set([...chartIds, ...maps.map((map) => map.id)]);
+  const droppedViews = new Set([...droppedCharts, ...saved.maps.map((map) => map.id).filter((id) => !viewIds.has(id))]);
+
   const selections: Record<string, Selection> = {};
   for (const [view, selection] of Object.entries(saved.selections)) {
     if (droppedCharts.has(view)) continue; // already reported with the chart
@@ -291,17 +329,17 @@ export function restoreWorkspace(
   const placed = new Set<string>();
   let repaired = false;
   for (const card of saved.layout.cards) {
-    if (!chartIds.has(card.chartId) || placed.has(card.chartId)) {
-      repaired ||= !droppedCharts.has(card.chartId);
+    if (!viewIds.has(card.chartId) || placed.has(card.chartId)) {
+      repaired ||= !droppedViews.has(card.chartId);
       continue;
     }
     placed.add(card.chartId);
     cards.push({ ...card });
   }
-  for (const chart of charts) {
-    if (placed.has(chart.id)) continue;
+  for (const id of viewIds) {
+    if (placed.has(id)) continue;
     const y = cards.reduce((bottom, card) => Math.max(bottom, card.y + card.h), 0);
-    cards.push({ chartId: chart.id, x: 0, y, w: 1, h: 1 });
+    cards.push({ chartId: id, x: 0, y, w: 1, h: 1 });
     repaired = true;
   }
   if (repaired) warnings.push({ code: 'layout_repaired', message: 'Some chart cards were missing or duplicated in the layout and were rearranged' });
@@ -310,6 +348,7 @@ export function restoreWorkspace(
     dataSource: { handleId: data.handleId, fileName: data.fileName, fingerprint: { ...data.fingerprint } },
     columns,
     charts,
+    maps,
     selections,
     userFilters: structuredCloneJson(userFilters),
     grid: { sort: structuredCloneJson(sort), columnOrder, columnWidths: structuredCloneJson(columnWidths), selection: null },

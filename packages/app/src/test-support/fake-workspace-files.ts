@@ -32,6 +32,7 @@ export const savedWorkspace: PersistedWorkspace = {
     { name: 'amount', inferredType: 'float', typeOverride: 'text' },
   ],
   charts: [{ id: 'chart_9', spec: { mark: 'bar', x: { column: 'category' }, filters: [] }, title: 'Trips by category' }],
+  maps: [],
   selections: {},
   userFilters: [],
   grid: { sort: [{ column: 'id', direction: 'desc' }], columnOrder: [], columnWidths: [] },

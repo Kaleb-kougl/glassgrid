@@ -47,6 +47,46 @@ function aggregateTable(mark: string) {
   }
 }
 
+/** Map query results: two aircraft at the data clock (one on the ground, one with no callsign), and their trails. */
+export function mapTable(query: string, dataClockMs: number) {
+  const f64 = (values: number[]) => Float64Array.from(values);
+  if (query === 'track') {
+    // The selected aircraft's track (L4): a1b2c3's fixes up to the clock, oldest first.
+    return tableFromArrays({
+      hex: ['a1b2c3', 'a1b2c3', 'a1b2c3', 'a1b2c3'],
+      ts: f64([dataClockMs - 600_000, dataClockMs - 300_000, dataClockMs - 20_000, dataClockMs - 10_000]),
+      lat: f64([37.4, 37.5, 37.6, 37.61]),
+      lon: f64([-122.5, -122.45, -122.38, -122.37]),
+      altBaroFt: f64([0, 1_200, 2_500, 3_000]),
+    });
+  }
+  if (query === 'trails') {
+    return tableFromArrays({
+      hex: ['a1b2c3', 'a1b2c3', 'b2c3d4'],
+      ts: f64([dataClockMs - 20_000, dataClockMs - 10_000, dataClockMs]),
+      lat: f64([37.6, 37.61, 37.7]),
+      lon: f64([-122.38, -122.37, -122.2]),
+      altBaroFt: f64([2_500, 3_000, 0]),
+    });
+  }
+  return tableFromArrays({
+    hex: ['a1b2c3', 'b2c3d4'],
+    flight: ['UAL1', 'SWA2'],
+    typeCode: ['B738', 'B737'],
+    category: ['A3', 'A3'],
+    lat: f64([37.61, 37.7]),
+    lon: f64([-122.37, -122.2]),
+    altBaroFt: f64([3_000, 0]),
+    altGeomFt: f64([3_100, 0]),
+    onGround: [false, true],
+    gsKt: f64([250.5, 12]),
+    trackDeg: f64([45, 180]),
+    baroRateFpm: f64([600, 0]),
+    ts: f64([dataClockMs - 10_000, dataClockMs]),
+    registration: ['N12345', null],
+  });
+}
+
 export function fakeEngine() {
   const timing = { engineMs: 1, cached: false };
   const restartListeners = new Set<() => void>();
@@ -95,6 +135,9 @@ export function fakeEngine() {
       }),
     ),
     prepareCrossfilter: vi.fn(() => Promise.resolve({ cubes: [], engineMs: 1 })),
+    mapQuery: vi.fn((_table: string, request: { query: string; dataClockMs: number }, _options?: unknown) =>
+      Promise.resolve({ table: mapTable(request.query, request.dataClockMs), ...timing }),
+    ),
     onEvent: vi.fn(() => () => undefined),
     // The rest of EngineClientApi, which the app does not call.
     rows: vi.fn(() => Promise.reject(new Error('fakeEngine.rows is not used by the app'))),

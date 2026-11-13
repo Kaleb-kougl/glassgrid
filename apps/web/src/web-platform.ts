@@ -1,5 +1,6 @@
 import type { OpenCsvResult } from '@glassgrid/core';
-import type { EngineClientLike, Platform, SampleDataset } from '@glassgrid/app';
+import type { EngineClientLike, LiveFallbackChoice, Platform, PlatformLive, PlatformMap, SampleDataset } from '@glassgrid/app';
+import { withBase } from './base';
 
 /*
  * The web Platform: browser APIs for files, clipboard and theme, and an
@@ -74,11 +75,115 @@ export interface WebPlatformOptions {
   readonly pick?: () => Promise<File | null>;
   readonly target?: Pick<Window, 'addEventListener' | 'removeEventListener'>;
   readonly nav?: Navigator;
+  /** Where `visibilitychange` fires and `visibilityState` is read (tests). */
+  readonly doc?: Pick<Document, 'visibilityState' | 'addEventListener' | 'removeEventListener'>;
+  /** The basemap for map views; default: the assets under `<base>map/` and their credit. */
+  readonly map?: PlatformMap;
+  /** Live flights' offline fallback (L5); default none. */
+  readonly live?: PlatformLive;
+}
+
+/** The map view's basemap on this site: style, tiles, glyphs and sprites under `<base>map/` (docs/live-flights-l3-data.md). */
+export function webMap(base?: string): PlatformMap {
+  // No extra credits: MapView adds the basemap's own (Natural Earth, OurAirports)
+  // from apps/web/public/map/basemap.json after the data's line.
+  return { assetsBase: base === undefined ? withBase('map/') : withBase('map/', base), attribution: [] };
+}
+
+/** sessionStorage key of the person's choice of recorded traffic over an unavailable live feed (L5): per tab, prefixed (the portfolio shares the origin). */
+export const LIVE_CHOICE_STORAGE_KEY = 'glassgrid.flights.choice';
+
+/** How long a probe of the live relay may take (as long as the live source's own poll, DEFAULT_LIVE_TIMEOUT_MS). */
+const PROBE_TIMEOUT_MS = 20_000;
+
+export interface WebLiveOptions {
+  /** The page was opened with `?live=1`. */
+  readonly requested: boolean;
+  /** The relay (default: `/api/flights` on this origin, as the engine polls it). */
+  readonly url: string;
+  readonly storage?: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | null;
+  readonly nav?: Pick<Navigator, 'onLine'>;
+  readonly target?: Pick<Window, 'addEventListener' | 'removeEventListener'>;
+  readonly fetch?: (url: string, init: RequestInit) => Promise<Response>;
+}
+
+/** The session storage, or null where it cannot be used (blocked site data, some private windows). */
+function sessionStore(): Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | null {
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Live flights' offline fallback on the web (L5): `navigator.onLine` and its events, one GET of the relay as a probe
+ * (same origin, `connect-src 'self'`; it counts as one more request to the CDN, once a minute at most while the
+ * recorded traffic shows), and the choice in sessionStorage (a tab's session; every access guarded).
+ */
+export function webLive(options: WebLiveOptions): PlatformLive {
+  const storage = options.storage === undefined ? sessionStore() : options.storage;
+  const nav = options.nav ?? navigator;
+  const target = options.target ?? window;
+  const fetchImpl = options.fetch ?? ((url: string, init: RequestInit) => fetch(url, init));
+  return {
+    requested: options.requested,
+    onOnlineChange: (listener) => {
+      const report = () => listener(nav.onLine);
+      target.addEventListener('online', report);
+      target.addEventListener('offline', report);
+      report();
+      return () => {
+        target.removeEventListener('online', report);
+        target.removeEventListener('offline', report);
+      };
+    },
+    probe: async (signal) => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+      // The caller's abort (the page hidden, the card gone) cancels the request too.
+      const abort = () => controller.abort();
+      if (signal?.aborted) abort();
+      signal?.addEventListener('abort', abort, { once: true });
+      try {
+        const response = await fetchImpl(options.url, { cache: 'no-store', headers: { Accept: 'application/json' }, signal: controller.signal });
+        if (!response.ok) {
+          await response.body?.cancel().catch(() => undefined);
+          return false;
+        }
+        const body = (await response.json()) as { stale?: unknown; ac?: unknown } | null;
+        return body !== null && typeof body === 'object' && body.stale === false && Array.isArray(body.ac);
+      } catch {
+        return false;
+      } finally {
+        clearTimeout(timer);
+        signal?.removeEventListener('abort', abort);
+      }
+    },
+    choice: {
+      get: (): LiveFallbackChoice | null => {
+        try {
+          return storage?.getItem(LIVE_CHOICE_STORAGE_KEY) === 'recorded' ? 'recorded' : null;
+        } catch {
+          return null;
+        }
+      },
+      set: (choice) => {
+        try {
+          if (choice === null) storage?.removeItem(LIVE_CHOICE_STORAGE_KEY);
+          else storage?.setItem(LIVE_CHOICE_STORAGE_KEY, choice);
+        } catch {
+          // Storage blocked: the choice lasts as long as the page.
+        }
+      },
+    },
+  };
 }
 
 export function createWebPlatform(web: WebEngine, options: WebPlatformOptions = {}): Platform {
   const nav = options.nav ?? navigator;
   const target = options.target ?? window;
+  const doc = options.doc ?? document;
   const pick = options.pick ?? (() => pickFile());
   return {
     name: 'web',
@@ -113,7 +218,16 @@ export function createWebPlatform(web: WebEngine, options: WebPlatformOptions = 
         target.addEventListener('pagehide', listener);
         return () => target.removeEventListener('pagehide', listener);
       },
+      // The engine worker cannot see document.visibilityState; the live-flights feed pauses on it.
+      onVisibilityChange: (listener) => {
+        const report = () => listener(doc.visibilityState !== 'hidden');
+        doc.addEventListener('visibilitychange', report);
+        report();
+        return () => doc.removeEventListener('visibilitychange', report);
+      },
     },
     capabilities: { canSaveWorkspace: false, canOpenFromPath: false, maxFileBytes: options.maxFileBytes === undefined ? WEB_MAX_FILE_BYTES : options.maxFileBytes },
+    map: options.map ?? webMap(),
+    ...(options.live ? { live: options.live } : {}),
   };
 }

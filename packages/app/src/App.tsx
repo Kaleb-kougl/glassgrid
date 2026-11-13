@@ -4,11 +4,19 @@ import {
   CommandError,
   crossfilterPlan,
   effectiveColumnType,
+  effectiveFilters,
   filterChips,
   formatInteger,
   isNumericType,
+  LIVE_FLIGHTS_HANDLE,
+  mapViewportFilters,
+  playedToEnd,
+  resolveTime,
+  roundBounds,
   stateColumns,
   tableIdForFile,
+  timeCursor,
+  timeWindowFilter,
   viewQueries,
   type BrushSelectionInput,
   type ChartSpecInput,
@@ -16,12 +24,16 @@ import {
   type Filter,
   type FilterChip as FilterChipModel,
   type FilterInput,
+  type LiveSourceInput,
+  type MapSpec,
   type TableColumnProfile,
   type TableId,
   type UndoEntry,
   type ViewQueries,
+  type ViewQueryOptions,
   type WorkspaceState,
 } from '@glassgrid/core';
+import type { MapBounds } from '@glassgrid/ui/map';
 import {
   Button,
   CanvasGrid,
@@ -46,12 +58,14 @@ import {
   OPEN_TO_FIRST_ROWS_MEASURE,
   PROFILE_MEASURE,
   SORT_TO_FIRST_ROWS_MEASURE,
+  TIME_SEEK_MEASURE,
   type ChartCreateMeasureDetail,
   type CountRowsMeasureDetail,
   type CrossfilterPrepareMeasureDetail,
   type OpenToFirstRowsMeasureDetail,
   type ProfileMeasureDetail,
   type SortToFirstRowsMeasureDetail,
+  type TimeSeekMeasureDetail,
 } from './perf';
 import { perfRegion, renderPerf } from './render-perf';
 import { useTheme } from './theme';
@@ -59,16 +73,25 @@ import type { ChartResult } from './views/chart-data';
 import { ChartView } from './views/ChartView';
 import { CrossfilterTracker } from './views/crossfilter-tracker';
 import { FilterEditor } from './views/FilterEditor';
+import { MapCard } from './views/MapCard';
+import { MapBoundary } from './views/MapBoundary';
+import { useMapViewport } from './views/map-viewport';
+import { ARCHIVE_PLAY_SPEED, batchKey, dataTimeRange, feedLabel, FLIGHTS_DAY_ARCHIVE, FLIGHTS_SAMPLE_ARCHIVE, mapClock, shortFeedError, useLiveState } from './flights';
+import { TimeScrubber, type LoadDay } from './views/TimeScrubber';
+import { LiveFallbackNotice } from './views/LiveFallbackNotice';
+import { useOnline } from './live-fallback';
 import {
   displayColumns,
   EngineGridSource,
   fromIndexSelection,
+  gridIntentKey,
   selectedColumnNames,
   sourceColumns,
   toIndexSelection,
 } from './views/grid-source';
 import { TopBar } from './views/TopBar';
 import { LocateDataDialog, MismatchBanner, RecentWorkspaces, RecoveryOffers, SaveBeforeReplaceDialog } from './views/WorkspaceFileViews';
+import { provideLiveFlights } from './live';
 import { workspaceFilesOf, type Platform } from './platform';
 import { createAppWorkspace, type AppWorkspace } from './workspace';
 import { isWorkspaceFileName, useWorkspaceFiles } from './workspace-files';
@@ -174,13 +197,56 @@ export function chartPixelWidth(listWidth: number, dpr: number): number {
   return Math.min(16_384, Math.max(100, px));
 }
 
-/** Every view's query key, as the cross-filter timing names them (`chart:<id>`, `grid:count`, `grid:rows`). */
-export function viewKeys(queries: ViewQueries): Map<string, string> {
+/**
+ * Every view's query key, as the cross-filter timing names them (`chart:<id>`, `grid:count`, `grid:rows`, and
+ * since L4 `map:<id>`: the JSON of the spec it queries with, as `MapSnapshot.specKey`).
+ */
+export function viewKeys(queries: ViewQueries, maps: ReadonlyMap<string, MapSpec> = new Map()): Map<string, string> {
   const keys = new Map<string, string>();
   keys.set('grid:count', queries.grid.key);
   keys.set('grid:rows', queries.grid.key);
   for (const chart of queries.charts) keys.set(chart.engineViewId, chart.key);
+  for (const [id, spec] of maps) keys.set(`map:${id}`, JSON.stringify(spec));
   return keys;
+}
+
+/**
+ * The spec each map queries with: its own filters, then every view's selection, the user filters and every other
+ * map's viewport (never its own, as a chart never queries with its own brush; L4). Maps are "as of T" by their
+ * data clock, so the charts' time window does not apply to them.
+ */
+export function mapQuerySpecs(state: Pick<WorkspaceState, 'maps' | 'charts' | 'selections' | 'userFilters'>): Map<string, MapSpec> {
+  return new Map(state.maps.map((map): [string, MapSpec] => [map.id, { ...map.spec, filters: [...map.spec.filters, ...effectiveFilters(state, map.id)] }]));
+}
+
+/** Wall-clock time, ticking every `intervalMs` while `active` (the time cursor playing). */
+function useWallClock(active: boolean, intervalMs: number, clock: () => number): number {
+  const [now, setNow] = useState(clock);
+  useEffect(() => {
+    if (!active) return;
+    const tick = () => setNow(clock());
+    const first = setTimeout(tick, 0);
+    const timer = setInterval(tick, intervalMs);
+    return () => {
+      clearTimeout(first);
+      clearInterval(timer);
+    };
+  }, [active, intervalMs, clock]);
+  return now;
+}
+
+/** While the time cursor plays, T moves on (and the map re-queries) once per this much wall time; dead reckoning fills in. */
+export const TIME_TICK_MS = 1_000;
+/**
+ * While it plays with "Charts follow time", the grid's window moves on once per this much wall time (the charts' every
+ * tick), so its rows are not replaced under the reader every second; paused, it is at T at once.
+ */
+export const GRID_FOLLOW_MS = 4_000;
+
+const defaultClock = () => Date.now();
+
+function sameBounds(a: MapBounds | undefined, b: MapBounds): boolean {
+  return a !== undefined && a.west === b.west && a.south === b.south && a.east === b.east && a.north === b.north;
 }
 
 /** Which caller created each chart, from the history's `addChart` patches. */
@@ -252,20 +318,116 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
   // ---------------------------------------------------------------------------
   // Views of the data source
 
-  // The view being brushed (the last whose selection changed, or the chart under the pointer): other
-  // views carry a cross-filter hint for its selection, so the engine can answer them from cubes.
-  const [active, setActive] = useState<{ selections: WorkspaceState['selections']; view: string | null }>({ selections: state.selections, view: null });
-  let activeView = active.view;
-  if (active.selections !== state.selections) {
-    activeView = changedSelectionView({ charts: state.charts, selections: active.selections }, state) ?? active.view;
-    setActive({ selections: state.selections, view: activeView });
+  // The live table (flight_states, docs/live-flights-l3-data.md): every ingested batch is new data under the same
+  // views, so each one bumps the data version (in this render, so a map's new clock and its new data version
+  // make one request). The engine has dropped every cached result of the table before it reports the batch.
+  const liveTable = state.dataSource?.handleId === LIVE_FLIGHTS_HANDLE;
+  const liveState = useLiveState(engine, liveTable);
+  // Bumped when the engine's data for the table changes under the same view (type overrides applied, engine restart, a live batch).
+  const [dataVersion, setDataVersion] = useState(0);
+  const liveBatch = liveTable ? batchKey(liveState) : null;
+  const [seenBatch, setSeenBatch] = useState<string | null>(null);
+  // Every change counts, to no batch too: another source emptied the table (or its load failed), and the views'
+  // answers for the old rows must go.
+  if (liveBatch !== seenBatch) {
+    setSeenBatch(liveBatch);
+    setDataVersion((version) => version + 1);
   }
-  // Every view's query inputs (core's cross-filter model): each queries with every selection but its own.
+  // Which source and batch the column profile was asked for: until one for this source's data is back, the time
+  // range would mix the old source's first fix with the new one's last, so the scrubber says "Loading…" instead.
+  const liveSource = liveTable ? JSON.stringify(liveState?.source ?? null) : null;
+  const [profiledFor, setProfiledFor] = useState<{ source: string | null; batch: string | null } | null>(null);
+  const rangePending = liveTable && liveBatch !== null && (profiledFor === null || profiledFor.source !== liveSource || profiledFor.batch === null);
+
+  // The time cursor (L4, docs/live-flights-l4.md): T, the time the map shows (each aircraft at its latest fix ≤ T,
+  // trails and the selected track up to T), and with "Charts follow time" the end of the charts' and grid's window.
+  // Following the newest data, T is the feed's data clock (or the end of an archive or file); paused, it holds; playing,
+  // it moves on at the cursor's speed, re-queried once per TIME_TICK_MS (the map's dead reckoning fills in between).
+  const clockNow = workspace.clock ?? defaultClock;
+  const cursor = timeCursor(state);
+  const timeColumn = state.maps[0]?.spec.time ?? 'ts';
+  const timeRange = useMemo(() => dataTimeRange(state.columns, timeColumn, liveTable ? liveState : null), [state.columns, timeColumn, liveTable, liveState]);
+  // The wall clock ticks only while a scrubber shows the cursor playing (with no map, nothing is "as of T").
+  const wallNow = useWallClock(cursor.mode === 'playing' && state.maps.length > 0, TIME_TICK_MS, clockNow);
+  const atMs = resolveTime(cursor, timeRange, wallNow);
+  /** A cursor that played to the end of the data holds there (an archive, a file) or follows it (a feed): below. */
+  const playedOut = playedToEnd(cursor, timeRange, wallNow);
+  const feedKind = liveTable ? (liveState?.source?.kind ?? null) : null;
+  // Offline → replay (L5, live-fallback.ts). `wantsLive`: the person asked for live data here (`?live=1`, or a live
+  // feed ran on this live table), so recorded traffic in its place is a fallback and the way back is offered. It is
+  // forgotten when the live table closes (another file opened).
+  const liveApi = platform.live;
+  const online = useOnline(liveApi);
+  const [wantsLive, setWantsLive] = useState(liveApi?.requested === true);
+  const [hadLiveTable, setHadLiveTable] = useState(liveTable);
+  if (hadLiveTable !== liveTable) {
+    setHadLiveTable(liveTable);
+    if (!liveTable && wantsLive) setWantsLive(false);
+  }
+  if (liveTable && feedKind === 'live' && !wantsLive) setWantsLive(true);
+  /** The recorded traffic was just chosen in place of live data: play it from its first fix once it is loaded. */
+  const [playRecorded, setPlayRecorded] = useState(false);
+  /** Live or replayed data keeps arriving: "Live" follows it. An archive or a file has an end instead. */
+  const followsFeed = feedKind === 'live' || feedKind === 'replay';
+  const atEnd = !followsFeed && cursor.mode !== 'live' && atMs !== null && timeRange !== null && atMs >= timeRange.endMs;
+  /** Paused on a feed for longer than it keeps fixes: T is held at the oldest one kept (and the scrubber says so). */
+  const expired = followsFeed && cursor.mode === 'paused' && cursor.atMs !== null && timeRange !== null && cursor.atMs < timeRange.startMs;
+  const chartsFollowTime = state.chartsFollowTime === true;
+  const hasMaps = state.maps.length > 0;
+  const gridAtMs = cursor.mode === 'playing' && chartsFollowTime ? resolveTime(cursor, timeRange, Math.floor(wallNow / GRID_FOLLOW_MS) * GRID_FOLLOW_MS) : atMs;
+  const timeFilter = useMemo(() => (hasMaps ? timeWindowFilter({ chartsFollowTime }, timeColumn, atMs) : null), [hasMaps, chartsFollowTime, timeColumn, atMs]);
+  const gridTimeFilter = useMemo(
+    () => (hasMaps ? timeWindowFilter({ chartsFollowTime }, timeColumn, gridAtMs) : null),
+    [hasMaps, chartsFollowTime, timeColumn, gridAtMs],
+  );
+  const context = useMemo((): ViewQueryOptions => ({ timeFilter }), [timeFilter]);
+  /** The latest context, for callbacks that compute view keys (brush end, pan end). */
+  const latestContext = useRef(context);
+  useLayoutEffect(() => {
+    latestContext.current = context;
+  });
+
+  // The view being brushed (the last whose selection changed, or the chart under the pointer): other
+  // views carry a cross-filter hint for its selection, so the engine can answer them from cubes. When the
+  // filters around it change (a map's viewport, the time window) its cubes no longer apply: no view is active
+  // until the next brush starts (an unusable hint would make the engine build cubes for one answer).
+  const [active, setActive] = useState<{ selections: WorkspaceState['selections']; context: string; view: string | null }>({ selections: state.selections, context: '', view: null });
+  const contextKey = JSON.stringify([state.maps.map((map) => mapViewportFilters(map)), timeFilter]);
+  let activeView = active.view;
+  if (active.selections !== state.selections || active.context !== contextKey) {
+    activeView = active.context !== contextKey ? null : (changedSelectionView({ charts: state.charts, selections: active.selections }, state) ?? active.view);
+    setActive({ selections: state.selections, context: contextKey, view: activeView });
+  }
+  // Every view's query inputs (core's cross-filter model): each queries with every selection but its own, the
+  // maps' viewports included (L4), and the time window while the charts follow the cursor.
   const queries = useMemo(
-    () => viewQueries({ charts: state.charts, columns: state.columns, selections: state.selections, userFilters: state.userFilters }, { activeView }),
-    [state.charts, state.columns, state.selections, state.userFilters, activeView],
+    () => viewQueries({ charts: state.charts, columns: state.columns, selections: state.selections, userFilters: state.userFilters, maps: state.maps }, { activeView, timeFilter, gridTimeFilter }),
+    [state.charts, state.columns, state.selections, state.userFilters, state.maps, activeView, timeFilter, gridTimeFilter],
   );
   const compileColumns = useMemo(() => stateColumns(state), [state]);
+  // Map views query with their own filters, every view's selection, the user filters and the other maps' viewports.
+  const mapSpecs = useMemo(
+    () => mapQuerySpecs({ maps: state.maps, charts: state.charts, selections: state.selections, userFilters: state.userFilters }),
+    [state.maps, state.charts, state.selections, state.userFilters],
+  );
+  /** The aircraft picked on a map (UI state, shared by every map view; not part of the workspace). */
+  const [selectedHex, setSelectedHex] = useState<string | null>(null);
+  // Cleared when the table or the workspace changes (another file, a workspace loaded or undone) ...
+  const selectionScope = JSON.stringify([tableId, state.dataSource?.handleId ?? null, state.document?.id ?? null]);
+  const [seenSelectionScope, setSeenSelectionScope] = useState(selectionScope);
+  if (seenSelectionScope !== selectionScope) {
+    setSeenSelectionScope(selectionScope);
+    setSelectedHex(null);
+  }
+  // ... and when no map's latest snapshot has the aircraft any more (it landed, left or stopped reporting).
+  const mapAircraft = useRef(new Map<string, ReadonlySet<string>>());
+  const onMapAircraft = useCallback((mapId: string, aircraft: readonly { hex: string }[] | null) => {
+    if (aircraft === null) mapAircraft.current.delete(mapId);
+    else mapAircraft.current.set(mapId, new Set(aircraft.map((a) => a.hex)));
+    const shown = [...mapAircraft.current.values()];
+    setSelectedHex((selected) => (selected !== null && shown.length > 0 && !shown.some((hexes) => hexes.has(selected)) ? null : selected));
+  }, [setSelectedHex]);
+  const canMap = ['lat', 'lon', 'hex', 'ts'].every((name) => state.columns.some((column) => column.name === name));
   const gridFiltersKey = JSON.stringify(queries.grid.filters);
   const filters = useMemo(() => JSON.parse(gridFiltersKey) as Filter[], [gridFiltersKey]);
   /** The grid count's cross-filter hint, read when the count is sent (not part of its key). */
@@ -274,8 +436,42 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
     gridHint.current = queries.grid.crossfilter;
   });
   const tracker = useMemo(() => new CrossfilterTracker(), []);
-  // Bumped when the engine's data for the table changes under the same view (type overrides applied, engine restart).
-  const [dataVersion, setDataVersion] = useState(0);
+
+  // A map's viewport (L4): recorded in the workspace after every pan or zoom (`setMapViewport`, no undo entry);
+  // while its "Filter to map view" is on, every other view re-queries with it, timed like a brush (pan end ->
+  // every other view painted).
+  const onMapViewport = useCallback(
+    (mapId: string, bounds: MapBounds) => {
+      const before = store.getState();
+      const map = before.maps.find((candidate) => candidate.id === mapId);
+      if (!map || sameBounds(map.viewport, roundBounds(bounds))) return;
+      const timed = map.filterToView !== false;
+      if (timed) tracker.begin(`map:${mapId}`, viewKeys(viewQueries(before, latestContext.current), mapQuerySpecs(before)));
+      registry.dispatch('setMapViewport', { mapId, bounds }, { caller: 'user' }).then(
+        () => {
+          if (!timed) return;
+          const after = store.getState();
+          const queriesAfter = viewQueries(after, latestContext.current);
+          tracker.arm(viewKeys(queriesAfter, mapQuerySpecs(after)), queriesAfter.grid.filters);
+        },
+        (cause: unknown) => {
+          if (timed) tracker.cancel();
+          console.warn('[glassgrid] map: the viewport was not recorded:', messageOf(cause));
+        },
+      );
+    },
+    [registry, store, tracker],
+  );
+  const mapViewport = useMapViewport(onMapViewport);
+  // What the camera shows is the truth: when an undo restored an older viewport (another map removed and brought
+  // back), record the camera's again. Maps that are gone are forgotten.
+  useEffect(() => {
+    mapViewport.keep(state.maps.map((map) => map.id));
+    for (const map of state.maps) {
+      const reported = mapViewport.viewports.get(map.id);
+      if (reported && !sameBounds(map.viewport, roundBounds(reported))) void registry.dispatch('setMapViewport', { mapId: map.id, bounds: reported }, { caller: 'user' }).catch(() => undefined);
+    }
+  }, [state.maps, mapViewport, registry]);
 
   // ---------------------------------------------------------------------------
   // The grid: one paged source per table, reset whenever its view changes
@@ -291,9 +487,15 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
   );
   const gridSelection = useMemo(() => toIndexSelection(state.grid.selection, gridColumns), [state.grid.selection, gridColumns]);
   const selectedColumns = useMemo(() => selectedColumnNames(state.grid.selection, gridColumns), [state.grid.selection, gridColumns]);
+  // What the person asked the grid for: a pan of the map, the time window moving on or a live batch keep its
+  // place and selection (the same intent); a brush, a filter, a sort or a switch sends it to the top.
+  const gridIntent = useMemo(
+    () => gridIntentKey({ grid: state.grid, charts: state.charts, selections: state.selections, userFilters: state.userFilters, maps: state.maps, chartsFollowTime }, fileColumns),
+    [state.grid, state.charts, state.selections, state.userFilters, state.maps, chartsFollowTime, fileColumns],
+  );
   const view = useMemo(
-    () => ({ sort: state.grid.sort, filters, dataVersion, columns: fileColumns, rowCount: knownRowCount }),
-    [state.grid.sort, filters, dataVersion, fileColumns, knownRowCount],
+    () => ({ sort: state.grid.sort, filters, dataVersion, columns: fileColumns, rowCount: knownRowCount, intent: gridIntent }),
+    [state.grid.sort, filters, dataVersion, fileColumns, knownRowCount, gridIntent],
   );
   const grid = useMemo(
     () => (tableId === null ? null : new EngineGridSource(engine, tableId, view)),
@@ -453,6 +655,9 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engine, tableId, overridesKey, engineEpoch, showToast, dispatch]);
 
+  // Live flights: startLive / stopLive / setLiveSource over the engine's feed, and page visibility (live.ts).
+  useEffect(() => provideLiveFlights({ registry, engine, window: shell }), [registry, engine, shell]);
+
   // copySelection: the selection as TSV, through the platform's clipboard.
   const gridSource = useRef<EngineGridSource | null>(null);
   useLayoutEffect(() => {
@@ -490,6 +695,7 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
           columns: profiled.columns.length,
         } satisfies ProfileMeasureDetail);
         setProfile({ table: tableId, rowCount: profiled.rowCount, columns: profiled.columns });
+        setProfiledFor({ source: liveSource, batch: liveBatch });
         // Record the profile in the workspace (default charts and brush snapping read it); not an undo entry.
         registry
           .dispatch(
@@ -515,7 +721,7 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
     return () => {
       run.live = false;
     };
-  }, [engine, registry, tableId, firstPageTable, dataVersion, showToast]);
+  }, [engine, registry, tableId, firstPageTable, dataVersion, liveSource, liveBatch, showToast]);
 
   useEffect(() => {
     if (tableId === null || firstPageTable !== tableId) return;
@@ -690,7 +896,7 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
       setActive((current) => (current.view === chartId ? current : { ...current, view: chartId }));
       const table = tableId;
       const current = store.getState();
-      const plan = table === null ? null : crossfilterPlan(current, chartId);
+      const plan = table === null ? null : crossfilterPlan(current, chartId, 'x', latestContext.current);
       if (table === null || !plan) return;
       const width = latestPixelWidth.current;
       const targets = plan.targets.map((target) => (target.kind === 'aggregate' ? { kind: 'aggregate' as const, spec: { ...target.spec, pixelWidth: width } } : { kind: 'count' as const, filters: target.filters }));
@@ -719,11 +925,12 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
       if (selection === null && !Object.hasOwn(before.selections, chartId)) return;
       setActive((current) => (current.view === chartId ? current : { ...current, view: chartId }));
       if (__GG_RENDER_PERF__) renderPerf.dispatch();
-      tracker.begin(chartId, viewKeys(viewQueries(before)));
+      tracker.begin(chartId, viewKeys(viewQueries(before, latestContext.current), mapQuerySpecs(before)));
       registry.dispatch('brush', { viewId: chartId, selection }, { caller: 'user' }).then(
         () => {
-          const after = viewQueries(store.getState());
-          tracker.arm(viewKeys(after), after.grid.filters);
+          const state = store.getState();
+          const after = viewQueries(state, latestContext.current);
+          tracker.arm(viewKeys(after, mapQuerySpecs(state)), after.grid.filters);
         },
         (cause: unknown) => {
           tracker.cancel();
@@ -834,6 +1041,139 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
   };
 
   // ---------------------------------------------------------------------------
+  // The time cursor's controls (L4): every change is a `setTime` (no undo entry) or `setChartsFollowTime` command.
+
+  /** A seek being timed: dispatched -> the map painted as of the new T. */
+  const pendingSeek = useRef<{ start: string; atMs: number } | null>(null);
+  const seek = useCallback(
+    (to: number, mode: 'paused' | 'playing' | 'keep') => {
+      const current = timeCursor(store.getState());
+      const next = mode === 'keep' ? (current.mode === 'playing' ? 'playing' : 'paused') : mode;
+      if (pendingSeek.current) performance.clearMarks(pendingSeek.current.start);
+      const start = `${TIME_SEEK_MEASURE}:start:${performance.now()}`;
+      performance.mark(start);
+      pendingSeek.current = { start, atMs: to };
+      dispatch('setTime', { mode: next, atMs: to });
+    },
+    [store, dispatch],
+  );
+  const onMapPainted = useCallback(
+    (mapId: string, specKey: string, paintedAt: number, engineMs: number) => {
+      tracker.painted(`map:${mapId}`, specKey, { engineMs, fromCube: false, cached: false });
+      const pending = pendingSeek.current;
+      if (pending && pending.atMs === paintedAt) {
+        pendingSeek.current = null;
+        measure(TIME_SEEK_MEASURE, pending.start, { mapId, atMs: paintedAt, engineMs } satisfies TimeSeekMeasureDetail);
+      }
+    },
+    [tracker],
+  );
+  const onFilterToView = useCallback((mapId: string, enabled: boolean) => dispatch('setMapViewFilter', { mapId, enabled }), [dispatch]);
+
+  // An archive opens playing from its first fix (once per workspace: the cursor is then set), as soon as the
+  // profile says where that is ...
+  const archiveStart =
+    feedKind === 'archive' &&
+    (state.time === undefined || playRecorded) &&
+    !rangePending &&
+    state.maps.length > 0 &&
+    liveState?.feed?.status === 'live' &&
+    timeRange !== null &&
+    timeRange.startMs < timeRange.endMs
+      ? timeRange.startMs
+      : null;
+  // The fallback's restart is done once the cursor plays from that first fix.
+  if (playRecorded && archiveStart !== null && cursor.mode === 'playing' && cursor.atMs === archiveStart) setPlayRecorded(false);
+  useEffect(() => {
+    if (archiveStart !== null) dispatch('setTime', { mode: 'playing', atMs: archiveStart, speed: ARCHIVE_PLAY_SPEED });
+  }, [archiveStart, dispatch]);
+  // ... and a cursor that played to the end of the data holds there (an archive, a file) or follows it (a feed).
+  useEffect(() => {
+    if (!playedOut || timeRange === null) return;
+    dispatch('setTime', followsFeed ? { mode: 'live' } : { mode: 'paused', atMs: timeRange.endMs });
+  }, [playedOut, followsFeed, timeRange, dispatch]);
+
+  // "Load full day" (archives only): offered on the half hour; on the day, loading, loaded, or failed (the source stops
+  // on an error it cannot get past, e.g. out of memory) with Retry and "Back to 30 minutes".
+  const archiveFixture = liveState?.source?.kind === 'archive' ? liveState.source.fixture : null;
+  const archiveFeed = liveState?.feed ?? null;
+  const startArchive = (source: LiveSourceInput) => {
+    registry.dispatch('startLive', source, { caller: 'user' }).catch((cause: unknown) => showToast({ tone: 'error', message: messageOf(cause) }));
+  };
+  const loadDay: LoadDay | undefined =
+    archiveFixture === 'flights-bay-30min'
+      ? { state: 'offer', onLoad: () => startArchive(FLIGHTS_DAY_ARCHIVE) }
+      : archiveFixture === 'flights-bay-day'
+        ? archiveFeed?.status === 'stopped' && archiveFeed.error !== null
+          ? { state: 'failed', error: shortFeedError(archiveFeed.error) ?? archiveFeed.error, onLoad: () => startArchive(FLIGHTS_DAY_ARCHIVE), onBack: () => startArchive(FLIGHTS_SAMPLE_ARCHIVE) }
+          : { state: archiveFeed?.status === 'live' ? 'loaded' : 'loading', onLoad: () => startArchive(FLIGHTS_DAY_ARCHIVE) }
+        : undefined;
+  const fallbackMode = liveTable && wantsLive && liveApi !== undefined ? (feedKind === 'live' ? 'live' : feedKind === 'archive' ? 'recorded' : null) : null;
+  // The choice is kept for the tab only once the recording has loaded: one that failed (offline, before it was fetched
+  // ahead) must not make the next reload of `?live=1` open a recording that cannot load either.
+  const recordedShown = fallbackMode === 'recorded' && liveState?.feed?.kind === 'archive' && liveState.feed.status === 'live';
+  useEffect(() => {
+    if (recordedShown) liveApi?.choice.set('recorded');
+  }, [recordedShown, liveApi]);
+  const watchRecorded = () => {
+    setPlayRecorded(true);
+    // A start that fails (offline, the fixture not fetched ahead) reports a stopped archive with its error, which the
+    // fallback strip shows (and retries once back online): no toast on top of it.
+    registry.dispatch('startLive', FLIGHTS_SAMPLE_ARCHIVE, { caller: 'user' }).catch(() => undefined);
+  };
+  const backToLive = () => {
+    liveApi?.choice.set(null);
+    setPlayRecorded(false);
+    registry.dispatch('startLive', { source: 'live' }, { caller: 'user' }).then(
+      () => dispatch('setTime', { mode: 'live' }),
+      (cause: unknown) => showToast({ tone: 'error', message: messageOf(cause) }),
+    );
+  };
+  const fallbackNotice =
+    fallbackMode !== null && liveApi !== undefined ? (
+      <LiveFallbackNotice
+        mode={fallbackMode}
+        feed={liveState?.feed ?? null}
+        online={online}
+        live={liveApi}
+        shell={shell}
+        onWatchRecorded={watchRecorded}
+        onRetryRecorded={watchRecorded}
+        onBackToLive={backToLive}
+        testId="live-fallback"
+      />
+    ) : undefined;
+  const timeBar = (title: string) => (
+    <TimeScrubber
+      label={title}
+      range={timeRange}
+      atMs={atMs}
+      cursor={cursor}
+      live={followsFeed}
+      atEnd={atEnd}
+      chartsFollow={state.chartsFollowTime === true}
+      loadDay={loadDay}
+      rangePending={rangePending}
+      expired={expired}
+      onSeek={seek}
+      onPlay={() => {
+        if (timeRange === null) return;
+        const from = atEnd || atMs === null ? timeRange.startMs : atMs;
+        dispatch('setTime', { mode: 'playing', atMs: from });
+      }}
+      onPause={() => {
+        if (atMs !== null) dispatch('setTime', { mode: 'paused', atMs });
+      }}
+      onLive={() => dispatch('setTime', { mode: 'live' })}
+      onSpeed={(speed) => {
+        if (cursor.mode === 'live' || atMs === null) dispatch('setTime', { mode: 'live', speed });
+        else dispatch('setTime', { mode: cursor.mode === 'playing' && !atEnd ? 'playing' : 'paused', atMs, speed });
+      }}
+      onChartsFollow={(enabled) => dispatch('setChartsFollowTime', { enabled })}
+    />
+  );
+
+  // ---------------------------------------------------------------------------
   // Render
 
   const profiled = profile?.table === tableId ? profile : null;
@@ -847,7 +1187,7 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
   const rowCount = count?.table === tableId ? count.rowCount : null;
   const totalRows = profiled?.rowCount ?? (filters.length === 0 ? rowCount : null);
   const callers = useMemo(() => chartCallers(history.past), [history.past]);
-  const chips = useMemo(() => filterChips(state), [state]);
+  const chips = useMemo(() => filterChips(state, { timeFilter }), [state, timeFilter]);
   const optimizingNow = optimizing && optimizing.table === tableId ? { fraction: optimizing.fraction } : null;
 
   // Header click: ascending, then descending, then file order.
@@ -904,6 +1244,7 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
         onRedo={() => dispatch('redo')}
         onStepTo={stepTo}
         inert={modal}
+        live={liveTable ? { rowCount: liveState?.rowCount ?? null, label: feedLabel(liveState?.feed ?? null, liveState?.source?.kind === 'replay' ? (liveState.source.speed ?? 1) : undefined, online) } : undefined}
         workspaceFile={
           workspaceFiles.enabled
             ? {
@@ -1040,8 +1381,9 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
                             <FilterChip
                               column={chip.column}
                               condition={chip.condition}
+                              {...(chip.id.startsWith('map:') ? { shortLabel: state.maps.length > 1 ? chip.column : 'Map view' } : {})}
                               onRemove={() => removeFilter(chip)}
-                              testId={`filter-${chip.column}`}
+                              testId={chip.id.startsWith('map:') ? `filter-map-${chip.viewId ?? ''}` : chip.id === 'time' ? 'filter-time' : `filter-${chip.column}`}
                             />
                           </div>
                         ))}
@@ -1132,6 +1474,11 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
                 <h2 className="panel__label">Charts</h2>
                 <span className="panel__count">{state.charts.length}</span>
                 <span className="panel__spacer" />
+                {canMap && (
+                  <Button variant="ghost" className="gg-button--accent-text" onClick={() => dispatch('addMapView', {})} data-testid="new-map">
+                    + Map
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   className="gg-button--accent-text"
@@ -1150,7 +1497,55 @@ export function App({ platform, workspace: givenWorkspace, initialOpen }: AppPro
               </div>
               <WebGLOverlayProvider className="charts__viewport" testId="charts-viewport">
               <div className="charts__list gg-scroll" ref={chartsListRef}>
-                {state.charts.length === 0 && (
+                <MapBoundary
+                  fallback={(_error, retry) => (
+                    <div className="map-card map-card__note" role="alert" data-testid="maps-failed">
+                      <p className="map-card__failed">A map stopped working.</p>
+                      <Button variant="secondary" size="sm" onClick={retry}>
+                        Show the maps again
+                      </Button>
+                    </div>
+                  )}
+                >
+                {state.maps.map((map, index) => {
+                  const base = mapClock(state, map.spec, liveState);
+                  // T for every map; dead reckoning only while T moves (following a running feed, or the cursor playing).
+                  const clock = {
+                    ...base,
+                    dataClockMs: atMs ?? base.dataClockMs,
+                    playing: cursor.mode === 'live' ? base.playing : cursor.mode === 'playing' && !atEnd && atMs !== null,
+                    speed: cursor.mode === 'live' ? base.speed : cursor.speed,
+                  };
+                  return (
+                    <MapCard
+                      key={map.id}
+                      engine={engine}
+                      tableId={tableId}
+                      map={map}
+                      spec={mapSpecs.get(map.id) ?? map.spec}
+                      dataVersion={dataVersion}
+                      clock={clock}
+                      theme={theme}
+                      platformMap={platform.map}
+                      selectedHex={selectedHex}
+                      onSelect={setSelectedHex}
+                      onViewportChange={mapViewport.onViewportChange}
+                      onAircraft={onMapAircraft}
+                      onPainted={onMapPainted}
+                      onFilterToView={onFilterToView}
+                      toolbar={index === 0 && (timeRange !== null || liveTable) ? timeBar(map.title ?? 'Map') : undefined}
+                      notice={index === 0 ? fallbackNotice : undefined}
+                      online={online}
+                      position={{ index, count: state.maps.length }}
+                      onRemove={() => {
+                        dispatch('removeMapView', { mapId: map.id });
+                        showToast({ tone: 'info', message: `Removed map “${map.title ?? 'Map'}”`, action: { label: 'Undo', shortcut: mod('Z'), onClick: () => dispatch('undo') } });
+                      }}
+                    />
+                  );
+                })}
+                </MapBoundary>
+                {state.charts.length === 0 && state.maps.length === 0 && (
                   <div className="charts__drop" data-testid="charts-drop">
                     <strong>Drag a column here to start a chart</strong>
                     <span>

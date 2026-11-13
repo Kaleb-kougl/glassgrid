@@ -219,7 +219,7 @@ interface QueryService {
 
 **Cancellation and ordering.** Every request carries an id and a monotonically increasing sequence per view. Interactive requests (brushing, scrolling) cancel the previous in-flight query for the same view via `interrupt()`. Responses older than the latest sequence are dropped.
 
-**Caching.** An LRU cache in the worker keyed by compiled SQL + parameters, capped at 256 MB of Arrow buffers. Grid pages and chart aggregates both hit it.
+**Caching.** An LRU cache in the worker keyed by compiled SQL + parameters, capped at 256 MB of Arrow buffers. Grid pages and chart aggregates both hit it. Every cache layer, from the Parquet copies to HTTP headers: [caching](caching.md).
 
 ## Persistence
 

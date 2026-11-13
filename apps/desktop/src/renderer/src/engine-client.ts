@@ -5,6 +5,7 @@ import {
   CubeTargetSchema,
   ENGINE_PORT_WINDOW_MESSAGE,
   EngineResponseSchema,
+  MapSpecSchema,
   RequestFiltersSchema,
   type AggregateSpecInput,
   type FilterInput,
@@ -30,7 +31,7 @@ import {
   type TableHandle,
   type TableId,
 } from '@glassgrid/core';
-import type { EngineClientApi } from '@glassgrid/engine/client';
+import type { EngineClientApi, MapQueryRequest } from '@glassgrid/engine/client';
 import { renderPerf } from '@glassgrid/app/render-perf-core';
 
 /** `tableFromIPC`, timed for the render-perf recording in render-perf builds. */
@@ -398,6 +399,25 @@ export class EngineClient implements EngineClientApi {
   }
 
   /**
+   * A map view's latest-fix or trails query at a data clock (docs/live-flights-l3-data.md). The
+   * engine host answers it like any query; the desktop has no live feed, so on the desktop a map
+   * view reads a flights file opened like any other.
+   */
+  async mapQuery(table: TableId, request: MapQueryRequest, options: QueryOptions = {}): Promise<RowsResult> {
+    const spec = parseOrReject(MapSpecSchema.safeParse(request.spec), 'map spec');
+    const body = {
+      kind: 'map' as const,
+      table,
+      spec,
+      query: request.query,
+      dataClockMs: request.dataClockMs,
+      ...(request.aircraft === undefined ? {} : { aircraft: request.aircraft }),
+    };
+    const reply = await this.call(this.viewScoped(body, options), 'arrow', options);
+    return { table: decode(reply), engineMs: reply.engineMs, cached: reply.cached };
+  }
+
+  /**
    * At brush start (pointer down): build the cubes the other views will need
    * (`crossfilterPlan(state, chartId)` gives the dimension and targets), so
    * the brush's commit is answered from them. Use one `viewId` for brushing
@@ -438,7 +458,7 @@ export class EngineClient implements EngineClientApi {
 
   async cacheStats(): Promise<CacheStats> {
     const reply = await this.call({ kind: 'cacheStats' }, 'cacheStats');
-    return { results: reply.results, parquet: reply.parquet };
+    return { results: reply.results, parquet: reply.parquet, ...(reply.live === undefined ? {} : { live: reply.live }) };
   }
 
   /**
@@ -494,7 +514,7 @@ export class EngineClient implements EngineClientApi {
     return { filters: parseOrReject(RequestFiltersSchema.safeParse(options.filters), 'filters') };
   }
 
-  private viewScoped<B extends { kind: 'profile' | 'rows' | 'count' | 'aggregate' | 'prepareCrossfilter' }>(body: B, options: QueryOptions) {
+  private viewScoped<B extends { kind: 'profile' | 'rows' | 'count' | 'aggregate' | 'map' | 'prepareCrossfilter' }>(body: B, options: QueryOptions) {
     // Requests without a view get a private one, so they never supersede anything.
     const viewId = options.viewId ?? `once-${this.nextId + 1}`;
     const seq = (this.seqs.get(viewId) ?? 0) + 1;

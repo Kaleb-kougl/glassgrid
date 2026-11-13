@@ -65,7 +65,9 @@ jobs:
       - run: pnpm --filter @glassgrid/web size
       - run: pnpm --filter @glassgrid/web exec playwright test
       # The same tests on a build for the portfolio's /glassgrid/ subfolder (what release-web.yml ships),
-      # served as its Next.js site serves it (dist/glassgrid-hosting.json).
+      # served as its Next.js site serves it (dist/glassgrid-hosting.json). flights-a11y.spec.ts skips itself here
+      # (same DOM under any base); flights-live.spec.ts runs again on purpose: under /glassgrid/ the live relay is
+      # outside the app's base, as in production, and the reload of /glassgrid?live=1 goes through Next's 308.
       - name: Web E2E under /glassgrid/
         run: pnpm --filter @glassgrid/web e2e
         env:
@@ -78,6 +80,58 @@ jobs:
           path: |
             packages/engine/test-results/
             apps/web/test-results/
+          if-no-files-found: ignore
+
+  # The web demo in Firefox and WebKit (docs/live-flights.md, "Cross-browser"): the flights specs (the recorded traffic,
+  # the list view and axe, the live states against the stand-in relay) and the smoke test. New in L5 and not yet run on
+  # GitHub, so it may fail without blocking a merge until its first green run; then drop continue-on-error.
+  web-browsers:
+    name: Web E2E (Firefox, WebKit)
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Firefox and WebKit are cached like Chromium in the checks job (their own key); their OS packages are not.
+      - name: Playwright version
+        id: playwright
+        run: echo "version=$(pnpm --filter @glassgrid/web exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright's Firefox and WebKit
+        id: playwright-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-firefox-webkit-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+      - name: Install Firefox and WebKit
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm --filter @glassgrid/web exec playwright install --with-deps firefox webkit
+      - name: Install Firefox's and WebKit's system dependencies
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm --filter @glassgrid/web exec playwright install-deps firefox webkit
+      # Firefox's own dependencies include no OpenGL driver, and headless it has no display to make a GL context on:
+      # without Mesa (llvmpipe) and an X server (Xvfb) it has no WebGL ("Exhausted GL driver options") and MapLibre
+      # cannot start. So Firefox runs headed under xvfb-run below (WebKit stays headless).
+      - name: Mesa and Xvfb for Firefox's WebGL
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xvfb libgl1-mesa-dri libglx-mesa0 libegl1 libegl-mesa0 libgbm1
+      - run: pnpm --filter @glassgrid/web build
+      - name: Web E2E in Firefox and WebKit
+        run: xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" pnpm --filter @glassgrid/web exec playwright test e2e/flights.spec.ts e2e/flights-a11y.spec.ts e2e/flights-live.spec.ts e2e/smoke.spec.ts
+        env:
+          GLASSGRID_E2E_BROWSERS: firefox,webkit
+          GLASSGRID_E2E_FIREFOX_HEADED: '1'
+      - name: Upload browser test results
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: web-browsers-test-results
+          path: apps/web/test-results/
           if-no-files-found: ignore
 
   e2e:

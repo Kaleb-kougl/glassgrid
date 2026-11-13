@@ -38,3 +38,4 @@ export {
   estimateCubeCells,
   type CubeColumn,
 } from './cube.js';
+export { compileMapLatestQuery, compileMapTrackQuery, compileMapTrailsQuery, type MapQueryOptions, type MapTrackOptions } from './map.js';

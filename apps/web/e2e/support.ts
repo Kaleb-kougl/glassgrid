@@ -33,32 +33,52 @@ declare global {
   }
 }
 
-export async function watchProblems(page: Page, options: { alerts?: boolean } = {}): Promise<Problems> {
+export async function watchProblems(page: Page, options: { alerts?: boolean; expected?: RegExp } = {}): Promise<Problems> {
   const problems: Problems = { list: [], info: [] };
+  // A test that provokes failures on purpose (the live relay answering 503 or 429, the page offline) names them.
+  const add = (line: string) => {
+    if (!options.expected?.test(line)) problems.list.push(line);
+  };
   page.on('console', (message) => {
     const text = message.text();
-    if (message.type() === 'error') problems.list.push(`console.error: ${text}`);
-    else if (message.type() === 'warning' && text.startsWith('[glassgrid]')) problems.list.push(`console.warn: ${text}`);
+    // A failed resource's message names no URL; its location does, so a test can expect the one it provokes.
+    // WebKit also logs each CSP violation as a console error naming no source: the page's `securitypolicyviolation` events
+    // below report the same violations with where they came from, so those count instead.
+    if (message.type() === 'error' && text.startsWith('Refused to apply a stylesheet because its hash')) return;
+    if (message.type() === 'error') add(`console.error: ${text}${text.startsWith('Failed to load resource') ? ` (${message.location().url})` : ''}`);
+    else if (message.type() === 'warning' && text.startsWith('[glassgrid]')) add(`console.warn: ${text}`);
     else if (message.type() === 'info' && text.startsWith('[glassgrid]')) problems.info.push(text);
   });
-  page.on('pageerror', (error) => problems.list.push(`pageerror: ${error.message}`));
+  page.on('pageerror', (error) => add(`pageerror: ${error.message}`));
   page.on('response', (response) => {
-    if (response.status() >= 400) problems.list.push(`HTTP ${response.status()} ${response.request().method()} ${response.url()}`);
+    if (response.status() >= 400) add(`HTTP ${response.status()} ${response.request().method()} ${response.url()}`);
   });
   page.on('request', (request) => {
     const url = new URL(request.url());
     if (BASE === '/' || !/^https?:$/.test(url.protocol)) return;
-    if (url.pathname !== BASE.slice(0, -1) && !url.pathname.startsWith(BASE)) problems.list.push(`outside ${BASE}: ${request.method()} ${request.url()}`);
+    // The live relay is the site's own route at its root (/api/flights), outside the base by design (docs/live-flights-l2.md).
+    if (url.pathname === '/api/flights') return;
+    if (url.pathname !== BASE.slice(0, -1) && !url.pathname.startsWith(BASE)) add(`outside ${BASE}: ${request.method()} ${request.url()}`);
   });
   page.on('requestfailed', (request) => {
     const failure = request.failure()?.errorText ?? '';
-    if (!failure.includes('ERR_ABORTED')) problems.list.push(`request failed: ${request.method()} ${request.url()} ${failure}`);
+    // An aborted request, in each browser's words: Chromium's net::ERR_ABORTED, Firefox's NS_BINDING_ABORTED, WebKit's "cancelled".
+    if (!/ERR_ABORTED|NS_BINDING_ABORTED|^cancelled$|Load request cancelled/i.test(failure)) add(`request failed: ${request.method()} ${request.url()} ${failure}`);
   });
   await page.addInitScript((alerts) => {
     const seen: string[] = [];
     window.__ggProblems = seen;
     document.addEventListener('securitypolicyviolation', (event) => {
-      seen.push(`CSP violation: ${event.violatedDirective} blocked ${event.blockedURI || '(inline)'} at ${event.sourceFile}:${event.lineNumber}`);
+      // Playwright's own screenshot preparation in WebKit adds a <style> from its script world, which has no source file
+      // (the page's own scripts all do: script-src 'self' allows no inline script). Not the page's doing.
+      if (event.violatedDirective.startsWith('style-src-elem') && event.sourceFile === '') return;
+      // WebKit builds a <select>'s own (user-agent) contents with an inline style and checks it against the page's
+      // policy: `document.createElement('select')` alone reports style-src-attr on the <select>. Not the page's doing
+      // while the <select> itself carries no style attribute (one the page set is still there when blocked, and counts).
+      if (event.violatedDirective.startsWith('style-src-attr') && event.target instanceof HTMLSelectElement && !event.target.hasAttribute('style')) return;
+      // The element (for an inline style or script) and the column: in a minified bundle the line alone says little.
+      const target = event.target instanceof Element ? ` on <${event.target.tagName.toLowerCase()}${event.target.className && typeof event.target.className === 'string' ? ` class="${event.target.className}"` : ''}>` : '';
+      seen.push(`CSP violation: ${event.violatedDirective} blocked ${event.blockedURI || '(inline)'} at ${event.sourceFile}:${event.lineNumber}:${event.columnNumber}${target}${event.sample ? ` (${event.sample})` : ''}`);
     });
     if (!alerts) return;
     new MutationObserver(() => {

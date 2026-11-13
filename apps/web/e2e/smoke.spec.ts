@@ -20,52 +20,61 @@ async function openStart(page: Page) {
   return { problems, headers: response?.headers() ?? {} };
 }
 
-test('/ shows the start screen with the production headers and the three samples, without starting DuckDB-WASM until a sample is pointed at', async ({ page }) => {
-  await page.emulateMedia({ colorScheme: 'dark' });
-  const engineRequests: string[] = [];
-  page.on('request', (request) => {
-    if (/engine-worker|duckdb-|\.wasm$|duckdb-extensions/.test(request.url())) engineRequests.push(request.url());
+// Dark from the context's options, not page.emulateMedia before the first navigation (Firefox did not keep that).
+test.describe(() => {
+  test.use({ colorScheme: 'dark' });
+
+  test('/ shows the start screen with the production headers and the three samples, without starting DuckDB-WASM until a sample is pointed at', async ({ page, browserName }) => {
+    const engineRequests: string[] = [];
+    page.on('request', (request) => {
+      if (/engine-worker|duckdb-|\.wasm$|duckdb-extensions/.test(request.url())) engineRequests.push(request.url());
+    });
+    const { problems, headers } = await openStart(page);
+    // At the root: /. Under a base: /glassgrid/ answers with a 308 to /glassgrid (Next.js's default), which serves the app.
+    expect(new URL(page.url()).pathname).toBe(BASE === '/' ? '/' : BASE.slice(0, -1));
+
+    // The header policy (what the engine worker runs under) and the <meta> copy.
+    expect(headers['content-security-policy']).toContain("script-src 'self' 'wasm-unsafe-eval'");
+    expect(headers['content-security-policy']).toContain("frame-ancestors 'none'");
+    expect(headers['content-security-policy']).not.toMatch(/(^|\s)'unsafe-eval'/);
+    expect(headers['x-content-type-options']).toBe('nosniff');
+    const meta = await page.locator('meta[http-equiv="Content-Security-Policy"]').getAttribute('content');
+    expect(meta).toContain("connect-src 'self'");
+    expect(meta).not.toContain('frame-ancestors');
+
+    const app = page.getByTestId('app');
+    await expect(app).toHaveAttribute('data-platform', 'web');
+    // Firefox: the context's dark scheme did not reach the page (neither did page.emulateMedia before the first
+    // navigation), most likely lost when Cross-Origin-Opener-Policy moves the navigation into a new browsing context.
+    // Applied to the loaded page it does arrive (flights-a11y.spec.ts), and the app follows it.
+    if (browserName === 'firefox') await page.emulateMedia({ colorScheme: 'dark' });
+    expect(await page.evaluate(() => window.matchMedia('(prefers-color-scheme: dark)').matches), 'the page sees prefers-color-scheme: dark').toBe(true);
+    await expect(page.locator('html')).toHaveAttribute('data-gg-theme', 'dark');
+    await expect(page.getByTestId('empty-state')).toBeVisible();
+    await expect(page.getByText('The file is read in this browser and never uploaded.')).toBeVisible();
+    for (const id of ['taxi', 'retail', 'sensors']) await expect(page.getByTestId(`sample-${id}`)).toBeVisible();
+
+    // The engine starts lazily: the start screen alone fetches no worker and no WebAssembly.
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(500);
+    expect(engineRequests).toEqual([]);
+    expect(problems.info.filter((line) => line.includes('DuckDB-WASM'))).toEqual([]);
+    // Pointing at a sample warms it up (DuckDB-WASM starts with Parquet) before the click.
+    await page.getByTestId('sample-sensors').hover();
+    await expectEngineWithParquet(problems);
+    expect(engineRequests.some((url) => url.endsWith('.wasm'))).toBe(true);
+
+    // A sample from the start screen puts its shareable link in the address bar.
+    await page.getByTestId('sample-sensors').click();
+    await expect(page.getByTestId('file-name')).toHaveText('sensor-readings-2025-09.parquet');
+    await expect(page.locator('section.gg-chart-card')).toHaveCount(4);
+    await expect.poll(() => new URL(page.url()).searchParams.get('sample')).toBe('sensors');
+    // Undo goes back to the start screen (the workspace load is one entry); the link goes with it.
+    await page.getByTestId('undo').click();
+    await expect(page.getByTestId('empty-state')).toBeVisible();
+    await expect.poll(() => new URL(page.url()).searchParams.get('sample')).toBeNull();
+    await expectNoProblems(page, problems);
   });
-  const { problems, headers } = await openStart(page);
-  // At the root: /. Under a base: /glassgrid/ answers with a 308 to /glassgrid (Next.js's default), which serves the app.
-  expect(new URL(page.url()).pathname).toBe(BASE === '/' ? '/' : BASE.slice(0, -1));
-
-  // The header policy (what the engine worker runs under) and the <meta> copy.
-  expect(headers['content-security-policy']).toContain("script-src 'self' 'wasm-unsafe-eval'");
-  expect(headers['content-security-policy']).toContain("frame-ancestors 'none'");
-  expect(headers['content-security-policy']).not.toMatch(/(^|\s)'unsafe-eval'/);
-  expect(headers['x-content-type-options']).toBe('nosniff');
-  const meta = await page.locator('meta[http-equiv="Content-Security-Policy"]').getAttribute('content');
-  expect(meta).toContain("connect-src 'self'");
-  expect(meta).not.toContain('frame-ancestors');
-
-  const app = page.getByTestId('app');
-  await expect(app).toHaveAttribute('data-platform', 'web');
-  await expect(page.locator('html')).toHaveAttribute('data-gg-theme', 'dark');
-  await expect(page.getByTestId('empty-state')).toBeVisible();
-  await expect(page.getByText('The file is read in this browser and never uploaded.')).toBeVisible();
-  for (const id of ['taxi', 'retail', 'sensors']) await expect(page.getByTestId(`sample-${id}`)).toBeVisible();
-
-  // The engine starts lazily: the start screen alone fetches no worker and no WebAssembly.
-  await page.waitForLoadState('networkidle');
-  await page.waitForTimeout(500);
-  expect(engineRequests).toEqual([]);
-  expect(problems.info.filter((line) => line.includes('DuckDB-WASM'))).toEqual([]);
-  // Pointing at a sample warms it up (DuckDB-WASM starts with Parquet) before the click.
-  await page.getByTestId('sample-sensors').hover();
-  await expectEngineWithParquet(problems);
-  expect(engineRequests.some((url) => url.endsWith('.wasm'))).toBe(true);
-
-  // A sample from the start screen puts its shareable link in the address bar.
-  await page.getByTestId('sample-sensors').click();
-  await expect(page.getByTestId('file-name')).toHaveText('sensor-readings-2025-09.parquet');
-  await expect(page.locator('section.gg-chart-card')).toHaveCount(4);
-  await expect.poll(() => new URL(page.url()).searchParams.get('sample')).toBe('sensors');
-  // Undo goes back to the start screen (the workspace load is one entry); the link goes with it.
-  await page.getByTestId('undo').click();
-  await expect(page.getByTestId('empty-state')).toBeVisible();
-  await expect.poll(() => new URL(page.url()).searchParams.get('sample')).toBeNull();
-  await expectNoProblems(page, problems);
 });
 
 test('/ opens a picked CSV through <input type=file>: real rows, a chart, cross-filter, undo', async ({ page }) => {

@@ -4,15 +4,33 @@ import { type Filter } from '../spec/filter.js';
 import { type CubeColumn } from '../sql/cube.js';
 import { GRID_VIEW_ID, type Selection, type SelectionClause, type WorkspaceState } from '../state/workspace.js';
 import { axisDimension, resolveAxis, stateColumns } from './axes.js';
+import { mapViewportFilters } from './map-selection.js';
 
 /*
  * The cross-filter model: one selection per view (chart id or "grid") plus
  * filters not tied to a view. Each view queries with every selection except
  * its own, plus every user filter, so a brushed chart keeps showing its full
  * distribution while everything else narrows.
+ *
+ * Since L4 a map view's viewport is a selection too (`mapViewportFilters`:
+ * ranges on its lat and lon columns, while its "Filter to map view" is on);
+ * it lives on the map (`maps[i].viewport`), not in `selections`, because it
+ * is view state (never saved, no undo entry per pan). And the charts and
+ * the grid may follow the time cursor (`timeFilter`, crossfilter/time.ts).
  */
 
-type ModelState = Pick<WorkspaceState, 'charts' | 'columns' | 'selections' | 'userFilters'>;
+type ModelState = Pick<WorkspaceState, 'charts' | 'columns' | 'selections' | 'userFilters'> & {
+  /** Map views; their viewports filter the other views (absent: no maps). */
+  readonly maps?: WorkspaceState['maps'];
+};
+
+type ComposeState = Pick<ModelState, 'charts' | 'selections' | 'userFilters' | 'maps'>;
+
+/** Filters that are not a view's selection but apply to the charts and the grid (L4: the time cursor's window). */
+export interface ContextFilters {
+  /** `timeWindowFilter(state, column, T)`: while charts follow the cursor, the window up to T. Not applied to maps. */
+  readonly timeFilter?: Filter | null;
+}
 
 /** The engine's `viewId` for a workspace view: `grid`, or `chart:<id>` (so newer requests supersede older ones). */
 export function engineViewId(viewId: string): string {
@@ -39,8 +57,9 @@ interface Composed {
   readonly offsets: ReadonlyMap<string, number>;
 }
 
-function compose(state: Pick<ModelState, 'charts' | 'selections' | 'userFilters'>, viewId: string | null): Composed {
+function compose(state: ComposeState, viewId: string | null, extra: Filter | null = null): Composed {
   const filters = state.userFilters.map((entry) => entry.filter);
+  if (extra !== null) filters.push(extra);
   const offsets = new Map<string, number>();
   for (const owner of selectionOrder(state)) {
     if (owner === viewId) continue;
@@ -49,16 +68,27 @@ function compose(state: Pick<ModelState, 'charts' | 'selections' | 'userFilters'
     offsets.set(owner, filters.length);
     filters.push(...selectionFilters(selection));
   }
+  // Map viewports, after every other selection (a map is never the brushed view of a cube hint).
+  for (const map of state.maps ?? []) {
+    if (map.id === viewId) continue;
+    const viewport = mapViewportFilters(map);
+    if (viewport.length === 0) continue;
+    offsets.set(map.id, filters.length);
+    filters.push(...viewport);
+  }
   return { filters, offsets };
 }
 
 /**
  * The filters `viewId` queries with: every user filter, then every other
- * view's selection (never its own). Pass null for a consumer that is not a
- * view (e.g. an export of the filtered rows), which gets every selection.
+ * view's selection (never its own), then every other map's viewport. Pass
+ * null for a consumer that is not a view (e.g. an export of the filtered
+ * rows), which gets every selection. `context.timeFilter` is added for
+ * charts, the grid and such consumers; pass none for a map (it is "as of T"
+ * by its data clock instead).
  */
-export function effectiveFilters(state: Pick<ModelState, 'charts' | 'selections' | 'userFilters'>, viewId: string | null): Filter[] {
-  return compose(state, viewId).filters;
+export function effectiveFilters(state: ComposeState, viewId: string | null, context: ContextFilters = {}): Filter[] {
+  return compose(state, viewId, context.timeFilter ?? null).filters;
 }
 
 /** The dimension a view's single-clause selection is made in, for cross-filter cubes; null if none applies. */
@@ -116,13 +146,19 @@ export interface ViewQueries {
   readonly charts: ChartViewQuery[];
 }
 
-export interface ViewQueryOptions {
+export interface ViewQueryOptions extends ContextFilters {
   /**
    * The view being brushed (the last one whose selection changed, see
    * `changedSelectionView`). Other views then carry a cross-filter hint for
    * its selection, so brushing it again is answered from cubes.
    */
   readonly activeView?: string | null;
+  /**
+   * The grid's time window when it differs from the charts' (`timeFilter`):
+   * while the cursor plays, the app moves it on less often, so the grid is
+   * not re-queried, and its rows replaced under the reader, every second.
+   */
+  readonly gridTimeFilter?: Filter | null;
 }
 
 function hintFor(
@@ -145,7 +181,8 @@ export function viewQueries(state: ModelState, options: ViewQueryOptions = {}): 
   const activeView = options.activeView ?? null;
   const dimension = activeView === null ? null : selectionDimension(state, activeView, columns);
 
-  const gridComposed = compose(state, GRID_VIEW_ID);
+  const timeFilter = options.timeFilter ?? null;
+  const gridComposed = compose(state, GRID_VIEW_ID, options.gridTimeFilter !== undefined ? options.gridTimeFilter : timeFilter);
   const grid: ViewQuery = {
     viewId: GRID_VIEW_ID,
     engineViewId: GRID_VIEW_ID,
@@ -154,7 +191,7 @@ export function viewQueries(state: ModelState, options: ViewQueryOptions = {}): 
     key: JSON.stringify([GRID_VIEW_ID, gridComposed.filters]),
   };
   const charts = state.charts.map((chart): ChartViewQuery => {
-    const composed = compose(state, chart.id);
+    const composed = compose(state, chart.id, timeFilter);
     const spec: ChartSpec = { ...chart.spec, filters: [...chart.spec.filters, ...composed.filters] };
     const crossfilter =
       activeView === chart.id || spec.mark === 'scatter' ? null : hintFor(composed, chart.spec.filters.length, activeView, dimension);
@@ -194,14 +231,14 @@ export interface CrossfilterPlan {
  * every later brush on the same axis. Null when the channel cannot be
  * brushed (e.g. a bar chart's categories along y).
  */
-export function crossfilterPlan(state: ModelState, viewId: string, channel: 'x' | 'y' = 'x'): CrossfilterPlan | null {
+export function crossfilterPlan(state: ModelState, viewId: string, channel: 'x' | 'y' = 'x', context: ContextFilters = {}): CrossfilterPlan | null {
   const columns = stateColumns(state);
   const chart = state.charts.find((candidate) => candidate.id === viewId);
   if (!chart) return null;
   const axis = resolveAxis(chart.spec, channel, columns);
   if (!axis) return null;
   const withoutBrush: ModelState = { ...state, selections: Object.fromEntries(Object.entries(state.selections).filter(([id]) => id !== viewId)) };
-  const queries = viewQueries(withoutBrush);
+  const queries = viewQueries(withoutBrush, context);
   const targets: CrossfilterTarget[] = [
     ...queries.charts
       .filter((query) => query.chartId !== viewId && query.spec.mark !== 'scatter')

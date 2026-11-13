@@ -22,6 +22,11 @@ const DRIVER_NEUTRAL = [
   'src/crossfilter-bench.test.ts',
   'src/m4-bench.test.ts',
   'src/web/**',
+  // Live flights: the pure parts (dedup rule, sources under fake timers); the store and the replay gate run on both.
+  'src/live/dedup.test.ts',
+  'src/live/adsblol-source.test.ts',
+  'src/live/replay-source.test.ts',
+  'src/client/malformed-reply.test.ts',
 ];
 
 export default defineConfig({

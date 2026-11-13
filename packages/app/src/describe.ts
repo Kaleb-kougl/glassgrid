@@ -175,6 +175,28 @@ export function describeEntry(entry: Pick<UndoEntry, 'name' | 'input'>, state?: 
     }
     case 'removeChart':
       return 'Removed a chart';
+    case 'addMapView':
+      return typeof input['title'] === 'string' ? `Added map “${input['title']}”` : 'Added a map';
+    case 'updateMapView': {
+      if (typeof input['trailMinutes'] === 'number') return `Set the map trail to ${input['trailMinutes']} min`;
+      if (Array.isArray(input['filters'])) return 'Changed the map filters';
+      if ('title' in input) return typeof input['title'] === 'string' ? `Renamed a map to “${input['title']}”` : 'Reset a map title';
+      return 'Changed a map';
+    }
+    case 'removeMapView':
+      return 'Removed a map';
+    case 'setMapViewFilter':
+      return input['enabled'] === true ? 'Filtered to the map view' : 'Stopped filtering to the map view';
+    case 'setMapViewport':
+      return 'Moved the map';
+    case 'setTime': {
+      const mode = input['mode'];
+      if (mode === 'live') return 'Followed the newest data';
+      const at = typeof input['atMs'] === 'number' ? `${new Date(input['atMs']).toISOString().slice(11, 19)} UTC` : 'a time';
+      return mode === 'playing' ? `Played from ${at}` : `Showed ${at}`;
+    }
+    case 'setChartsFollowTime':
+      return input['enabled'] === true ? 'Charts follow the time' : 'Charts show every time';
     case 'renameChart':
       return typeof input['title'] === 'string' ? `Renamed a chart to “${input['title']}”` : 'Reset a chart title';
     case 'setShelf': {

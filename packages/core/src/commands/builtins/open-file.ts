@@ -47,10 +47,13 @@ export const openFile = defineCommand({
       typeOverride: null,
     }));
     draft.charts = [];
+    draft.maps = [];
     draft.selections = {};
     draft.userFilters = [];
     draft.grid = createInitialGridState();
     draft.layout = { cards: [] };
+    delete draft.time;
+    delete draft.chartsFollowTime;
     // An untitled workspace that is clean until the person changes something.
     draft.document = { id: null, fileName: null, savedDigest: null };
     draft.document.savedDigest = persistedDigest(current(draft));

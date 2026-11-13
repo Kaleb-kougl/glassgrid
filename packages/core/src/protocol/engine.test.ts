@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { LIVE_FLIGHTS_HANDLE, LIVE_FLIGHTS_TABLE_ID, isLiveFlightsTable } from '../flights/table.js';
 import { toFileHandle } from '../ids.js';
 import {
   EngineRequestSchema,
@@ -100,6 +101,31 @@ describe('EngineRequestSchema', () => {
     expect(
       EngineRequestSchema.safeParse({ ...requests[2], targets: [{ kind: 'rows', filters: [] }] }).success,
     ).toBe(false);
+  });
+
+  it('accepts map queries with a validated map spec and an integer data clock (view scoped)', () => {
+    const base = { kind: 'map', requestId: 'm1', viewId: 'map:map_1:latest', seq: 1, table, spec: { kind: 'map' }, query: 'latest', dataClockMs: 1_794_268_800_000 };
+    const parsed = EngineRequestSchema.parse(base);
+    expect(parsed).toMatchObject({ kind: 'map', spec: { kind: 'map', lat: 'lat', lon: 'lon', id: 'hex', time: 'ts', filters: [], trailMinutes: 5 } });
+    expect(isViewScopedRequest(parsed)).toBe(true);
+    expect(EngineRequestSchema.safeParse({ ...base, query: 'trails' }).success).toBe(true);
+    expect(EngineRequestSchema.safeParse({ ...base, query: 'everything' }).success).toBe(false);
+    expect(EngineRequestSchema.safeParse({ ...base, dataClockMs: 1.5 }).success).toBe(false);
+    expect(EngineRequestSchema.safeParse({ ...base, spec: { kind: 'map', trailMinutes: 60 } }).success).toBe(false);
+    expect(EngineRequestSchema.safeParse({ ...base, spec: { kind: 'map', sql: 'SELECT 1' } }).success).toBe(false);
+    // L4: a track names its aircraft, and only a track does.
+    expect(EngineRequestSchema.safeParse({ ...base, query: 'track', aircraft: 'a1b2c3' }).success).toBe(true);
+    expect(EngineRequestSchema.safeParse({ ...base, query: 'track' }).success).toBe(false);
+    expect(EngineRequestSchema.safeParse({ ...base, aircraft: 'a1b2c3' }).success).toBe(false);
+    expect(EngineRequestSchema.safeParse({ ...base, query: 'track', aircraft: 'x'.repeat(65) }).success).toBe(false);
+  });
+
+  it('the live table has a reserved handle that no file handle (a UUID) can equal', () => {
+    expect(LIVE_FLIGHTS_TABLE_ID).toBe(tableIdForFile(LIVE_FLIGHTS_HANDLE));
+    expect(LIVE_FLIGHTS_TABLE_ID).toBe('tb_live-flight-states');
+    expect(isLiveFlightsTable(LIVE_FLIGHTS_TABLE_ID)).toBe(true);
+    expect(isLiveFlightsTable(table)).toBe(false);
+    expect(EngineRequestSchema.parse({ kind: 'open', requestId: 'o1', file: LIVE_FLIGHTS_HANDLE })).toMatchObject({ file: 'fh_live-flight-states' });
   });
 
   it('marks only query requests as view scoped', () => {

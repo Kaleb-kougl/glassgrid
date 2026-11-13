@@ -449,6 +449,8 @@ button.gg-shelf-chip {
 .gg-filter-chip {
   box-sizing: border-box;
   height: 26px;
+  max-width: 100%;
+  min-width: 0;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -462,11 +464,24 @@ button.gg-shelf-chip {
 }
 
 .gg-filter-chip__column {
+  flex: 0 1 auto;
+  min-width: 2ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-family: var(--gg-font-mono);
   font-weight: 500;
 }
 
+/* The condition gives way first, then the column; × always shows. */
+.gg-filter-chip__condition {
+  flex: 0 100 auto;
+  min-width: 2ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .gg-filter-chip__remove {
+  flex-shrink: 0;
   width: 18px;
   height: 18px;
   display: flex;
@@ -1331,4 +1346,28 @@ button.gg-shelf-chip {
 .gg-cgrid__spacer {
   width: 1px;
   height: 1px;
+}
+
+/* Map altitude legend (map/AltitudeLegend.tsx). The map itself styles from map/map.css, in its lazy chunk. */
+.gg-map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gg-space-1) var(--gg-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font: var(--gg-type-ui-xs);
+  color: var(--gg-text-secondary);
+}
+
+.gg-map-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gg-space-1);
+}
+
+.gg-map-legend__swatch {
+  flex: none;
+  width: 14px;
+  height: 14px;
 }
